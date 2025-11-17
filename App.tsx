@@ -1,5 +1,6 @@
 
 
+
 import React, { useState, useEffect } from 'react';
 import LandingPage, { RecentProject } from './components/LandingPage';
 import PhotoLog from './components/PhotoLog';
@@ -28,6 +29,7 @@ const PlaceholderApp: React.FC<{ title: string, onBack: () => void }> = ({ title
 const App: React.FC = () => {
     const [selectedApp, setSelectedApp] = useState<AppType | null>(null);
     const [projectToOpen, setProjectToOpen] = useState<any>(null);
+    const [isUpdateAvailable, setIsUpdateAvailable] = useState(false);
 
     const loadProjectFromFileContent = (content: string, path: string) => {
         try {
@@ -66,6 +68,22 @@ const App: React.FC = () => {
                 }
             });
         }
+        
+        // @ts-ignore
+        if (window.electronAPI?.onUpdateAvailable) {
+            // @ts-ignore
+            window.electronAPI.onUpdateAvailable(() => {
+                setIsUpdateAvailable(true);
+            });
+        }
+
+        return () => {
+             // @ts-ignore
+            if (window.electronAPI?.removeUpdateAvailableListener) {
+                // @ts-ignore
+                window.electronAPI.removeUpdateAvailableListener();
+            }
+        }
     }, []);
 
     const handleSelectApp = (app: AppType) => {
@@ -94,7 +112,7 @@ const App: React.FC = () => {
     }
 
     if (!selectedApp) {
-        return <LandingPage onSelectApp={handleSelectApp} onOpenProject={handleOpenProject} />;
+        return <LandingPage onSelectApp={handleSelectApp} onOpenProject={handleOpenProject} isUpdateAvailable={isUpdateAvailable} />;
     }
 
     switch (selectedApp) {
@@ -107,7 +125,7 @@ const App: React.FC = () => {
         case 'combinedLog':
             return <CombinedLog onBack={handleBackToHome} initialData={projectToOpen} />;
         default:
-            return <LandingPage onSelectApp={handleSelectApp} onOpenProject={handleOpenProject} />;
+            return <LandingPage onSelectApp={handleSelectApp} onOpenProject={handleOpenProject} isUpdateAvailable={isUpdateAvailable}/>;
     }
 };
 

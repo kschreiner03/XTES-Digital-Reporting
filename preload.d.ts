@@ -10,6 +10,8 @@ export interface IElectronAPI {
     removeDownloadPhotosListener: (callback: () => void) => void,
     removeAllDownloadPhotosListeners: () => void,
     saveZipFile: (data: ArrayBuffer, defaultPath: string) => Promise<{ success: boolean; path?: string; error?: string }>,
+    onUpdateAvailable: (callback: () => void) => void,
+    removeUpdateAvailableListener: () => void,
 }
 
 declare global {

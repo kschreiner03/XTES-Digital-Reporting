@@ -21,7 +21,7 @@ module.exports = {
       },
       {
         ext: 'clog',
-        name: 'X-TES Combined Log',
+        name: 'X-TES Combine Logs',
         icon: 'assets/COMBINEDLOGICON.ico'
       }
     ]
@@ -37,8 +37,6 @@ module.exports = {
         exe: 'X-TES Digital Reporting.exe',
         // Path to the .ico file for the installer and shortcuts
         setupIcon: 'assets/icon.ico',
-        certificateFile: './cert.pfx',
-        certificatePassword: process.env.CERTIFICATE_PASSWORD,
         createDesktopShortcut: true
       },
     }

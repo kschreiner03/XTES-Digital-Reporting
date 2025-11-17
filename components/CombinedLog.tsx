@@ -335,7 +335,7 @@ const CombinedLog: React.FC<CombinedLogProps> = ({ onBack, initialData }) => {
 
                 const formattedDate = formatDateForRecentProject(loadedHeader.date);
                 const dateSuffix = formattedDate ? ` - ${formattedDate}` : '';
-                const projectName = `${loadedHeader.projectName || 'Untitled Combined Log'}${dateSuffix}`;
+                const projectName = `${loadedHeader.projectName || 'Untitled Combine Logs'}${dateSuffix}`;
 
                 const stateForRecent = await prepareStateForRecentProjectStorage(loadedHeader, hydratedPhotos);
                 const newTimestamp = await addRecentProject(stateForRecent, {
@@ -554,7 +554,7 @@ const CombinedLog: React.FC<CombinedLogProps> = ({ onBack, initialData }) => {
         const stateForRecentProjects = await prepareStateForRecentProjectStorage(headerData, photosData);
         const formattedDate = formatDateForRecentProject(headerData.date);
         const dateSuffix = formattedDate ? ` - ${formattedDate}` : '';
-        const projectName = `${headerData.projectName || 'Untitled Combined Log'}${dateSuffix}`;
+        const projectName = `${headerData.projectName || 'Untitled Combine Logs'}${dateSuffix}`;
 
         const newTimestamp = await addRecentProject(stateForRecentProjects, {
             type: 'combinedLog',
@@ -859,7 +859,7 @@ const CombinedLog: React.FC<CombinedLogProps> = ({ onBack, initialData }) => {
             }
 
             const sanitize = (name: string) => name.replace(/[^a-z0-9_]/gi, '-').toLowerCase();
-            const filename = `${sanitize(headerData.projectNumber) || 'project'}_${sanitize(headerData.projectName) || 'combinedlog'}_Photolog.pdf`;
+            const filename = `${sanitize(headerData.projectNumber) || 'project'}_${sanitize(headerData.projectName) || 'combinelogs'}_Photolog.pdf`;
             
             const pdfBlob = doc.output('blob');
             const pdfUrl = URL.createObjectURL(pdfBlob);
@@ -876,7 +876,7 @@ const CombinedLog: React.FC<CombinedLogProps> = ({ onBack, initialData }) => {
         
         const formattedDate = formatDateForRecentProject(headerData.date);
         const dateSuffix = formattedDate ? ` - ${formattedDate}` : '';
-        const projectName = `${headerData.projectName || 'Untitled Combined Log'}${dateSuffix}`;
+        const projectName = `${headerData.projectName || 'Untitled Combine Logs'}${dateSuffix}`;
 
         const newTimestamp = await addRecentProject(stateForRecentProjects, {
             type: 'combinedLog',
@@ -889,7 +889,7 @@ const CombinedLog: React.FC<CombinedLogProps> = ({ onBack, initialData }) => {
         const stateForFileExport = { headerData, photosData: photosForExport };
 
         const sanitize = (name: string) => name.replace(/[^a-z0-9_]/gi, '-').toLowerCase();
-        const filename = `${sanitize(headerData.projectNumber) || 'project'}_${sanitize(headerData.projectName) || 'combinedlog'}_CombinedLog.clog`;
+        const filename = `${sanitize(headerData.projectNumber) || 'project'}_${sanitize(headerData.projectName) || 'combinelogs'}_CombineLogs.clog`;
 
         // @ts-ignore
         if (window.electronAPI) {
@@ -956,7 +956,7 @@ Description: ${photo.description || 'N/A'}
             await new Promise(resolve => setTimeout(resolve, 100));
             
             const sanitize = (name: string) => name.replace(/[^a-z0-9_]/gi, '-').toLowerCase();
-            const zipFilename = `${sanitize(headerData.projectNumber) || 'project'}_${sanitize(headerData.projectName) || 'combinedlog'}_Photos.zip`;
+            const zipFilename = `${sanitize(headerData.projectNumber) || 'project'}_${sanitize(headerData.projectName) || 'combinelogs'}_Photos.zip`;
             
             // @ts-ignore
             if (window.electronAPI?.saveZipFile) {

@@ -13,4 +13,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   removeDownloadPhotosListener: (callback) => ipcRenderer.removeListener('download-photos', callback),
   removeAllDownloadPhotosListeners: () => ipcRenderer.removeAllListeners('download-photos'),
   saveZipFile: (data, defaultPath) => ipcRenderer.invoke('save-zip-file', data, defaultPath),
+  onUpdateAvailable: (callback) => ipcRenderer.on('update-available', () => callback()),
+  removeUpdateAvailableListener: () => ipcRenderer.removeAllListeners('update-available'),
 });

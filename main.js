@@ -1,4 +1,4 @@
-const { app, autoUpdater, BrowserWindow, ipcMain, dialog, Menu, shell, Notification } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Menu, shell, autoUpdater } = require('electron');
 const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
@@ -23,15 +23,6 @@ if (!gotTheLock) {
       }
     }
   });
-}
-
-// --- Squirrel Startup (Windows installer) ---
-try {
-  if (require('electron-squirrel-startup')) {
-    app.quit();
-  }
-} catch (e) {
-  console.log('No electron-squirrel-startup found, continuing...');
 }
 
 // --- Shortcut creation (Windows only) ---
@@ -197,57 +188,49 @@ function createWindow() {
 
 // --- Handle file operations ---
 app.whenReady().then(() => {
-  // --- Auto-update logic ---
-  // Replaces the 'update-electron-app' package with a direct implementation
-  // to avoid module resolution issues in the packaged app.
-  try {
-    const server = 'https://update.electronjs.org';
-    // The repository details are from your package.json
-    const repo = 'kschreiner03/XTES-Digital-Reporting';
-    const feedURL = `${server}/${repo}/${process.platform}/${app.getVersion()}`;
-
-    autoUpdater.setFeedURL({ url: feedURL });
-
-    autoUpdater.on('update-available', () => {
-        new Notification({
-            title: 'Update Available',
-            body: 'A new version is being downloaded in the background. You will be notified when it is ready to install.'
-        }).show();
-    });
-
-    // Check for updates every hour
-    setInterval(() => {
-      autoUpdater.checkForUpdates();
-    }, 60 * 60 * 1000);
-    
-    // Check for updates on startup as well
-    autoUpdater.checkForUpdates();
-
-    autoUpdater.on('update-downloaded', (event, releaseNotes, releaseName) => {
-      const dialogOpts = {
-        type: 'info',
-        buttons: ['Restart', 'Later'],
-        title: 'Application Update',
-        message: releaseName || 'A new version is ready',
-        detail: 'A new version has been downloaded. Restart the application to apply the updates.'
-      };
-
-      dialog.showMessageBox(dialogOpts).then((returnValue) => {
-        if (returnValue.response === 0) autoUpdater.quitAndInstall();
-      });
-    });
-
-    autoUpdater.on('error', (error) => {
-      // Silently log errors. Don't bother the user.
-      console.error('There was a problem updating the application');
-      console.error(error);
-    });
-  } catch (error) {
-    console.error('Error setting up auto-updater:', error.message);
-  }
-
   const menu = Menu.buildFromTemplate(menuTemplate);
   Menu.setApplicationMenu(menu);
+
+  // --- Auto-updater Logic ---
+  const repoUrl = 'kschreiner03/XTES-Digital-Reporting';
+  const server = 'https://update.electronjs.org';
+  const feedUrl = `${server}/${repoUrl}/${process.platform}-${process.arch}/${app.getVersion()}`;
+
+  try {
+    autoUpdater.setFeedURL(feedUrl);
+  } catch (error) {
+    console.error('Failed to set auto-updater feed URL:', error);
+  }
+
+  // Check for updates shortly after startup, then every hour
+  setTimeout(() => autoUpdater.checkForUpdates(), 5000);
+  setInterval(() => autoUpdater.checkForUpdates(), 60 * 60 * 1000);
+
+  // For the banner on the landing page
+  autoUpdater.on('update-available', () => {
+    if (mainWindow) {
+      mainWindow.webContents.send('update-available');
+    }
+  });
+
+  // For the dialog to restart the app
+  autoUpdater.on('update-downloaded', (event, releaseNotes, releaseName) => {
+    dialog.showMessageBox({
+      type: 'info',
+      buttons: ['Restart', 'Later'],
+      title: 'Application Update',
+      message: process.platform === 'win32' ? releaseNotes : releaseName,
+      detail: 'A new version has been downloaded. Restart the application to apply the updates.'
+    }).then(returnValue => {
+      if (returnValue.response === 0) autoUpdater.quitAndInstall();
+    });
+  });
+
+  autoUpdater.on('error', (error) => {
+    console.error('There was a problem updating the application');
+    console.error(error);
+  });
+  // --- End Auto-updater Logic ---
 
   ipcMain.handle('save-project', async (event, data, defaultPath) => {
     const window = BrowserWindow.getFocusedWindow();
@@ -257,7 +240,7 @@ app.whenReady().then(() => {
     if (ext === '.spdfr') filters = [{ name: 'SaskPower DFR Project', extensions: ['spdfr'] }];
     else if (ext === '.dfr') filters = [{ name: 'X-TES DFR Project', extensions: ['dfr'] }];
     else if (ext === '.plog') filters = [{ name: 'X-TES Photo Log', extensions: ['plog'] }];
-    else if (ext === '.clog') filters = [{ name: 'X-TES Combined Log', extensions: ['clog'] }];
+    else if (ext === '.clog') filters = [{ name: 'X-TES Combine Logs', extensions: ['clog'] }];
 
     const { filePath } = await dialog.showSaveDialog(window, {
       title: 'Save Project',
@@ -284,7 +267,7 @@ app.whenReady().then(() => {
     if (fileType === 'plog') filters.push({ name: 'Photo Log Files', extensions: ['plog'] });
     else if (fileType === 'dfr') filters.push({ name: 'DFR Standard Files', extensions: ['dfr'] });
     else if (fileType === 'spdfr') filters.push({ name: 'SaskPower DFR Files', extensions: ['spdfr'] });
-    else if (fileType === 'clog') filters.push({ name: 'Combined Log Files', extensions: ['clog'] });
+    else if (fileType === 'clog') filters.push({ name: 'Combine Logs Files', extensions: ['clog'] });
     else filters.push({ name: 'All Project Files', extensions: ['plog', 'dfr', 'spdfr', 'clog'] });
 
     filters.push({ name: 'All Files', extensions: ['*'] });
