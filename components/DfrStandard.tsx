@@ -2,7 +2,7 @@ import React, { useState, ReactElement, useEffect, useRef, useCallback } from 'r
 import { DfrHeader } from './DfrHeader';
 import PhotoEntry from './PhotoEntry';
 import type { DfrHeaderData, DfrStandardBodyData, PhotoData, ActivityBlock, LocationActivity } from '../types';
-import { PlusIcon, DownloadIcon, SaveIcon, FolderOpenIcon, ArrowLeftIcon, TrashIcon, ArrowUpIcon, ArrowDownIcon, CloseIcon, FolderArrowDownIcon } from './icons';
+import { PlusIcon, DownloadIcon, SaveIcon, FolderOpenIcon, ArrowLeftIcon, TrashIcon, ArrowUpIcon, ArrowDownIcon, CloseIcon, FolderArrowDownIcon, ChatBubbleLeftIcon } from './icons';
 import { AppType } from '../App';
 import { storeImage, retrieveImage, deleteImage, storeProject, deleteProject, retrieveProject } from './db';
 import { SpecialCharacterPalette } from './SpecialCharacterPalette';
@@ -359,10 +359,20 @@ const LocationBlockEntry: React.FC<{
     isFirst: boolean;
     isLast: boolean;
 }> = ({ data, onDataChange, onRemove, onMove, isFirst, isLast }) => {
+    const [isCommentOpen, setIsCommentOpen] = useState(false);
     return (
         <div className="p-4 border border-gray-200 rounded-md">
             <div className="flex justify-between items-center mb-2">
-                <h3 className="font-bold text-gray-600">Location Specific Activity</h3>
+                <div className="flex items-center gap-2">
+                    <h3 className="font-bold text-gray-600">Location Specific Activity</h3>
+                    <button
+                        onClick={() => setIsCommentOpen(!isCommentOpen)}
+                        title="Toggle comment"
+                        className={`p-1 rounded-full ${isCommentOpen ? 'bg-yellow-200 text-yellow-800' : 'text-gray-400 hover:text-gray-600'}`}
+                    >
+                        <ChatBubbleLeftIcon className="h-5 w-5" />
+                    </button>
+                </div>
                 <div className="flex items-center space-x-2">
                     <button onClick={() => onMove(data.id, 'up')} disabled={isFirst} className="p-1 text-gray-500 hover:text-gray-800 disabled:opacity-30 disabled:cursor-not-allowed transition duration-200" aria-label="Move Up">
                         <ArrowUpIcon className="h-6 w-6" />
@@ -375,6 +385,15 @@ const LocationBlockEntry: React.FC<{
                     </button>
                 </div>
             </div>
+             {isCommentOpen && (
+                 <textarea
+                    value={data.comment || ''}
+                    onChange={(e) => onDataChange(data.id, 'comment', e.target.value)}
+                    placeholder="Add a comment for this location..."
+                    rows={2}
+                    className="block w-full p-2 border border-yellow-300 bg-yellow-50 rounded-md shadow-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition mb-2"
+                />
+            )}
             <div className="space-y-4">
                 <EditableField label="Location" value={data.location || ''} onChange={v => onDataChange(data.id, 'location', v)} />
                 <BulletPointEditor label="Activities (detailed description with timestamps)" value={data.activities} onChange={v => onDataChange(data.id, 'activities', v)} rows={8} placeholder={activityPlaceholder} />
@@ -404,6 +423,7 @@ const DfrStandard = ({ onBack, initialData }: DfrStandardProps): ReactElement =>
         environmentalProtection: '',
         wildlifeObservations: '',
         furtherRestoration: '',
+        comments: {},
     });
 
     const [photosData, setPhotosData] = useState<PhotoData[]>([]);
@@ -417,6 +437,7 @@ const DfrStandard = ({ onBack, initialData }: DfrStandardProps): ReactElement =>
     const [pdfPreview, setPdfPreview] = useState<{ url: string; filename: string } | null>(null);
     const [showStatusModal, setShowStatusModal] = useState(false);
     const [statusMessage, setStatusMessage] = useState('');
+    const [openComments, setOpenComments] = useState<Set<string>>(new Set());
     const fileInputRef = useRef<HTMLInputElement>(null);
     const isDownloadingRef = useRef(false);
 
@@ -565,12 +586,34 @@ const DfrStandard = ({ onBack, initialData }: DfrStandardProps): ReactElement =>
         setHeaderData(prev => ({ ...prev, [field]: value }));
     };
     
-    const handleBodyDataChange = (field: keyof Omit<DfrStandardBodyData, 'activityBlocks' | 'generalActivity' | 'locationActivities'>, value: string) => {
+    const handleBodyDataChange = (field: keyof Omit<DfrStandardBodyData, 'activityBlocks' | 'generalActivity' | 'locationActivities' | 'comments'>, value: string) => {
         setBodyData(prev => ({ ...prev, [field]: value }));
     };
 
     const handleGeneralActivityChange = (value: string) => {
         setBodyData(prev => ({ ...prev, generalActivity: value }));
+    };
+
+    const toggleComment = (field: string) => {
+        setOpenComments(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(field)) {
+                newSet.delete(field);
+            } else {
+                newSet.add(field);
+            }
+            return newSet;
+        });
+    };
+
+    const handleCommentChange = (field: string, value: string) => {
+        setBodyData(prev => ({
+            ...prev,
+            comments: {
+                ...prev.comments,
+                [field]: value
+            }
+        }));
     };
 
     // --- Location Activity Handlers ---
@@ -1541,14 +1584,18 @@ Description: ${photo.description || 'N/A'}
                     <DfrHeader data={headerData} onDataChange={handleHeaderChange} errors={getHeaderErrors()} placeholders={dfrPlaceholders.header} />
                     
                     <Section title="Project Activities">
-                         <BulletPointEditor 
-                            label="General Activity"
-                            value={bodyData.generalActivity} 
-                            onChange={handleGeneralActivityChange} 
-                            rows={15} 
-                            placeholder={dfrPlaceholders.body.generalActivity}
-                            isInvalid={errors.has('generalActivity')}
-                        />
+                        <div>
+                            <div className="flex items-center justify-between mb-1">
+                                <label className="block text-sm font-medium text-gray-700">General Activity</label>
+                                <button onClick={() => toggleComment('generalActivity')} title="Toggle comment" className={`p-1 rounded-full ${openComments.has('generalActivity') ? 'bg-yellow-200 text-yellow-800' : 'text-gray-400 hover:text-gray-600'}`}>
+                                    <ChatBubbleLeftIcon className="h-5 w-5" />
+                                </button>
+                            </div>
+                            {openComments.has('generalActivity') && (
+                                <textarea value={bodyData.comments?.generalActivity || ''} onChange={(e) => handleCommentChange('generalActivity', e.target.value)} placeholder="Add a comment for editing purposes..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 rounded-md shadow-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition mb-2" />
+                            )}
+                            <BulletPointEditor label="" value={bodyData.generalActivity} onChange={handleGeneralActivityChange} rows={15} placeholder={dfrPlaceholders.body.generalActivity} isInvalid={errors.has('generalActivity')} />
+                        </div>
                          <div className="space-y-4">
                             {bodyData.locationActivities.map((block, index) => (
                                 <LocationBlockEntry 
@@ -1571,14 +1618,69 @@ Description: ${photo.description || 'N/A'}
                     </Section>
 
                     <Section title="Communications & Conditions">
-                        <BulletPointEditor label="Communication" value={bodyData.communication} onChange={v => handleBodyDataChange('communication', v)} rows={3} placeholder={dfrPlaceholders.body.communication} isInvalid={errors.has('communication')}/>
-                        <BulletPointEditor label="Weather and Ground Conditions" value={bodyData.weatherAndGroundConditions} onChange={v => handleBodyDataChange('weatherAndGroundConditions', v)} rows={3} placeholder={dfrPlaceholders.body.weatherAndGroundConditions} isInvalid={errors.has('weatherAndGroundConditions')}/>
+                        <div>
+                            <div className="flex items-center justify-between mb-1">
+                                <label className="block text-sm font-medium text-gray-700">Communication</label>
+                                <button onClick={() => toggleComment('communication')} title="Toggle comment" className={`p-1 rounded-full ${openComments.has('communication') ? 'bg-yellow-200 text-yellow-800' : 'text-gray-400 hover:text-gray-600'}`}>
+                                    <ChatBubbleLeftIcon className="h-5 w-5" />
+                                </button>
+                            </div>
+                            {openComments.has('communication') && (
+                                <textarea value={bodyData.comments?.communication || ''} onChange={(e) => handleCommentChange('communication', e.target.value)} placeholder="Add a comment for editing purposes..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 rounded-md shadow-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition mb-2" />
+                            )}
+                            <BulletPointEditor label="" value={bodyData.communication} onChange={v => handleBodyDataChange('communication', v)} rows={3} placeholder={dfrPlaceholders.body.communication} isInvalid={errors.has('communication')}/>
+                        </div>
+                        <div>
+                             <div className="flex items-center justify-between mb-1">
+                                <label className="block text-sm font-medium text-gray-700">Weather and Ground Conditions</label>
+                                <button onClick={() => toggleComment('weatherAndGroundConditions')} title="Toggle comment" className={`p-1 rounded-full ${openComments.has('weatherAndGroundConditions') ? 'bg-yellow-200 text-yellow-800' : 'text-gray-400 hover:text-gray-600'}`}>
+                                    <ChatBubbleLeftIcon className="h-5 w-5" />
+                                </button>
+                            </div>
+                            {openComments.has('weatherAndGroundConditions') && (
+                                <textarea value={bodyData.comments?.weatherAndGroundConditions || ''} onChange={(e) => handleCommentChange('weatherAndGroundConditions', e.target.value)} placeholder="Add a comment for editing purposes..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 rounded-md shadow-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition mb-2" />
+                            )}
+                            <BulletPointEditor label="" value={bodyData.weatherAndGroundConditions} onChange={v => handleBodyDataChange('weatherAndGroundConditions', v)} rows={3} placeholder={dfrPlaceholders.body.weatherAndGroundConditions} isInvalid={errors.has('weatherAndGroundConditions')}/>
+                        </div>
                     </Section>
                     
                     <Section title="Environmental & Wildlife">
-                         <BulletPointEditor label="Environmental Protection Measures & Mitigation" value={bodyData.environmentalProtection} onChange={v => handleBodyDataChange('environmentalProtection', v)} rows={7} placeholder={dfrPlaceholders.body.environmentalProtection} isInvalid={errors.has('environmentalProtection')} />
-                         <BulletPointEditor label="Wildlife Observations" value={bodyData.wildlifeObservations} onChange={v => handleBodyDataChange('wildlifeObservations', v)} rows={3} placeholder={dfrPlaceholders.body.wildlifeObservations} isInvalid={errors.has('wildlifeObservations')}/>
-                         <BulletPointEditor label="Further Restoration or Monitoring Required" value={bodyData.furtherRestoration} onChange={v => handleBodyDataChange('furtherRestoration', v)} rows={3} placeholder={dfrPlaceholders.body.furtherRestoration} isInvalid={errors.has('furtherRestoration')} />
+                        <div>
+                            <div className="flex items-center justify-between mb-1">
+                                <label className="block text-sm font-medium text-gray-700">Environmental Protection Measures & Mitigation</label>
+                                <button onClick={() => toggleComment('environmentalProtection')} title="Toggle comment" className={`p-1 rounded-full ${openComments.has('environmentalProtection') ? 'bg-yellow-200 text-yellow-800' : 'text-gray-400 hover:text-gray-600'}`}>
+                                    <ChatBubbleLeftIcon className="h-5 w-5" />
+                                </button>
+                            </div>
+                            {openComments.has('environmentalProtection') && (
+                                <textarea value={bodyData.comments?.environmentalProtection || ''} onChange={(e) => handleCommentChange('environmentalProtection', e.target.value)} placeholder="Add a comment for editing purposes..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 rounded-md shadow-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition mb-2" />
+                            )}
+                            <BulletPointEditor label="" value={bodyData.environmentalProtection} onChange={v => handleBodyDataChange('environmentalProtection', v)} rows={7} placeholder={dfrPlaceholders.body.environmentalProtection} isInvalid={errors.has('environmentalProtection')} />
+                        </div>
+                        <div>
+                            <div className="flex items-center justify-between mb-1">
+                                <label className="block text-sm font-medium text-gray-700">Wildlife Observations</label>
+                                <button onClick={() => toggleComment('wildlifeObservations')} title="Toggle comment" className={`p-1 rounded-full ${openComments.has('wildlifeObservations') ? 'bg-yellow-200 text-yellow-800' : 'text-gray-400 hover:text-gray-600'}`}>
+                                    <ChatBubbleLeftIcon className="h-5 w-5" />
+                                </button>
+                            </div>
+                            {openComments.has('wildlifeObservations') && (
+                                <textarea value={bodyData.comments?.wildlifeObservations || ''} onChange={(e) => handleCommentChange('wildlifeObservations', e.target.value)} placeholder="Add a comment for editing purposes..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 rounded-md shadow-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition mb-2" />
+                            )}
+                            <BulletPointEditor label="" value={bodyData.wildlifeObservations} onChange={v => handleBodyDataChange('wildlifeObservations', v)} rows={3} placeholder={dfrPlaceholders.body.wildlifeObservations} isInvalid={errors.has('wildlifeObservations')}/>
+                        </div>
+                        <div>
+                            <div className="flex items-center justify-between mb-1">
+                                <label className="block text-sm font-medium text-gray-700">Further Restoration or Monitoring Required</label>
+                                <button onClick={() => toggleComment('furtherRestoration')} title="Toggle comment" className={`p-1 rounded-full ${openComments.has('furtherRestoration') ? 'bg-yellow-200 text-yellow-800' : 'text-gray-400 hover:text-gray-600'}`}>
+                                    <ChatBubbleLeftIcon className="h-5 w-5" />
+                                </button>
+                            </div>
+                            {openComments.has('furtherRestoration') && (
+                                <textarea value={bodyData.comments?.furtherRestoration || ''} onChange={(e) => handleCommentChange('furtherRestoration', e.target.value)} placeholder="Add a comment for editing purposes..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 rounded-md shadow-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition mb-2" />
+                            )}
+                            <BulletPointEditor label="" value={bodyData.furtherRestoration} onChange={v => handleBodyDataChange('furtherRestoration', v)} rows={3} placeholder={dfrPlaceholders.body.furtherRestoration} isInvalid={errors.has('furtherRestoration')} />
+                        </div>
                     </Section>
 
                     <div className="border-t-4 border-[#007D8C] my-10" />
@@ -1640,7 +1742,7 @@ Description: ${photo.description || 'N/A'}
                 </div>
                 {photosData.length > 0 && <div className="border-t-4 border-[#007D8C] my-8" />}
                 <footer className="text-center text-gray-500 text-sm py-4">
-                    X-TES Digital Reporting v1.0.2
+                    X-TES Digital Reporting v1.0.5
                 </footer>
             </div>
             {showUnsupportedFileModal && (

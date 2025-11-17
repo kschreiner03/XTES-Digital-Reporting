@@ -1,7 +1,7 @@
 {
   "name": "x-tes-digital-reporting-web",
   "productName": "X-TES Digital Reporting",
-  "version": "1.0.2",
+  "version": "1.0.5",
   "description": "A comprehensive web application for creating and managing Daily Field Reports and Photographic Logs for environmental projects.",
   "main": ".vite/build/main.js",
   "scripts": {

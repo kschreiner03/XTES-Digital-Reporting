@@ -65,6 +65,7 @@ function createHelpWindow() {
     height: 720,
     title: 'Help - X-TES Digital Reporting',
     webPreferences: {
+      preload: path.join(__dirname, 'help-preload.js'),
       nodeIntegration: false,
       contextIsolation: true,
     },
@@ -186,6 +187,15 @@ function createWindow() {
   });
 }
 
+const allowedPdfs = [
+    'Example_DFR.pdf',
+    'Example_DFR_Monitoring.pdf',
+    'Example_DFR_NonCompliance.pdf',
+    'Example_DFR_Herbicide.pdf',
+    'Example_DFR_Construction.pdf',
+    'Example_DFR_NestSweep.pdf'
+];
+
 // --- Handle file operations ---
 app.whenReady().then(() => {
   const menu = Menu.buildFromTemplate(menuTemplate);
@@ -231,6 +241,27 @@ app.whenReady().then(() => {
     console.error(error);
   });
   // --- End Auto-updater Logic ---
+
+  ipcMain.handle('open-pdf', async (event, filename) => {
+    if (!allowedPdfs.includes(filename)) {
+        console.error('Requested PDF is not allowed:', filename);
+        dialog.showErrorBox('Error', 'The requested file is not a valid example document.');
+        return;
+    }
+
+    const assetsDir = app.isPackaged
+        ? path.join(process.resourcesPath, 'assets')
+        : path.resolve(app.getAppPath(), 'assets');
+    
+    const pdfPath = path.join(assetsDir, filename);
+
+    try {
+        await shell.openPath(pdfPath);
+    } catch (err) {
+        console.error(`Failed to open PDF: ${pdfPath}`, err);
+        dialog.showErrorBox('Error', `Could not open the file: ${pdfPath}`);
+    }
+  });
 
   ipcMain.handle('save-project', async (event, data, defaultPath) => {
     const window = BrowserWindow.getFocusedWindow();

@@ -29,6 +29,7 @@ export interface LocationActivity {
     id: number;
     location: string;
     activities: string;
+    comment?: string;
 }
 
 export type ActivityBlockType = 'location' | 'general';
@@ -54,6 +55,7 @@ export interface DfrStandardBodyData {
     environmentalProtection: string;
     wildlifeObservations: string;
     furtherRestoration: string;
+    comments?: { [key: string]: string };
 }
 
 export interface PhotoData {
@@ -100,4 +102,5 @@ export interface DfrSaskpowerData {
     environmentalProtection: string;
     wildlifeObservations: string;
     futureMonitoring: string;
+    comments?: { [key: string]: string };
 }

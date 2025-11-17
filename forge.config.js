@@ -65,6 +65,10 @@ module.exports = {
             entry: 'preload.js',
             config: 'vite.preload.config.ts',
           },
+          {
+            entry: 'help-preload.js',
+            config: 'vite.preload.config.ts',
+          },
         ],
         // `renderer` specifies the Vite dev server configurations for renderer processes.
         renderer: [

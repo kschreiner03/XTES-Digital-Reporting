@@ -317,7 +317,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSelectApp, onOpenProject, i
                 </div>
             </main>
             <footer className="text-center text-gray-500 text-sm py-4">
-                X-TES Digital Reporting v1.0.2
+                X-TES Digital Reporting v1.0.5
             </footer>
         </div>
     );

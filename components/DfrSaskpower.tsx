@@ -1,6 +1,6 @@
 import React, { useState, ReactElement, useEffect, useRef, useCallback } from 'react';
 import type { DfrSaskpowerData, ChecklistOption, PhotoData, LocationActivity, ActivityBlock } from '../types';
-import { DownloadIcon, SaveIcon, FolderOpenIcon, ArrowLeftIcon, PlusIcon, TrashIcon, ArrowUpIcon, ArrowDownIcon, CloseIcon, FolderArrowDownIcon } from './icons';
+import { DownloadIcon, SaveIcon, FolderOpenIcon, ArrowLeftIcon, PlusIcon, TrashIcon, ArrowUpIcon, ArrowDownIcon, CloseIcon, FolderArrowDownIcon, ChatBubbleLeftIcon } from './icons';
 import { AppType } from '../App';
 import PhotoEntry from './PhotoEntry';
 import { storeImage, retrieveImage, deleteImage, storeProject, deleteProject, retrieveProject } from './db';
@@ -341,6 +341,7 @@ const DfrSaskpower = ({ onBack, initialData }: DfrSaskpowerProps): ReactElement 
         environmentalProtection: '',
         wildlifeObservations: '',
         futureMonitoring: '',
+        comments: {},
     });
     const [photosData, setPhotosData] = useState<PhotoData[]>([]);
     const [errors, setErrors] = useState(new Set<string>());
@@ -352,6 +353,7 @@ const DfrSaskpower = ({ onBack, initialData }: DfrSaskpowerProps): ReactElement 
     const [pdfPreview, setPdfPreview] = useState<{ url: string; filename: string } | null>(null);
     const [showStatusModal, setShowStatusModal] = useState(false);
     const [statusMessage, setStatusMessage] = useState('');
+    const [openComments, setOpenComments] = useState<Set<string>>(new Set());
     const fileInputRef = useRef<HTMLInputElement>(null);
     const isDownloadingRef = useRef(false);
 
@@ -450,8 +452,30 @@ const DfrSaskpower = ({ onBack, initialData }: DfrSaskpowerProps): ReactElement 
         loadInitialData();
     }, [initialData]);
 
-    const handleChange = (field: keyof DfrSaskpowerData, value: string | ChecklistOption) => {
+    const handleChange = (field: keyof Omit<DfrSaskpowerData, 'comments'>, value: string | ChecklistOption) => {
         setData(prev => ({ ...prev, [field]: value }));
+    };
+
+    const toggleComment = (field: string) => {
+        setOpenComments(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(field)) {
+                newSet.delete(field);
+            } else {
+                newSet.add(field);
+            }
+            return newSet;
+        });
+    };
+
+    const handleCommentChange = (field: string, value: string) => {
+        setData(prev => ({
+            ...prev,
+            comments: {
+                ...prev.comments,
+                [field]: value
+            }
+        }));
     };
 
     // --- Photo Handlers ---
@@ -1262,19 +1286,78 @@ Description: ${photo.description || 'N/A'}
                     
                     {/* Main Body Sections */}
                     <Section title="Project Activities & Observations">
-                         <BulletPointEditor
-                            label="Project Activities (detailed description with timestamps)"
-                            value={data.generalActivity}
-                            onChange={v => handleChange('generalActivity', v)}
-                            rows={10}
-                            placeholder={activityPlaceholder}
-                            isInvalid={errors.has('generalActivity')}
-                         />
-                         <BulletPointEditor label="X-Terra Equipment Onsite" value={data.equipmentOnsite} onChange={v => handleChange('equipmentOnsite', v)} rows={3} isInvalid={errors.has('equipmentOnsite')} />
-                         <BulletPointEditor label="Weather and Ground Conditions" value={data.weatherAndGroundConditions} onChange={v => handleChange('weatherAndGroundConditions', v)} rows={3} isInvalid={errors.has('weatherAndGroundConditions')} />
-                         <BulletPointEditor label="Environmental Protection Measures and Mitigation" value={data.environmentalProtection} onChange={v => handleChange('environmentalProtection', v)} rows={4} isInvalid={errors.has('environmentalProtection')} />
-                         <BulletPointEditor label="Wildlife Observations" value={data.wildlifeObservations} onChange={v => handleChange('wildlifeObservations', v)} rows={3} isInvalid={errors.has('wildlifeObservations')} />
-                         <BulletPointEditor label="Future Monitoring Requirements" value={data.futureMonitoring} onChange={v => handleChange('futureMonitoring', v)} rows={3} isInvalid={errors.has('futureMonitoring')} />
+                         <div>
+                            <div className="flex items-center justify-between mb-1">
+                                <label className="block text-sm font-medium text-gray-700">Project Activities (detailed description with timestamps)</label>
+                                <button onClick={() => toggleComment('generalActivity')} title="Toggle comment" className={`p-1 rounded-full ${openComments.has('generalActivity') ? 'bg-yellow-200 text-yellow-800' : 'text-gray-400 hover:text-gray-600'}`}>
+                                    <ChatBubbleLeftIcon className="h-5 w-5" />
+                                </button>
+                            </div>
+                            {openComments.has('generalActivity') && (
+                                <textarea value={data.comments?.generalActivity || ''} onChange={(e) => handleCommentChange('generalActivity', e.target.value)} placeholder="Add a comment for editing purposes..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 rounded-md shadow-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition mb-2" />
+                            )}
+                            <BulletPointEditor label="" value={data.generalActivity} onChange={v => handleChange('generalActivity', v)} rows={10} placeholder={activityPlaceholder} isInvalid={errors.has('generalActivity')} />
+                        </div>
+                        <div>
+                             <div className="flex items-center justify-between mb-1">
+                                <label className="block text-sm font-medium text-gray-700">X-Terra Equipment Onsite</label>
+                                <button onClick={() => toggleComment('equipmentOnsite')} title="Toggle comment" className={`p-1 rounded-full ${openComments.has('equipmentOnsite') ? 'bg-yellow-200 text-yellow-800' : 'text-gray-400 hover:text-gray-600'}`}>
+                                    <ChatBubbleLeftIcon className="h-5 w-5" />
+                                </button>
+                            </div>
+                            {openComments.has('equipmentOnsite') && (
+                                <textarea value={data.comments?.equipmentOnsite || ''} onChange={(e) => handleCommentChange('equipmentOnsite', e.target.value)} placeholder="Add a comment for editing purposes..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 rounded-md shadow-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition mb-2" />
+                            )}
+                            <BulletPointEditor label="" value={data.equipmentOnsite} onChange={v => handleChange('equipmentOnsite', v)} rows={3} isInvalid={errors.has('equipmentOnsite')} />
+                        </div>
+                         <div>
+                             <div className="flex items-center justify-between mb-1">
+                                <label className="block text-sm font-medium text-gray-700">Weather and Ground Conditions</label>
+                                <button onClick={() => toggleComment('weatherAndGroundConditions')} title="Toggle comment" className={`p-1 rounded-full ${openComments.has('weatherAndGroundConditions') ? 'bg-yellow-200 text-yellow-800' : 'text-gray-400 hover:text-gray-600'}`}>
+                                    <ChatBubbleLeftIcon className="h-5 w-5" />
+                                </button>
+                            </div>
+                            {openComments.has('weatherAndGroundConditions') && (
+                                <textarea value={data.comments?.weatherAndGroundConditions || ''} onChange={(e) => handleCommentChange('weatherAndGroundConditions', e.target.value)} placeholder="Add a comment for editing purposes..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 rounded-md shadow-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition mb-2" />
+                            )}
+                            <BulletPointEditor label="" value={data.weatherAndGroundConditions} onChange={v => handleChange('weatherAndGroundConditions', v)} rows={3} isInvalid={errors.has('weatherAndGroundConditions')} />
+                        </div>
+                         <div>
+                            <div className="flex items-center justify-between mb-1">
+                                <label className="block text-sm font-medium text-gray-700">Environmental Protection Measures and Mitigation</label>
+                                <button onClick={() => toggleComment('environmentalProtection')} title="Toggle comment" className={`p-1 rounded-full ${openComments.has('environmentalProtection') ? 'bg-yellow-200 text-yellow-800' : 'text-gray-400 hover:text-gray-600'}`}>
+                                    <ChatBubbleLeftIcon className="h-5 w-5" />
+                                </button>
+                            </div>
+                            {openComments.has('environmentalProtection') && (
+                                <textarea value={data.comments?.environmentalProtection || ''} onChange={(e) => handleCommentChange('environmentalProtection', e.target.value)} placeholder="Add a comment for editing purposes..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 rounded-md shadow-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition mb-2" />
+                            )}
+                            <BulletPointEditor label="" value={data.environmentalProtection} onChange={v => handleChange('environmentalProtection', v)} rows={4} isInvalid={errors.has('environmentalProtection')} />
+                        </div>
+                         <div>
+                             <div className="flex items-center justify-between mb-1">
+                                <label className="block text-sm font-medium text-gray-700">Wildlife Observations</label>
+                                <button onClick={() => toggleComment('wildlifeObservations')} title="Toggle comment" className={`p-1 rounded-full ${openComments.has('wildlifeObservations') ? 'bg-yellow-200 text-yellow-800' : 'text-gray-400 hover:text-gray-600'}`}>
+                                    <ChatBubbleLeftIcon className="h-5 w-5" />
+                                </button>
+                            </div>
+                            {openComments.has('wildlifeObservations') && (
+                                <textarea value={data.comments?.wildlifeObservations || ''} onChange={(e) => handleCommentChange('wildlifeObservations', e.target.value)} placeholder="Add a comment for editing purposes..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 rounded-md shadow-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition mb-2" />
+                            )}
+                            <BulletPointEditor label="" value={data.wildlifeObservations} onChange={v => handleChange('wildlifeObservations', v)} rows={3} isInvalid={errors.has('wildlifeObservations')} />
+                        </div>
+                         <div>
+                             <div className="flex items-center justify-between mb-1">
+                                <label className="block text-sm font-medium text-gray-700">Future Monitoring Requirements</label>
+                                <button onClick={() => toggleComment('futureMonitoring')} title="Toggle comment" className={`p-1 rounded-full ${openComments.has('futureMonitoring') ? 'bg-yellow-200 text-yellow-800' : 'text-gray-400 hover:text-gray-600'}`}>
+                                    <ChatBubbleLeftIcon className="h-5 w-5" />
+                                </button>
+                            </div>
+                            {openComments.has('futureMonitoring') && (
+                                <textarea value={data.comments?.futureMonitoring || ''} onChange={(e) => handleCommentChange('futureMonitoring', e.target.value)} placeholder="Add a comment for editing purposes..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 rounded-md shadow-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition mb-2" />
+                            )}
+                            <BulletPointEditor label="" value={data.futureMonitoring} onChange={v => handleChange('futureMonitoring', v)} rows={3} isInvalid={errors.has('futureMonitoring')} />
+                        </div>
                     </Section>
 
                     {/* Photo Log Section */}
@@ -1318,7 +1401,7 @@ Description: ${photo.description || 'N/A'}
                     </div>
                 </div>
                 <footer className="text-center text-gray-500 text-sm py-4 mt-8">
-                    X-TES Digital Reporting v1.0.2
+                    X-TES Digital Reporting v1.0.5
                 </footer>
             </div>
             {showUnsupportedFileModal && (
