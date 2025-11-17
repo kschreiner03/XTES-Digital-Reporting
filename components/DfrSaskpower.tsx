@@ -1401,7 +1401,7 @@ Description: ${photo.description || 'N/A'}
                     </div>
                 </div>
                 <footer className="text-center text-gray-500 text-sm py-4 mt-8">
-                    X-TES Digital Reporting v1.0.5
+                    X-TES Digital Reporting v1.0.6
                 </footer>
             </div>
             {showUnsupportedFileModal && (

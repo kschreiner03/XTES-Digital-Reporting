@@ -337,6 +337,7 @@ const CombinedLog: React.FC<CombinedLogProps> = ({ onBack, initialData }) => {
                 const dateSuffix = formattedDate ? ` - ${formattedDate}` : '';
                 const projectName = `${loadedHeader.projectName || 'Untitled Combine Logs'}${dateSuffix}`;
 
+// FIX: Add missing prepareStateForRecentProjectStorage function
                 const stateForRecent = await prepareStateForRecentProjectStorage(loadedHeader, hydratedPhotos);
                 const newTimestamp = await addRecentProject(stateForRecent, {
                     type: 'combinedLog',
@@ -414,7 +415,7 @@ const CombinedLog: React.FC<CombinedLogProps> = ({ onBack, initialData }) => {
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
     
                 let drawWidth, drawHeight, drawX, drawY;
-    
+                
                 if (originalAspectRatio > targetAspectRatio) {
                     drawWidth = canvas.width;
                     drawHeight = drawWidth / originalAspectRatio;
@@ -554,7 +555,7 @@ const CombinedLog: React.FC<CombinedLogProps> = ({ onBack, initialData }) => {
         const stateForRecentProjects = await prepareStateForRecentProjectStorage(headerData, photosData);
         const formattedDate = formatDateForRecentProject(headerData.date);
         const dateSuffix = formattedDate ? ` - ${formattedDate}` : '';
-        const projectName = `${headerData.projectName || 'Untitled Combine Logs'}${dateSuffix}`;
+        const projectName = `${headerData.projectName || 'Untitled Combine Log'}${dateSuffix}`;
 
         const newTimestamp = await addRecentProject(stateForRecentProjects, {
             type: 'combinedLog',
@@ -712,12 +713,12 @@ const CombinedLog: React.FC<CombinedLogProps> = ({ onBack, initialData }) => {
                 const drawTextField = (label: string, value: string, isDesc = false) => {
                     const valueOrDefault = value || ' ';
                     if (isDesc) {
-                        docInstance.setFontSize(13); // Label size
+                        docInstance.setFontSize(13);
                         docInstance.setFont('times', 'bold');
                         docInstance.text(`${label}:`, margin, textY);
                         textY += docInstance.getTextDimensions(`${label}:`, { maxWidth: textBlockWidth }).h + 2;
                         
-                        docInstance.setFontSize(12); // Value size
+                        docInstance.setFontSize(12);
                         docInstance.setFont('times', 'normal');
                         const dims = docInstance.getTextDimensions(valueOrDefault, { maxWidth: textBlockWidth });
                         docInstance.text(valueOrDefault, margin, textY, { maxWidth: textBlockWidth });
@@ -731,6 +732,7 @@ const CombinedLog: React.FC<CombinedLogProps> = ({ onBack, initialData }) => {
                     const labelWidth = docInstance.getTextWidth(labelText);
                     const labelHeight = docInstance.getTextDimensions(labelText).h;
                     docInstance.text(labelText, margin, textY);
+                    
                     docInstance.setFontSize(12);
                     docInstance.setFont('times', 'normal');
                     const valueX = margin + labelWidth + 1;
@@ -747,12 +749,10 @@ const CombinedLog: React.FC<CombinedLogProps> = ({ onBack, initialData }) => {
                 drawTextField('Description', photo.description, true);
 
                 const textBottom = textY;
-
-                let scaledHeight = 0;
                 let imageBottom = yStart;
                 if (photo.imageUrl) {
                     const { width, height } = await getImageDimensions(photo.imageUrl);
-                    scaledHeight = height * (imageBlockWidth / width);
+                    const scaledHeight = height * (imageBlockWidth / width);
                     docInstance.addImage(photo.imageUrl, 'JPEG', imageX, yStart, imageBlockWidth, scaledHeight);
                     imageBottom = yStart + scaledHeight;
                 }
@@ -793,9 +793,7 @@ const CombinedLog: React.FC<CombinedLogProps> = ({ onBack, initialData }) => {
             
             for (let i = 0; i < pages.length; i++) {
                 const group = pages[i];
-                if (i > 0) {
-                    doc.addPage();
-                }
+                if (i > 0) doc.addPage();
 
                 let yPos = drawHeader(doc);
                 const photosOnPage = group.map(i => photosData[i]);
@@ -832,9 +830,7 @@ const CombinedLog: React.FC<CombinedLogProps> = ({ onBack, initialData }) => {
                             const photo = photosOnPage[i];
                             const photoHeight = heightsOnPage[i];
                             await drawPhotoEntry(doc, photo, yPos);
-
                             yPos += photoHeight;
-
                             if (i < numPhotosOnPage - 1) {
                                 yPos += gap; 
                                 doc.setLineWidth(0.5);
@@ -845,7 +841,6 @@ const CombinedLog: React.FC<CombinedLogProps> = ({ onBack, initialData }) => {
                         }
                     }
                 }
-                
                 drawFooterLine(doc);
             }
             
@@ -859,7 +854,7 @@ const CombinedLog: React.FC<CombinedLogProps> = ({ onBack, initialData }) => {
             }
 
             const sanitize = (name: string) => name.replace(/[^a-z0-9_]/gi, '-').toLowerCase();
-            const filename = `${sanitize(headerData.projectNumber) || 'project'}_${sanitize(headerData.projectName) || 'combinelogs'}_Photolog.pdf`;
+            const filename = `${sanitize(headerData.projectNumber) || 'project'}_${sanitize(headerData.projectName) || 'combinedlog'}_Photolog.pdf`;
             
             const pdfBlob = doc.output('blob');
             const pdfUrl = URL.createObjectURL(pdfBlob);
@@ -873,10 +868,9 @@ const CombinedLog: React.FC<CombinedLogProps> = ({ onBack, initialData }) => {
 
     const handleSaveProject = async () => {
         const stateForRecentProjects = await prepareStateForRecentProjectStorage(headerData, photosData);
-        
         const formattedDate = formatDateForRecentProject(headerData.date);
         const dateSuffix = formattedDate ? ` - ${formattedDate}` : '';
-        const projectName = `${headerData.projectName || 'Untitled Combine Logs'}${dateSuffix}`;
+        const projectName = `${headerData.projectName || 'Untitled Combine Log'}${dateSuffix}`;
 
         const newTimestamp = await addRecentProject(stateForRecentProjects, {
             type: 'combinedLog',
@@ -889,7 +883,7 @@ const CombinedLog: React.FC<CombinedLogProps> = ({ onBack, initialData }) => {
         const stateForFileExport = { headerData, photosData: photosForExport };
 
         const sanitize = (name: string) => name.replace(/[^a-z0-9_]/gi, '-').toLowerCase();
-        const filename = `${sanitize(headerData.projectNumber) || 'project'}_${sanitize(headerData.projectName) || 'combinelogs'}_CombineLogs.clog`;
+        const filename = `${sanitize(headerData.projectNumber) || 'project'}_${sanitize(headerData.projectName) || 'combinedlog'}.clog`;
 
         // @ts-ignore
         if (window.electronAPI) {
@@ -956,7 +950,7 @@ Description: ${photo.description || 'N/A'}
             await new Promise(resolve => setTimeout(resolve, 100));
             
             const sanitize = (name: string) => name.replace(/[^a-z0-9_]/gi, '-').toLowerCase();
-            const zipFilename = `${sanitize(headerData.projectNumber) || 'project'}_${sanitize(headerData.projectName) || 'combinelogs'}_Photos.zip`;
+            const zipFilename = `${sanitize(headerData.projectNumber) || 'project'}_${sanitize(headerData.projectName) || 'combinedlog'}_Photos.zip`;
             
             // @ts-ignore
             if (window.electronAPI?.saveZipFile) {
@@ -1005,6 +999,7 @@ Description: ${photo.description || 'N/A'}
         };
     }, [stableListener]);
 
+
     const handleOpenProject = async () => {
         // @ts-ignore
         if (window.electronAPI) {
@@ -1029,63 +1024,38 @@ Description: ${photo.description || 'N/A'}
             event.target.value = '';
         }
     };
-    
-    const importPhotosFromContent = (filesContent: string[]) => {
-        setStatusMessage(`Importing photos from ${filesContent.length} file(s)...`);
+
+    const handleImportProjects = async (projectsToImport: RecentProject[]) => {
+        setStatusMessage('Importing photos...');
         setShowStatusModal(true);
-        
-        let allImportedPhotos: PhotoData[] = [];
-    
-        for (const content of filesContent) {
+
+        const newPhotos: PhotoData[] = [];
+        let newIdCounter = photosData.length > 0 ? Math.max(...photosData.map(p => p.id)) + 1 : 1;
+
+        for (const project of projectsToImport) {
             try {
-                const projectData = JSON.parse(content);
-                const photosToImport = projectData.photosData;
-    
-                if (photosToImport && Array.isArray(photosToImport)) {
-                    const newPhotos = photosToImport.map((photo: PhotoData) => ({
-                        ...photo,
-                        id: Date.now() + Math.random(),
-                        imageId: undefined, // Clear imageId to prevent conflicts
-                    }));
-                    allImportedPhotos.push(...newPhotos);
+                const projectData = await retrieveProject(project.timestamp);
+                if (projectData?.photosData && Array.isArray(projectData.photosData)) {
+                    for (const photo of projectData.photosData) {
+                        const imageUrl = photo.imageId ? await retrieveImage(photo.imageId) : photo.imageUrl;
+                        if (imageUrl) {
+                            newPhotos.push({
+                                ...photo,
+                                id: newIdCounter++,
+                                imageUrl,
+                                photoNumber: '', // will be renumbered
+                            });
+                        }
+                    }
                 }
             } catch (e) {
-                console.error("Could not parse one of the imported files.", e);
+                console.error(`Failed to import project ${project.name}:`, e);
             }
         }
         
-        setPhotosData(prev => renumberPhotos([...prev, ...allImportedPhotos]));
+        setPhotosData(prev => renumberPhotos([...prev, ...newPhotos]));
+        
         setShowStatusModal(false);
-    }
-
-    const handleImportFromFile = async () => {
-        // @ts-ignore
-        if (window.electronAPI?.loadMultipleProjects) {
-            // Electron path
-            // @ts-ignore
-            const result = await window.electronAPI.loadMultipleProjects();
-            if (result.success && result.data) {
-                importPhotosFromContent(result.data);
-            } else if (result.error) {
-                alert(`Error loading files: ${result.error}`);
-            }
-        } else {
-            // Web path
-            fileInputRef.current?.click();
-        }
-    };
-    
-    const handleFilesSelectedForImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
-        const files = event.target.files;
-        if (!files || files.length === 0) return;
-    
-        const contentPromises = Array.from(files).map(file => file.text());
-        const filesContent = await Promise.all(contentPromises);
-        importPhotosFromContent(filesContent);
-    
-        if (event.target) {
-            event.target.value = ''; // Reset file input
-        }
     };
 
     const getPhotoErrors = (id: number): Set<keyof PhotoData> => {
@@ -1109,44 +1079,25 @@ Description: ${photo.description || 'N/A'}
         return headerErrors;
     };
 
-    const handleImportFromRecent = async (projectsToImport: RecentProject[]) => {
-        setStatusMessage(`Importing photos...`);
-        setShowStatusModal(true);
-    
-        let importedPhotos: PhotoData[] = [];
-    
-        for (const project of projectsToImport) {
-            const projectData = await retrieveProject(project.timestamp);
-            if (projectData?.photosData) {
-                for (const photo of projectData.photosData) {
-                    let imageUrl = photo.imageUrl || null;
-                    if (photo.imageId && !imageUrl) {
-                        imageUrl = await retrieveImage(photo.imageId);
-                    }
-    
-                    importedPhotos.push({
-                        ...photo,
-                        id: Date.now() + Math.random(),
-                        imageUrl,
-                    });
-                }
-            }
-        }
-    
-        setPhotosData(prev => {
-            const combined = [...prev, ...importedPhotos];
-            return renumberPhotos(combined);
-        });
-        
-        setShowStatusModal(false);
-    };
-
     return (
         <div className="bg-gray-100 min-h-screen">
-            {pdfPreview && <PdfPreviewModal url={pdfPreview.url} filename={pdfPreview.filename} onClose={() => setPdfPreview(null)} />}
-            {enlargedImageUrl && <ImageModal imageUrl={enlargedImageUrl} onClose={() => setEnlargedImageUrl(null)} />}
+            {pdfPreview && (
+                <PdfPreviewModal 
+                    url={pdfPreview.url} 
+                    filename={pdfPreview.filename} 
+                    onClose={() => setPdfPreview(null)} 
+                />
+            )}
+            {enlargedImageUrl && (
+                <ImageModal imageUrl={enlargedImageUrl} onClose={() => setEnlargedImageUrl(null)} />
+            )}
             {showStatusModal && <ActionStatusModal message={statusMessage} />}
-            <ImportProjectsModal isOpen={isImportModalOpen} onClose={() => setIsImportModalOpen(false)} onImport={handleImportFromRecent} currentProjectTimestamp={projectTimestamp} />
+            <ImportProjectsModal 
+                isOpen={isImportModalOpen}
+                onClose={() => setIsImportModalOpen(false)}
+                onImport={handleImportProjects}
+                currentProjectTimestamp={projectTimestamp}
+            />
             <SpecialCharacterPalette />
             <div className="max-w-7xl mx-auto p-4 md:p-8">
                 <div className="flex flex-wrap justify-between items-center gap-2 mb-4">
@@ -1157,18 +1108,20 @@ Description: ${photo.description || 'N/A'}
                         <button onClick={handleOpenProject} className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
                             <FolderOpenIcon /> <span>Open Project</span>
                         </button>
-                        <input type="file" ref={fileInputRef} onChange={handleFileSelected} style={{ display: 'none' }} accept=".clog" />
-                        <input type="file" ref={fileInputRef} onChange={handleFilesSelectedForImport} style={{ display: 'none' }} accept=".plog,.dfr,.spdfr,.json,.clog" multiple />
-
-                        <button onClick={() => setIsImportModalOpen(true)} className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
-                            <DocumentDuplicateIcon className="h-7 w-7" /> <span>Import from Recent</span>
-                        </button>
-                         <button onClick={handleImportFromFile} className="bg-teal-600 hover:bg-teal-700 text-white font-bold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
-                            <FolderArrowDownIcon className="h-7 w-7" /> <span>Import from File...</span>
+                        <input
+                            type="file"
+                            ref={fileInputRef}
+                            onChange={handleFileSelected}
+                            style={{ display: 'none' }}
+                            accept=".clog"
+                        />
+                         <button onClick={() => setIsImportModalOpen(true)} className="bg-teal-600 hover:bg-teal-700 text-white font-bold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
+                            <DocumentDuplicateIcon className="h-7 w-7" /> <span>Import Photos</span>
                         </button>
                         <button onClick={handleSaveProject} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
                             <SaveIcon /> <span>Save Project</span>
                         </button>
+                        {/* @ts-ignore */}
                         {!window.electronAPI && (
                             <button onClick={handleDownloadPhotos} className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
                                 <FolderArrowDownIcon /> <span>Download Photos</span>
@@ -1229,7 +1182,7 @@ Description: ${photo.description || 'N/A'}
                 </div>
                 {photosData.length > 0 && <div className="border-t-4 border-[#007D8C] my-8" />}
                 <footer className="text-center text-gray-500 text-sm py-4">
-                    X-TES Digital Reporting v1.0.5
+                    X-TES Digital Reporting v1.0.6
                 </footer>
             </div>
              {showUnsupportedFileModal && (
@@ -1242,10 +1195,18 @@ Description: ${photo.description || 'N/A'}
                         >
                             <CloseIcon className="h-6 w-6" />
                         </button>
-                        <img src="https://ik.imagekit.io/fzpijprte/200.gif?updatedAt=1758919911063" alt="Unsupported file type animation" className="mx-auto mb-4 w-40 h-40" />
+                        <img
+                            src="https://ik.imagekit.io/fzpijprte/200.gif?updatedAt=1758919911063"
+                            alt="Unsupported file type animation"
+                            className="mx-auto mb-4 w-40 h-40"
+                        />
                         <h3 className="text-2xl font-bold mb-2 text-gray-800">Unsupported File Type</h3>
-                        <p className="text-gray-600">Please upload a supported image file.</p>
-                        <p className="text-sm text-gray-500 mt-3">Supported formats: <strong>JPG, PNG</strong></p>
+                        <p className="text-gray-600">
+                            Please upload a supported image file.
+                        </p>
+                        <p className="text-sm text-gray-500 mt-3">
+                            Supported formats: <strong>JPG, PNG</strong>
+                        </p>
                     </div>
                 </div>
             )}
@@ -1259,21 +1220,35 @@ Description: ${photo.description || 'N/A'}
                         >
                             <CloseIcon className="h-6 w-6" />
                         </button>
-                        <img src="https://ik.imagekit.io/fzpijprte/200.gif?updatedAt=1758919911063" alt="Missing information animation" className="mx-auto mb-4 w-40 h-40" />
+                        <img
+                            src="https://ik.imagekit.io/fzpijprte/200.gif?updatedAt=1758919911063"
+                            alt="Missing information animation"
+                            className="mx-auto mb-4 w-40 h-40"
+                        />
                         <h3 className="text-2xl font-bold mb-2 text-gray-800">Missing Information</h3>
-                        <p className="text-gray-600">Please fill in all required fields.</p>
-                        <p className="text-sm text-gray-500 mt-3">Missing fields are highlighted in red.</p>
+                        <p className="text-gray-600">
+                            Please fill in all required fields.
+                        </p>
+                        <p className="text-sm text-gray-500 mt-3">
+                            Missing fields are highlighted in red.
+                        </p>
                     </div>
                 </div>
             )}
              {showNoInternetModal && (
                 <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
                     <div className="bg-white p-8 rounded-lg shadow-2xl text-center relative max-w-md">
-                        <button onClick={() => setShowNoInternetModal(false)} className="absolute top-2 right-2 p-1 text-gray-400 hover:text-gray-700" aria-label="Close">
+                        <button
+                            onClick={() => setShowNoInternetModal(false)}
+                            className="absolute top-2 right-2 p-1 text-gray-400 hover:text-gray-700"
+                            aria-label="Close"
+                        >
                             <CloseIcon className="h-6 w-6" />
                         </button>
                         <h3 className="text-2xl font-bold mb-2 text-gray-800">No Internet Connection</h3>
-                        <p className="text-gray-600">An internet connection is required to save the PDF. Please connect to the internet and try again.</p>
+                        <p className="text-gray-600">
+                            An internet connection is required to save the PDF. Please connect to the internet and try again.
+                        </p>
                     </div>
                 </div>
             )}

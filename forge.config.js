@@ -3,6 +3,9 @@ module.exports = {
     asar: true,
     icon: 'assets/icon.ico',
     executableName: 'X-TES Digital Reporting',
+    extraResource: [
+      'assets'
+    ],
     fileAssociations: [
       {
         ext: 'spdfr',
