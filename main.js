@@ -1,4 +1,4 @@
-const { app, autoUpdater, BrowserWindow, ipcMain, dialog, Menu, shell } = require('electron');
+const { app, autoUpdater, BrowserWindow, ipcMain, dialog, Menu, shell, Notification } = require('electron');
 const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
@@ -208,6 +208,13 @@ app.whenReady().then(() => {
 
     autoUpdater.setFeedURL({ url: feedURL });
 
+    autoUpdater.on('update-available', () => {
+        new Notification({
+            title: 'Update Available',
+            body: 'A new version is being downloaded in the background. You will be notified when it is ready to install.'
+        }).show();
+    });
+
     // Check for updates every hour
     setInterval(() => {
       autoUpdater.checkForUpdates();
@@ -221,7 +228,7 @@ app.whenReady().then(() => {
         type: 'info',
         buttons: ['Restart', 'Later'],
         title: 'Application Update',
-        message: releaseName,
+        message: releaseName || 'A new version is ready',
         detail: 'A new version has been downloaded. Restart the application to apply the updates.'
       };
 
