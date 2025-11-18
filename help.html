@@ -187,7 +187,7 @@
                     </tr>
                     <tr>
                         <td>Revision No</td>
-                        <td>1B</td>
+                        <td>1C</td>
                     </tr>
                     <tr>
                         <td>Document Review</td>
@@ -218,6 +218,11 @@
                         <td>INCORPORATE USER-PROVIDED TEXT AND REFORMAT</td>
                         <td>NOVEMBER 15, 2025</td>
                     </tr>
+                    <tr>
+                        <td>1C</td>
+                        <td>ADDED PROCEDURES FOR COMBINED LOGS, MAPS, COMMENTS AND PREFERENCES</td>
+                        <td>NOVEMBER 18, 2025</td>
+                    </tr>
                 </tbody>
             </table>
 
@@ -242,11 +247,17 @@
                                     <li><a href="#report-photolog">4.4.1&emsp;Photographic Log</a></li>
                                     <li><a href="#report-dfr-standard">4.4.2&emsp;Standard Daily Field Report (DFR)</a></li>
                                     <li><a href="#report-dfr-saskpower">4.4.3&emsp;SaskPower Daily Field Report (DFR)</a></li>
+                                    <li><a href="#report-combined">4.4.4&emsp;Combined Logs</a></li>
                                 </ol>
                             </li>
                             <li><a href="#photo-log-management">4.5&emsp;Photographic Log Management</a></li>
                             <li><a href="#data-management">4.6&emsp;Saving, Exporting & Data Management</a></li>
-                            <li><a href="#advanced-features">4.7&emsp;Advanced Features & Data Concepts</a></li>
+                            <li><a href="#advanced-features">4.7&emsp;Advanced Features & Data Concepts</a>
+                                <ol class="subsubsection">
+                                    <li><a href="#defaults">4.7.4&emsp;Application Preferences & Defaults</a></li>
+                                    <li><a href="#comments">4.7.5&emsp;Editing Comments</a></li>
+                                </ol>
+                            </li>
                         </ol>
                     </li>
                      <li><a href="#formatting-tips"><span class="section-title">5&emsp;FORMATTING TIPS</span></a></li>
@@ -266,7 +277,7 @@
                 
                 <section id="general-protocol">
                     <h1>3&emsp;GENERAL PROTOCOL</h1>
-                    <p>The X-TES Digital Reporting Application is a desktop program that must be installed from the company server. Once installed, it allows users to create reports from templates. Data is entered into specific fields, and prepared photos are uploaded into the photographic log sections. The application saves work-in-progress as editable project files (with extensions <span class="filepath">.plog</span>, <span class="filepath">.dfr</span>, or <span class="filepath">.spdfr</span>).</p>
+                    <p>The X-TES Digital Reporting Application is a desktop program that must be installed from the company server. Once installed, it allows users to create reports from templates. Data is entered into specific fields, and prepared photos are uploaded into the photographic log sections. The application saves work-in-progress as editable project files (with extensions <span class="filepath">.plog</span>, <span class="filepath">.dfr</span>, <span class="filepath">.spdfr</span>, or <span class="filepath">.clog</span>).</p>
                     <p>It is critical to distinguish between saving a project file (for future editing) and generating a final PDF (for submission). All recent work is stored locally on the user's computer for quick access from the application's landing page. The most critical workflow component is the mandatory preparation of photos (cropping, resizing, and server archival) before they are used in a report, as this ensures quality and manageable file sizes.</p>
                 </section>
                 
@@ -303,7 +314,8 @@
                         <strong>THIS IS THE SINGLE MOST IMPORTANT WORKFLOW.</strong> Failure to follow these steps results in inconsistent report quality, excessively large PDF files that cannot be emailed, and incorrect project archiving.
                     </div>
                     <ol>
-                        <li><strong>Crop to 4:3 Aspect Ratio:</strong> The final PDF report formats all images into a standard landscape <strong>4:3 aspect ratio</strong>. The application will automatically fit images, often resulting in undesirable letterboxing (white bars). To ensure your photos are not awkwardly cut off or displayed with bars, you must crop them manually first.
+                        <li><strong>Auto-Crop Feature:</strong> The application now includes an automatic feature that center-crops uploaded images to the required **4:3 aspect ratio**. While this saves time, it may unintentionally cut off important details at the top or bottom of portrait-oriented photos. <strong>For best results, manually cropping is still recommended.</strong></li>
+                        <li><strong>Crop to 4:3 Aspect Ratio:</strong> The final PDF report formats all images into a standard landscape <strong>4:3 aspect ratio</strong>. To ensure your photos are not awkwardly cut off or displayed with bars, you should crop them manually first.
                             <ul>
                                 <li>Open a site photo in a photo editor (Windows Photos is sufficient). Find the "Crop" function, select "Aspect Ratio," and choose <strong>4:3</strong>. Adjust the cropping rectangle to perfectly frame the subject matter, then save. It's recommended to save it as a new copy to preserve the original.</li>
                             </ul>
@@ -327,7 +339,7 @@
                     <h3 id="ui-landing">4.3.1&emsp;The Landing Page</h3>
                     <p>This is the main hub of the application.</p>
                     <ul>
-                        <li><strong>Create a New Report:</strong> The three large cards at the top are for starting a new, blank project.</li>
+                        <li><strong>Create a New Report:</strong> The large cards at the top are for starting a new, blank project. Options include Photographic Log, Daily Field Report, SaskPower DFR, and Combined Logs.</li>
                         <li><strong>Recent Projects:</strong> This section lists projects you have saved. This data is stored locally on your computer for quick access. Use the search bar to filter this list by project name or number.</li>
                     </ul>
                     <h3 id="ui-report-screen">4.3.2&emsp;The Report Creation Screen</h3>
@@ -337,6 +349,7 @@
                        <li><strong>Desktop Menu Bar:</strong> In the installed desktop app, a menu bar at the very top of the window contains:
                            <ul>
                                <li><strong>File > Download Photos:</strong> Exports all photos and metadata into a zip file.</li>
+                               <li><strong>Settings > Preferences:</strong> Opens the settings modal to configure defaults.</li>
                                <li><strong>Help > How to Use:</strong> Opens this SOP document.</li>
                                <li><strong>Help > Report Issues:</strong> Opens a web form to report bugs or suggest improvements.</li>
                            </ul>
@@ -361,6 +374,7 @@
                                 <li><strong>Location-Specific Activity (Optional):</strong> This is a powerful tool for projects with work at multiple, distinct locations in one day. Click "Add Location-Specific Activity" to create a separate, organized block for each location. For example, you can create one block for "Wetland A" and detail all work performed there, then a second block for "Wetland B." This creates a much clearer report than a single long narrative.</li>
                             </ul>
                         </li>
+                         <li><strong>Maps & Figures:</strong> Unlike the Photo Log, this report type allows you to insert full-page maps. Click the "Add Map" button. Maps are numbered separately from photos (e.g., Map 1, Map 2) and are formatted to fit a full page in the generated PDF.</li>
                          <li><strong>Other Text Sections & Bullet-Point Editor:</strong> The multi-line text fields (Communication, Weather, etc.) use a custom editor.
                             <ul>
                                 <li>Press <kbd>Enter</kbd> to create a new bullet point on the next line.</li>
@@ -381,6 +395,15 @@
                             <strong>Note on Opening Older Files:</strong> If you open an older SaskPower DFR file that used separate location blocks, the application will automatically merge all activity text into the single "Project Activities" box to conform to the new standard. A notice will appear. Be sure to review and save the project to finalize this change.
                         </div>
                     </ol>
+
+                    <h3 id="report-combined">4.4.4&emsp;Combined Logs</h3>
+                    <p>The Combined Log feature is a powerful tool designed to consolidate photographic data from multiple existing reports into a single, master document. This is ideal for creating weekly or monthly summaries.</p>
+                    <ol>
+                        <li><strong>Start a New Log:</strong> Select "Combined Logs" from the landing page. Fill in the header information for the new summary report.</li>
+                        <li><strong>Import from Recent:</strong> Click the "Import Photos" button (clipboard icon). A modal will appear listing your locally stored recent projects. Select the checkboxes for the days/reports you wish to merge and click "Import". All photos from the selected projects will be appended to your current log.</li>
+                        <li><strong>Import from Files:</strong> Click "Import from Files" (folder icon). This opens a file dialog allowing you to select multiple <span class="filepath">.dfr</span>, <span class="filepath">.plog</span>, or <span class="filepath">.spdfr</span> files from your computer's hard drive or server. This is useful for combining reports shared by colleagues.</li>
+                        <li><strong>Renumbering:</strong> Imported photos are automatically renumbered sequentially based on the order they are added. You can reorder them using the up/down arrows.</li>
+                    </ol>
                     
                     <h2 id="photo-log-management">4.5&emsp;Photographic Log Management</h2>
                     <ol>
@@ -399,7 +422,7 @@
                     <div class="warning">
                         <strong>THE GOLDEN RULE: "SAVE PROJECT" VS. "SAVE TO PDF".</strong> Understanding this distinction is essential to avoid data loss and rework.
                         <ul>
-                            <li><strong>Save Project:</strong> Creates a live, <strong>EDITABLE</strong> source file (<span class="filepath">.dfr</span>, <span class="filepath">.plog</span>). This is your master copy for saving progress and making future edits. You can only open these files with this application.</li>
+                            <li><strong>Save Project:</strong> Creates a live, <strong>EDITABLE</strong> source file (<span class="filepath">.dfr</span>, <span class="filepath">.plog</span>, <span class="filepath">.clog</span>). This is your master copy for saving progress and making future edits. You can only open these files with this application.</li>
                             <li><strong>Save to PDF:</strong> Generates a final, <strong>NON-EDITABLE</strong> document for submission, printing, or sharing. It cannot be opened or edited by this application.</li>
                         </ul>
                     </div>
@@ -425,6 +448,21 @@
                             </ul>
                         </li>
                     </ol>
+
+                    <h3 id="defaults">4.7.4&emsp;Application Preferences & Defaults</h3>
+                    <p>You can configure default values to save time when starting new reports.</p>
+                    <ol>
+                        <li>Open the settings menu via <strong>Settings > Preferences</strong> in the top menu bar.</li>
+                        <li>In the "General" tab, you can enter a <strong>Default Proponent</strong> (e.g., "Cenovus") and a <strong>Default Monitor Name</strong>.</li>
+                        <li>Once saved, every new Standard DFR or Photo Log you create will automatically start with these fields pre-filled.</li>
+                    </ol>
+
+                    <h3 id="comments">4.7.5&emsp;Editing Comments (Sticky Notes)</h3>
+                    <p>In the Standard and SaskPower DFRs, you will see a small **speech bubble icon** next to major section headers (e.g., General Activity). Clicking this opens a yellow text box.</p>
+                    <ul>
+                        <li>This is a space for **internal notes**, reminders, or to-do items (e.g., "Need to double check spacing here", "Ask foreman for exact volume").</li>
+                        <li>Content written in these comment boxes is saved in the editable project file (`.dfr`) but is **NEVER** included in the final generated PDF.</li>
+                    </ul>
                 </section>
                 
                 <section id="formatting-tips">
