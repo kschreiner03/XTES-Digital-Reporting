@@ -1,4 +1,3 @@
-
 import React, { useState, ReactElement, useEffect, useRef, useCallback } from 'react';
 import { DfrHeader } from './DfrHeader';
 import PhotoEntry from './PhotoEntry';
@@ -1112,7 +1111,7 @@ Description: ${photo.description || 'N/A'}
         const drawDfrHeader = (docInstance: any) => {
             const headerContentStartY = contentMargin;
 
-            const logoUrl = "/assets/xterra-logo.jpg";
+            const logoUrl = "https://ik.imagekit.io/fzpijprte/XTerraLogo2019_Horizontal.jpg?updatedAt=1758827714962";
             docInstance.addImage(logoUrl, 'JPEG', contentMargin, headerContentStartY, 40, 10);
             
             docInstance.setFontSize(18);
@@ -1134,7 +1133,8 @@ Description: ${photo.description || 'N/A'}
 
             const headerContentStartY = contentMargin;
 
-            const logoUrl = "/assets/xterra-logo.jpg";
+            const logoUrl = "https://ik.imagekit.io/fzpijprte/XTerraLogo2019_Horizontal.jpg?updatedAt=1758827714962";
+
             docInstance.addImage(logoUrl, 'JPEG', contentMargin, headerContentStartY, 40, 10);
 
             docInstance.setFontSize(18);
@@ -1755,7 +1755,7 @@ Description: ${photo.description || 'N/A'}
                 </div>
                 {photosData.length > 0 && <div className="border-t-4 border-[#007D8C] my-8" />}
                 <footer className="text-center text-gray-500 text-sm py-4">
-                    X-TES Digital Reporting v1.0.7
+                    X-TES Digital Reporting v1.0.8
                 </footer>
             </div>
             {showUnsupportedFileModal && (
