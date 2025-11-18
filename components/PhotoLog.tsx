@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Header from './Header';
 import PhotoEntry from './PhotoEntry';
@@ -282,6 +283,16 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, initialData }) => {
                     setPhotosData(hydratedPhotos);
                 } else {
                     setPhotosData(initialData.photosData || []);
+                }
+            } else {
+                // Load defaults from settings for new projects
+                try {
+                    const settings = JSON.parse(localStorage.getItem('xtec_general_settings') || '{}');
+                    if (settings.defaultProponent) {
+                         setHeaderData(prev => ({ ...prev, proponent: settings.defaultProponent }));
+                    }
+                } catch (e) {
+                    console.error("Failed to load settings", e);
                 }
             }
         };
@@ -602,6 +613,7 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, initialData }) => {
                 };
 
                 totalTextHeight += measureFieldHeight('Photo', photo.photoNumber);
+                totalTextHeight += measureFieldHeight('Direction', photo.direction || 'N/A');
                 totalTextHeight += measureFieldHeight('Date', photo.date);
                 totalTextHeight += measureFieldHeight('Location', photo.location);
                 totalTextHeight += measureFieldHeight('Description', photo.description, true);
@@ -669,6 +681,7 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, initialData }) => {
                 };
 
                 drawTextField('Photo', photo.photoNumber);
+                drawTextField('Direction', photo.direction || 'N/A');
                 drawTextField('Date', photo.date);
                 drawTextField('Location', photo.location);
                 drawTextField('Description', photo.description, true);
@@ -1083,7 +1096,7 @@ Description: ${photo.description || 'N/A'}
                 </div>
                 {photosData.length > 0 && <div className="border-t-4 border-[#007D8C] my-8" />}
                 <footer className="text-center text-gray-500 text-sm py-4">
-                    X-TES Digital Reporting v1.0.6
+                    X-TES Digital Reporting v1.0.7
                 </footer>
             </div>
              {showUnsupportedFileModal && (

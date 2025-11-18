@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { DocumentTextIcon, CameraIcon, ClipboardDocumentListIcon, SearchIcon, FolderOpenIcon, EllipsisVerticalIcon, DocumentDuplicateIcon } from './icons';
 import { AppType } from '../App';
@@ -317,7 +318,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSelectApp, onOpenProject, i
                 </div>
             </main>
             <footer className="text-center text-gray-500 text-sm py-4">
-                X-TES Digital Reporting v1.0.6
+                X-TES Digital Reporting v1.0.7
             </footer>
         </div>
     );

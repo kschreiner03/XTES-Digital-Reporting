@@ -122,6 +122,19 @@ const menuTemplate = [
     ],
   },
   {
+    label: 'Settings',
+    submenu: [
+      {
+        label: 'Preferences...',
+        click: () => {
+            if (mainWindow) {
+                mainWindow.webContents.send('open-settings');
+            }
+        }
+      }
+    ]
+  },
+  {
     label: 'Help',
     submenu: [
       {

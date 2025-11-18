@@ -1,6 +1,3 @@
-
-
-
 import React, { useState, useEffect } from 'react';
 import LandingPage, { RecentProject } from './components/LandingPage';
 import PhotoLog from './components/PhotoLog';
@@ -8,6 +5,7 @@ import DfrStandard from './components/DfrStandard';
 import DfrSaskpower from './components/DfrSaskpower';
 import { retrieveProject } from './components/db';
 import CombinedLog from './components/CombinedLog';
+import SettingsModal from './components/SettingsModal';
 
 export type AppType = 'photoLog' | 'dfrSaskpower' | 'dfrStandard' | 'combinedLog';
 
@@ -30,6 +28,7 @@ const App: React.FC = () => {
     const [selectedApp, setSelectedApp] = useState<AppType | null>(null);
     const [projectToOpen, setProjectToOpen] = useState<any>(null);
     const [isUpdateAvailable, setIsUpdateAvailable] = useState(false);
+    const [showSettings, setShowSettings] = useState(false);
 
     const loadProjectFromFileContent = (content: string, path: string) => {
         try {
@@ -76,12 +75,25 @@ const App: React.FC = () => {
                 setIsUpdateAvailable(true);
             });
         }
+        
+        // @ts-ignore
+        if (window.electronAPI?.onOpenSettings) {
+            // @ts-ignore
+            window.electronAPI.onOpenSettings(() => {
+                setShowSettings(true);
+            });
+        }
 
         return () => {
              // @ts-ignore
             if (window.electronAPI?.removeUpdateAvailableListener) {
                 // @ts-ignore
                 window.electronAPI.removeUpdateAvailableListener();
+            }
+            // @ts-ignore
+             if (window.electronAPI?.removeOpenSettingsListener) {
+                // @ts-ignore
+                window.electronAPI.removeOpenSettingsListener();
             }
         }
     }, []);
@@ -111,22 +123,29 @@ const App: React.FC = () => {
         setProjectToOpen(null);
     }
 
-    if (!selectedApp) {
-        return <LandingPage onSelectApp={handleSelectApp} onOpenProject={handleOpenProject} isUpdateAvailable={isUpdateAvailable} />;
-    }
-
-    switch (selectedApp) {
-        case 'photoLog':
-            return <PhotoLog onBack={handleBackToHome} initialData={projectToOpen} />;
-        case 'dfrSaskpower':
-            return <DfrSaskpower onBack={handleBackToHome} initialData={projectToOpen} />;
-        case 'dfrStandard':
-            return <DfrStandard onBack={handleBackToHome} initialData={projectToOpen} />;
-        case 'combinedLog':
-            return <CombinedLog onBack={handleBackToHome} initialData={projectToOpen} />;
-        default:
-            return <LandingPage onSelectApp={handleSelectApp} onOpenProject={handleOpenProject} isUpdateAvailable={isUpdateAvailable}/>;
-    }
+    return (
+        <>
+            {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
+            {!selectedApp ? (
+                <LandingPage onSelectApp={handleSelectApp} onOpenProject={handleOpenProject} isUpdateAvailable={isUpdateAvailable} />
+            ) : (
+                (() => {
+                    switch (selectedApp) {
+                        case 'photoLog':
+                            return <PhotoLog onBack={handleBackToHome} initialData={projectToOpen} />;
+                        case 'dfrSaskpower':
+                            return <DfrSaskpower onBack={handleBackToHome} initialData={projectToOpen} />;
+                        case 'dfrStandard':
+                            return <DfrStandard onBack={handleBackToHome} initialData={projectToOpen} />;
+                        case 'combinedLog':
+                            return <CombinedLog onBack={handleBackToHome} initialData={projectToOpen} />;
+                        default:
+                            return <LandingPage onSelectApp={handleSelectApp} onOpenProject={handleOpenProject} isUpdateAvailable={isUpdateAvailable}/>;
+                    }
+                })()
+            )}
+        </>
+    );
 };
 
 export default App;

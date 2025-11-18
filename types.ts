@@ -71,7 +71,7 @@ export interface PhotoData {
 }
 
 // --- SaskPower DFR Types ---
-export type ChecklistOption = 'Yes' | 'No' | 'NA';
+export type ChecklistOption = 'Yes' | 'No' | 'NA' | '';
 
 export interface DfrSaskpowerData {
     proponent: string;

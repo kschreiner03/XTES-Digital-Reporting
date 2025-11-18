@@ -15,4 +15,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   saveZipFile: (data, defaultPath) => ipcRenderer.invoke('save-zip-file', data, defaultPath),
   onUpdateAvailable: (callback) => ipcRenderer.on('update-available', () => callback()),
   removeUpdateAvailableListener: () => ipcRenderer.removeAllListeners('update-available'),
+  onOpenSettings: (callback) => ipcRenderer.on('open-settings', callback),
+  removeOpenSettingsListener: () => ipcRenderer.removeAllListeners('open-settings'),
 });

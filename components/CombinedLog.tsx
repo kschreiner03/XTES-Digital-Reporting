@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Header from './Header';
 import PhotoEntry from './PhotoEntry';
@@ -314,6 +315,22 @@ const CombinedLog: React.FC<CombinedLogProps> = ({ onBack, initialData }) => {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const isDownloadingRef = useRef(false);
 
+    // Define this helper function first as it is used in parseAndLoadProject
+    const prepareStateForRecentProjectStorage = async (headerData: HeaderData, photosData: PhotoData[]) => {
+        const photosForStorage = await Promise.all(
+            photosData.map(async (photo) => {
+                if (photo.imageUrl) {
+                    const imageId = photo.imageId || `${headerData.projectNumber || 'proj'}-${photo.id}-${Date.now()}`;
+                    await storeImage(imageId, photo.imageUrl);
+                    const { imageUrl, ...rest } = photo;
+                    return { ...rest, imageId };
+                }
+                return photo;
+            })
+        );
+        return { headerData, photosData: photosForStorage };
+    };
+
     const parseAndLoadProject = async (fileContent: string) => {
         try {
             const projectData = JSON.parse(fileContent);
@@ -337,7 +354,6 @@ const CombinedLog: React.FC<CombinedLogProps> = ({ onBack, initialData }) => {
                 const dateSuffix = formattedDate ? ` - ${formattedDate}` : '';
                 const projectName = `${loadedHeader.projectName || 'Untitled Combine Logs'}${dateSuffix}`;
 
-// FIX: Add missing prepareStateForRecentProjectStorage function
                 const stateForRecent = await prepareStateForRecentProjectStorage(loadedHeader, hydratedPhotos);
                 const newTimestamp = await addRecentProject(stateForRecent, {
                     type: 'combinedLog',
@@ -378,6 +394,16 @@ const CombinedLog: React.FC<CombinedLogProps> = ({ onBack, initialData }) => {
                 if (initialData.timestamp) {
                     setProjectTimestamp(initialData.timestamp);
                 }
+            } else {
+                // Load defaults for new projects
+                try {
+                    const settings = JSON.parse(localStorage.getItem('xtec_general_settings') || '{}');
+                    if (settings.defaultProponent) {
+                         setHeaderData(prev => ({ ...prev, proponent: settings.defaultProponent }));
+                    }
+                } catch (e) {
+                    console.error("Failed to load settings", e);
+                }
             }
         };
         loadInitialData();
@@ -415,7 +441,7 @@ const CombinedLog: React.FC<CombinedLogProps> = ({ onBack, initialData }) => {
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
     
                 let drawWidth, drawHeight, drawX, drawY;
-                
+    
                 if (originalAspectRatio > targetAspectRatio) {
                     drawWidth = canvas.width;
                     drawHeight = drawWidth / originalAspectRatio;
@@ -435,7 +461,7 @@ const CombinedLog: React.FC<CombinedLogProps> = ({ onBack, initialData }) => {
             img.src = imageUrl;
         });
     };
-    
+
     const handleImageChange = (id: number, file: File) => {
         const allowedTypes = ['image/jpeg', 'image/png'];
         if (!allowedTypes.includes(file.type)) {
@@ -464,7 +490,7 @@ const CombinedLog: React.FC<CombinedLogProps> = ({ onBack, initialData }) => {
         const newId = photosData.length > 0 ? Math.max(...photosData.map(p => p.id)) + 1 : 1;
         const newPhoto: PhotoData = {
             id: newId,
-            photoNumber: '', // Will be re-assigned by renumberPhotos
+            photoNumber: '', 
             date: '',
             location: '',
             description: '',
@@ -529,21 +555,6 @@ const CombinedLog: React.FC<CombinedLogProps> = ({ onBack, initialData }) => {
         }
         return true;
     };
-    
-    const prepareStateForRecentProjectStorage = async (headerData: HeaderData, photosData: PhotoData[]) => {
-        const photosForStorage = await Promise.all(
-            photosData.map(async (photo) => {
-                if (photo.imageUrl) {
-                    const imageId = photo.imageId || `${headerData.projectNumber || 'proj'}-${photo.id}-${Date.now()}`;
-                    await storeImage(imageId, photo.imageUrl);
-                    const { imageUrl, ...rest } = photo;
-                    return { ...rest, imageId };
-                }
-                return photo;
-            })
-        );
-        return { headerData, photosData: photosForStorage };
-    };
 
     const handleSavePdf = async () => {
         if (!navigator.onLine) {
@@ -552,10 +563,11 @@ const CombinedLog: React.FC<CombinedLogProps> = ({ onBack, initialData }) => {
         }
         if (!validateForm()) return;
         
+        // Save to recent projects first
         const stateForRecentProjects = await prepareStateForRecentProjectStorage(headerData, photosData);
         const formattedDate = formatDateForRecentProject(headerData.date);
         const dateSuffix = formattedDate ? ` - ${formattedDate}` : '';
-        const projectName = `${headerData.projectName || 'Untitled Combine Log'}${dateSuffix}`;
+        const projectName = `${headerData.projectName || 'Untitled Combined Log'}${dateSuffix}`;
 
         const newTimestamp = await addRecentProject(stateForRecentProjects, {
             type: 'combinedLog',
@@ -619,7 +631,7 @@ const CombinedLog: React.FC<CombinedLogProps> = ({ onBack, initialData }) => {
                     return Math.max(labelHeight, valueHeight);
                 };
                 
-                const topPadding = 5;
+                const topPadding = 5; 
                 let yPos = firstLineY + topPadding;
             
                 const proponentHeight = drawFieldAndGetHeight('Proponent', headerData.proponent, col1X, yPos, col1MaxWidth);
@@ -688,6 +700,7 @@ const CombinedLog: React.FC<CombinedLogProps> = ({ onBack, initialData }) => {
                 };
 
                 totalTextHeight += measureFieldHeight('Photo', photo.photoNumber);
+                totalTextHeight += measureFieldHeight('Direction', photo.direction || 'N/A');
                 totalTextHeight += measureFieldHeight('Date', photo.date);
                 totalTextHeight += measureFieldHeight('Location', photo.location);
                 totalTextHeight += measureFieldHeight('Description', photo.description, true);
@@ -713,12 +726,12 @@ const CombinedLog: React.FC<CombinedLogProps> = ({ onBack, initialData }) => {
                 const drawTextField = (label: string, value: string, isDesc = false) => {
                     const valueOrDefault = value || ' ';
                     if (isDesc) {
-                        docInstance.setFontSize(13);
+                        docInstance.setFontSize(13); 
                         docInstance.setFont('times', 'bold');
                         docInstance.text(`${label}:`, margin, textY);
                         textY += docInstance.getTextDimensions(`${label}:`, { maxWidth: textBlockWidth }).h + 2;
                         
-                        docInstance.setFontSize(12);
+                        docInstance.setFontSize(12); 
                         docInstance.setFont('times', 'normal');
                         const dims = docInstance.getTextDimensions(valueOrDefault, { maxWidth: textBlockWidth });
                         docInstance.text(valueOrDefault, margin, textY, { maxWidth: textBlockWidth });
@@ -727,32 +740,40 @@ const CombinedLog: React.FC<CombinedLogProps> = ({ onBack, initialData }) => {
                     }
                     
                     const labelText = `${label}:`;
+
                     docInstance.setFontSize(13);
                     docInstance.setFont('times', 'bold');
                     const labelWidth = docInstance.getTextWidth(labelText);
                     const labelHeight = docInstance.getTextDimensions(labelText).h;
+
                     docInstance.text(labelText, margin, textY);
                     
                     docInstance.setFontSize(12);
                     docInstance.setFont('times', 'normal');
-                    const valueX = margin + labelWidth + 1;
+                    
+                    const valueX = margin + labelWidth + 1; 
                     const valueMaxWidth = textBlockWidth - labelWidth - 1;
+                    
                     const valueLines = docInstance.splitTextToSize(valueOrDefault, valueMaxWidth);
                     const valueHeight = docInstance.getTextDimensions(valueLines).h;
+
                     docInstance.text(valueLines, valueX, textY);
                     textY += Math.max(labelHeight, valueHeight) + 2;
                 };
 
                 drawTextField('Photo', photo.photoNumber);
+                drawTextField('Direction', photo.direction || 'N/A');
                 drawTextField('Date', photo.date);
                 drawTextField('Location', photo.location);
                 drawTextField('Description', photo.description, true);
 
                 const textBottom = textY;
+
+                let scaledHeight = 0;
                 let imageBottom = yStart;
                 if (photo.imageUrl) {
                     const { width, height } = await getImageDimensions(photo.imageUrl);
-                    const scaledHeight = height * (imageBlockWidth / width);
+                    scaledHeight = height * (imageBlockWidth / width);
                     docInstance.addImage(photo.imageUrl, 'JPEG', imageX, yStart, imageBlockWidth, scaledHeight);
                     imageBottom = yStart + scaledHeight;
                 }
@@ -793,7 +814,9 @@ const CombinedLog: React.FC<CombinedLogProps> = ({ onBack, initialData }) => {
             
             for (let i = 0; i < pages.length; i++) {
                 const group = pages[i];
-                if (i > 0) doc.addPage();
+                if (i > 0) {
+                    doc.addPage();
+                }
 
                 let yPos = drawHeader(doc);
                 const photosOnPage = group.map(i => photosData[i]);
@@ -830,7 +853,9 @@ const CombinedLog: React.FC<CombinedLogProps> = ({ onBack, initialData }) => {
                             const photo = photosOnPage[i];
                             const photoHeight = heightsOnPage[i];
                             await drawPhotoEntry(doc, photo, yPos);
+
                             yPos += photoHeight;
+
                             if (i < numPhotosOnPage - 1) {
                                 yPos += gap; 
                                 doc.setLineWidth(0.5);
@@ -841,6 +866,7 @@ const CombinedLog: React.FC<CombinedLogProps> = ({ onBack, initialData }) => {
                         }
                     }
                 }
+                
                 drawFooterLine(doc);
             }
             
@@ -854,7 +880,7 @@ const CombinedLog: React.FC<CombinedLogProps> = ({ onBack, initialData }) => {
             }
 
             const sanitize = (name: string) => name.replace(/[^a-z0-9_]/gi, '-').toLowerCase();
-            const filename = `${sanitize(headerData.projectNumber) || 'project'}_${sanitize(headerData.projectName) || 'combinedlog'}_Photolog.pdf`;
+            const filename = `${sanitize(headerData.projectNumber) || 'project'}_${sanitize(headerData.projectName) || 'combined'}_Log.pdf`;
             
             const pdfBlob = doc.output('blob');
             const pdfUrl = URL.createObjectURL(pdfBlob);
@@ -868,9 +894,10 @@ const CombinedLog: React.FC<CombinedLogProps> = ({ onBack, initialData }) => {
 
     const handleSaveProject = async () => {
         const stateForRecentProjects = await prepareStateForRecentProjectStorage(headerData, photosData);
+        
         const formattedDate = formatDateForRecentProject(headerData.date);
         const dateSuffix = formattedDate ? ` - ${formattedDate}` : '';
-        const projectName = `${headerData.projectName || 'Untitled Combine Log'}${dateSuffix}`;
+        const projectName = `${headerData.projectName || 'Untitled Combined Log'}${dateSuffix}`;
 
         const newTimestamp = await addRecentProject(stateForRecentProjects, {
             type: 'combinedLog',
@@ -883,7 +910,7 @@ const CombinedLog: React.FC<CombinedLogProps> = ({ onBack, initialData }) => {
         const stateForFileExport = { headerData, photosData: photosForExport };
 
         const sanitize = (name: string) => name.replace(/[^a-z0-9_]/gi, '-').toLowerCase();
-        const filename = `${sanitize(headerData.projectNumber) || 'project'}_${sanitize(headerData.projectName) || 'combinedlog'}.clog`;
+        const filename = `${sanitize(headerData.projectNumber) || 'project'}_${sanitize(headerData.projectName) || 'combined'}_Log.clog`;
 
         // @ts-ignore
         if (window.electronAPI) {
@@ -900,7 +927,7 @@ const CombinedLog: React.FC<CombinedLogProps> = ({ onBack, initialData }) => {
             URL.revokeObjectURL(link.href);
         }
     };
-    
+
     const handleDownloadPhotos = useCallback(async () => {
         if (isDownloadingRef.current) return;
         isDownloadingRef.current = true;
@@ -950,7 +977,7 @@ Description: ${photo.description || 'N/A'}
             await new Promise(resolve => setTimeout(resolve, 100));
             
             const sanitize = (name: string) => name.replace(/[^a-z0-9_]/gi, '-').toLowerCase();
-            const zipFilename = `${sanitize(headerData.projectNumber) || 'project'}_${sanitize(headerData.projectName) || 'combinedlog'}_Photos.zip`;
+            const zipFilename = `${sanitize(headerData.projectNumber) || 'project'}_${sanitize(headerData.projectName) || 'combined'}_Photos.zip`;
             
             // @ts-ignore
             if (window.electronAPI?.saveZipFile) {
@@ -974,25 +1001,33 @@ Description: ${photo.description || 'N/A'}
         }
     }, [photosData, headerData]);
 
+    // Create a ref to hold the latest handler function.
     const downloadHandlerRef = useRef(handleDownloadPhotos);
     useEffect(() => {
         downloadHandlerRef.current = handleDownloadPhotos;
     }, [handleDownloadPhotos]);
 
+    // Create a stable listener function that always calls the latest handler from the ref.
     const stableListener = useCallback(() => {
         if (downloadHandlerRef.current) {
             downloadHandlerRef.current();
         }
     }, []);
 
+    // Effect to add and remove the stable listener.
     useEffect(() => {
         const api = window.electronAPI;
         if (api && api.onDownloadPhotos && api.removeAllDownloadPhotosListeners) {
+            // On mount, defensively remove any lingering listeners. This ensures that only
+            // this active component instance reacts to the download command from the main menu.
             api.removeAllDownloadPhotosListeners();
+            
+            // Then, add the listener for this specific component instance.
             api.onDownloadPhotos(stableListener);
         }
         
         return () => {
+            // On unmount, clean up the listener we added to prevent memory leaks.
             if (api && api.removeDownloadPhotosListener) {
                 api.removeDownloadPhotosListener(stableListener);
             }
@@ -1025,39 +1060,6 @@ Description: ${photo.description || 'N/A'}
         }
     };
 
-    const handleImportProjects = async (projectsToImport: RecentProject[]) => {
-        setStatusMessage('Importing photos...');
-        setShowStatusModal(true);
-
-        const newPhotos: PhotoData[] = [];
-        let newIdCounter = photosData.length > 0 ? Math.max(...photosData.map(p => p.id)) + 1 : 1;
-
-        for (const project of projectsToImport) {
-            try {
-                const projectData = await retrieveProject(project.timestamp);
-                if (projectData?.photosData && Array.isArray(projectData.photosData)) {
-                    for (const photo of projectData.photosData) {
-                        const imageUrl = photo.imageId ? await retrieveImage(photo.imageId) : photo.imageUrl;
-                        if (imageUrl) {
-                            newPhotos.push({
-                                ...photo,
-                                id: newIdCounter++,
-                                imageUrl,
-                                photoNumber: '', // will be renumbered
-                            });
-                        }
-                    }
-                }
-            } catch (e) {
-                console.error(`Failed to import project ${project.name}:`, e);
-            }
-        }
-        
-        setPhotosData(prev => renumberPhotos([...prev, ...newPhotos]));
-        
-        setShowStatusModal(false);
-    };
-
     const getPhotoErrors = (id: number): Set<keyof PhotoData> => {
         const photoErrors = new Set<keyof PhotoData>();
         errors.forEach(errorKey => {
@@ -1079,6 +1081,49 @@ Description: ${photo.description || 'N/A'}
         return headerErrors;
     };
 
+    const handleImport = async (selectedProjects: RecentProject[]) => {
+        setStatusMessage('Importing photos...');
+        setShowStatusModal(true);
+        
+        try {
+            const newPhotos: PhotoData[] = [];
+            let startingId = photosData.length > 0 ? Math.max(...photosData.map(p => p.id)) + 1 : 1;
+
+            for (const proj of selectedProjects) {
+                const projectData = await retrieveProject(proj.timestamp);
+                if (projectData && projectData.photosData) {
+                    for (const photo of projectData.photosData) {
+                         let imageUrl = photo.imageUrl;
+                         if (!imageUrl && photo.imageId) {
+                             imageUrl = await retrieveImage(photo.imageId);
+                         }
+
+                         if (imageUrl) {
+                             newPhotos.push({
+                                 ...photo,
+                                 id: startingId++,
+                                 photoNumber: '', // Will be renumbered
+                                 imageUrl: imageUrl
+                             });
+                         }
+                    }
+                }
+            }
+
+            if (newPhotos.length > 0) {
+                setPhotosData(prev => renumberPhotos([...prev, ...newPhotos]));
+            } else {
+                alert('No photos found in selected projects.');
+            }
+
+        } catch (e) {
+            console.error("Error importing photos:", e);
+            alert("Failed to import photos from some projects.");
+        } finally {
+            setShowStatusModal(false);
+        }
+    };
+
     return (
         <div className="bg-gray-100 min-h-screen">
             {pdfPreview && (
@@ -1092,12 +1137,14 @@ Description: ${photo.description || 'N/A'}
                 <ImageModal imageUrl={enlargedImageUrl} onClose={() => setEnlargedImageUrl(null)} />
             )}
             {showStatusModal && <ActionStatusModal message={statusMessage} />}
+            
             <ImportProjectsModal 
-                isOpen={isImportModalOpen}
-                onClose={() => setIsImportModalOpen(false)}
-                onImport={handleImportProjects}
+                isOpen={isImportModalOpen} 
+                onClose={() => setIsImportModalOpen(false)} 
+                onImport={handleImport}
                 currentProjectTimestamp={projectTimestamp}
             />
+
             <SpecialCharacterPalette />
             <div className="max-w-7xl mx-auto p-4 md:p-8">
                 <div className="flex flex-wrap justify-between items-center gap-2 mb-4">
@@ -1115,8 +1162,8 @@ Description: ${photo.description || 'N/A'}
                             style={{ display: 'none' }}
                             accept=".clog"
                         />
-                         <button onClick={() => setIsImportModalOpen(true)} className="bg-teal-600 hover:bg-teal-700 text-white font-bold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
-                            <DocumentDuplicateIcon className="h-7 w-7" /> <span>Import Photos</span>
+                        <button onClick={() => setIsImportModalOpen(true)} className="bg-teal-600 hover:bg-teal-700 text-white font-bold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
+                            <DocumentDuplicateIcon className="h-5 w-5" /> <span>Import Photos</span>
                         </button>
                         <button onClick={handleSaveProject} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
                             <SaveIcon /> <span>Save Project</span>
@@ -1159,7 +1206,6 @@ Description: ${photo.description || 'N/A'}
                                             <button
                                                 onClick={() => addPhoto(index)}
                                                 className="bg-white hover:bg-gray-100 text-[#007D8C] font-bold py-2 px-4 rounded-full border-2 border-[#007D8C] inline-flex items-center gap-2 transition duration-200 shadow-sm"
-                                                aria-label={`Add new photo after photo ${index + 1}`}
                                             >
                                                 <PlusIcon />
                                                 <span>Add Photo Here</span>
@@ -1182,7 +1228,7 @@ Description: ${photo.description || 'N/A'}
                 </div>
                 {photosData.length > 0 && <div className="border-t-4 border-[#007D8C] my-8" />}
                 <footer className="text-center text-gray-500 text-sm py-4">
-                    X-TES Digital Reporting v1.0.6
+                    X-TES Digital Reporting v1.0.7
                 </footer>
             </div>
              {showUnsupportedFileModal && (

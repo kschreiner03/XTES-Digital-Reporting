@@ -1,3 +1,4 @@
+
 import React, { useState, ReactElement, useEffect, useRef, useCallback } from 'react';
 import type { DfrSaskpowerData, ChecklistOption, PhotoData, LocationActivity, ActivityBlock } from '../types';
 import { DownloadIcon, SaveIcon, FolderOpenIcon, ArrowLeftIcon, PlusIcon, TrashIcon, ArrowUpIcon, ArrowDownIcon, CloseIcon, FolderArrowDownIcon, ChatBubbleLeftIcon } from './icons';
@@ -333,9 +334,9 @@ const DfrSaskpower = ({ onBack, initialData }: DfrSaskpowerProps): ReactElement 
         generalActivity: '',
         locationActivities: [],
         totalHoursWorked: '',
-        completedTailgate: 'Yes',
-        reviewedTailgate: 'Yes',
-        reviewedPermits: 'Yes',
+        completedTailgate: '',
+        reviewedTailgate: '',
+        reviewedPermits: '',
         equipmentOnsite: '',
         weatherAndGroundConditions: '',
         environmentalProtection: '',
@@ -447,6 +448,16 @@ const DfrSaskpower = ({ onBack, initialData }: DfrSaskpowerProps): ReactElement 
         const loadInitialData = async () => {
             if (initialData) {
                 await processLoadedData(initialData);
+            } else {
+                // Load defaults for new projects
+                try {
+                    const settings = JSON.parse(localStorage.getItem('xtec_general_settings') || '{}');
+                    if (settings.defaultMonitor) {
+                         setData(prev => ({ ...prev, environmentalMonitor: settings.defaultMonitor }));
+                    }
+                } catch (e) {
+                    console.error("Failed to load settings", e);
+                }
             }
         };
         loadInitialData();
@@ -584,7 +595,8 @@ const DfrSaskpower = ({ onBack, initialData }: DfrSaskpowerProps): ReactElement 
             'projectNumber', 'environmentalMonitor', 'envFileNumber', 
             'generalActivity', 'totalHoursWorked', 'equipmentOnsite', 
             'weatherAndGroundConditions', 'environmentalProtection', 
-            'wildlifeObservations', 'futureMonitoring'
+            'wildlifeObservations', 'futureMonitoring',
+            'completedTailgate', 'reviewedTailgate', 'reviewedPermits'
         ];
 
         requiredFields.forEach(field => {
@@ -1401,7 +1413,7 @@ Description: ${photo.description || 'N/A'}
                     </div>
                 </div>
                 <footer className="text-center text-gray-500 text-sm py-4 mt-8">
-                    X-TES Digital Reporting v1.0.6
+                    X-TES Digital Reporting v1.0.7
                 </footer>
             </div>
             {showUnsupportedFileModal && (

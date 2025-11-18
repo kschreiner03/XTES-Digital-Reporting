@@ -83,3 +83,17 @@ export const deleteProject = async (id: number): Promise<void> => {
     const db = await initDB();
     await db.delete(PROJECT_STORE_NAME, id);
 };
+
+/**
+ * Clears all data from the database stores.
+ * Used for freeing up storage space.
+ */
+export const clearDatabase = async (): Promise<void> => {
+    const db = await initDB();
+    const tx = db.transaction([IMAGE_STORE_NAME, PROJECT_STORE_NAME], 'readwrite');
+    await Promise.all([
+        tx.objectStore(IMAGE_STORE_NAME).clear(),
+        tx.objectStore(PROJECT_STORE_NAME).clear(),
+        tx.done
+    ]);
+};

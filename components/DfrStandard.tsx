@@ -1,3 +1,4 @@
+
 import React, { useState, ReactElement, useEffect, useRef, useCallback } from 'react';
 import { DfrHeader } from './DfrHeader';
 import PhotoEntry from './PhotoEntry';
@@ -575,6 +576,18 @@ const DfrStandard = ({ onBack, initialData }: DfrStandardProps): ReactElement =>
                         })
                     );
                     setPhotosData(hydratedPhotos);
+                }
+            } else {
+                // Load defaults for new projects
+                try {
+                    const settings = JSON.parse(localStorage.getItem('xtec_general_settings') || '{}');
+                    setHeaderData(prev => ({
+                        ...prev,
+                        proponent: settings.defaultProponent || prev.proponent,
+                        monitor: settings.defaultMonitor || prev.monitor
+                    }));
+                } catch (e) {
+                    console.error("Failed to load settings", e);
                 }
             }
         };
@@ -1742,7 +1755,7 @@ Description: ${photo.description || 'N/A'}
                 </div>
                 {photosData.length > 0 && <div className="border-t-4 border-[#007D8C] my-8" />}
                 <footer className="text-center text-gray-500 text-sm py-4">
-                    X-TES Digital Reporting v1.0.6
+                    X-TES Digital Reporting v1.0.7
                 </footer>
             </div>
             {showUnsupportedFileModal && (
