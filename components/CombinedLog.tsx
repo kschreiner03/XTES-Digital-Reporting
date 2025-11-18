@@ -1,9 +1,8 @@
-
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Header from './Header';
 import PhotoEntry from './PhotoEntry';
 import type { HeaderData, PhotoData } from '../types';
-import { PlusIcon, DownloadIcon, SaveIcon, FolderOpenIcon, CloseIcon, ArrowLeftIcon, FolderArrowDownIcon, DocumentDuplicateIcon } from './icons';
+import { PlusIcon, DownloadIcon, SaveIcon, FolderOpenIcon, CloseIcon, ArrowLeftIcon, FolderArrowDownIcon, DocumentDuplicateIcon, ClipboardDocumentListIcon } from './icons';
 import { AppType } from '../App';
 import { storeImage, retrieveImage, deleteImage, storeProject, deleteProject, retrieveProject } from './db';
 import { SpecialCharacterPalette } from './SpecialCharacterPalette';
@@ -313,6 +312,7 @@ const CombinedLog: React.FC<CombinedLogProps> = ({ onBack, initialData }) => {
     const [statusMessage, setStatusMessage] = useState('');
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const fileImportInputRef = useRef<HTMLInputElement>(null);
     const isDownloadingRef = useRef(false);
 
     // Define this helper function first as it is used in parseAndLoadProject
@@ -1124,6 +1124,83 @@ Description: ${photo.description || 'N/A'}
         }
     };
 
+    const processImportedFiles = async (fileContents: string[]) => {
+        let newPhotos: PhotoData[] = [];
+        let startingId = photosData.length > 0 ? Math.max(...photosData.map(p => p.id)) + 1 : 1;
+
+        for (const content of fileContents) {
+            try {
+                const projectData = JSON.parse(content);
+                const incomingPhotos = projectData.photosData;
+                
+                if (incomingPhotos && Array.isArray(incomingPhotos)) {
+                     for (const photo of incomingPhotos) {
+                           if (photo.imageUrl) {
+                               newPhotos.push({
+                                   ...photo,
+                                   id: startingId++,
+                                   photoNumber: '',
+                               });
+                           }
+                     }
+                }
+            } catch (e) {
+                console.error("Failed to parse a file", e);
+            }
+        }
+        
+        if (newPhotos.length > 0) {
+            setPhotosData(prev => renumberPhotos([...prev, ...newPhotos]));
+            alert(`Successfully imported ${newPhotos.length} photos.`);
+        } else {
+            alert("No photos found in the selected files. Ensure the files are valid project files with embedded images.");
+        }
+   };
+
+   const handleImportFromFiles = async () => {
+        // @ts-ignore
+        if (window.electronAPI) {
+            setStatusMessage('Importing files...');
+            setShowStatusModal(true);
+            try {
+                // @ts-ignore
+                const result = await window.electronAPI.loadMultipleProjects();
+                if (result.success && result.data) {
+                    await processImportedFiles(result.data);
+                }
+            } catch(e) {
+                console.error(e);
+            } finally {
+                setShowStatusModal(false);
+            }
+        } else {
+            fileImportInputRef.current?.click();
+        }
+    };
+
+    const handleFileImportSelected = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const files = event.target.files;
+        if (!files || files.length === 0) return;
+        
+        setStatusMessage('Importing files...');
+        setShowStatusModal(true);
+
+        const fileContents: string[] = [];
+        for (let i = 0; i < files.length; i++) {
+             try {
+                const text = await files[i].text();
+                fileContents.push(text);
+             } catch (e) {
+                 console.error("Error reading file", files[i].name);
+             }
+        }
+        
+        await processImportedFiles(fileContents);
+        setShowStatusModal(false);
+        
+        if (event.target) event.target.value = '';
+    };
+
     return (
         <div className="bg-gray-100 min-h-screen">
             {pdfPreview && (
@@ -1162,8 +1239,19 @@ Description: ${photo.description || 'N/A'}
                             style={{ display: 'none' }}
                             accept=".clog"
                         />
-                        <button onClick={() => setIsImportModalOpen(true)} className="bg-teal-600 hover:bg-teal-700 text-white font-bold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
+                        <input
+                            type="file"
+                            ref={fileImportInputRef}
+                            onChange={handleFileImportSelected}
+                            style={{ display: 'none' }}
+                            accept=".plog,.dfr,.spdfr,.clog,.json"
+                            multiple
+                        />
+                         <button onClick={() => setIsImportModalOpen(true)} className="bg-teal-600 hover:bg-teal-700 text-white font-bold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
                             <DocumentDuplicateIcon className="h-5 w-5" /> <span>Import Photos</span>
+                        </button>
+                        <button onClick={handleImportFromFiles} className="bg-teal-600 hover:bg-teal-700 text-white font-bold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
+                            <FolderOpenIcon className="h-5 w-5" /> <span>Import from Files</span>
                         </button>
                         <button onClick={handleSaveProject} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
                             <SaveIcon /> <span>Save Project</span>
