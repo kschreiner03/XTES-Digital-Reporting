@@ -1,3 +1,4 @@
+
 const { contextBridge, ipcRenderer } = require('electron');
 
 // Expose protected methods that allow the renderer process to use
@@ -6,7 +7,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   saveProject: (data, defaultPath) => ipcRenderer.invoke('save-project', data, defaultPath),
   loadProject: (fileType) => ipcRenderer.invoke('load-project', fileType),
   loadMultipleProjects: () => ipcRenderer.invoke('load-multiple-projects'),
-  savePdf: (defaultPath) => ipcRenderer.invoke('save-pdf', defaultPath),
+  savePdf: (data, defaultPath) => ipcRenderer.invoke('save-pdf', data, defaultPath),
   readFile: (filePath) => ipcRenderer.invoke('read-file', filePath),
   onOpenFile: (callback) => ipcRenderer.on('open-file-path', (_event, value) => callback(value)),
   onDownloadPhotos: (callback) => ipcRenderer.on('download-photos', callback),
@@ -17,4 +18,5 @@ contextBridge.exposeInMainWorld('electronAPI', {
   removeUpdateAvailableListener: () => ipcRenderer.removeAllListeners('update-available'),
   onOpenSettings: (callback) => ipcRenderer.on('open-settings', callback),
   removeOpenSettingsListener: () => ipcRenderer.removeAllListeners('open-settings'),
+  getAssetPath: (filename) => ipcRenderer.invoke('get-asset-path', filename),
 });

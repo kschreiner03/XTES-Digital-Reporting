@@ -1,3 +1,4 @@
+
 import React, { useRef } from 'react';
 
 interface BulletPointEditorProps {
@@ -90,7 +91,7 @@ const BulletPointEditor: React.FC<BulletPointEditorProps> = ({ label, value, onC
 
     return (
         <div>
-            {label && <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>}
+            {label && <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{label}</label>}
             <textarea
                 ref={textareaRef}
                 value={value}
@@ -99,7 +100,7 @@ const BulletPointEditor: React.FC<BulletPointEditorProps> = ({ label, value, onC
                 onKeyDown={handleKeyDown}
                 rows={rows}
                 placeholder={placeholder}
-                className={`block w-full p-2 border rounded-md shadow-sm focus:ring-2 focus:ring-[#007D8C] focus:border-[#007D8C] transition ${isInvalid ? 'border-red-500' : 'border-gray-300'}`}
+                className={`block w-full p-2 border rounded-md shadow-sm focus:ring-2 focus:ring-[#007D8C] focus:border-[#007D8C] transition bg-white dark:bg-gray-700 text-black dark:text-white dark:placeholder-gray-400 ${isInvalid ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'}`}
                 spellCheck={true}
             />
         </div>

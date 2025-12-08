@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -159,12 +160,12 @@
 <body>
     <div class="container">
         <header>
-            <img src="https://ik.imagekit.io/fzpijprte/XTerraLogo2019_Horizontal.jpg?updatedAt=1758827714962" alt="X-TERRA Logo" class="header-logo"/>
+            <img id="header-logo" alt="X-TERRA Logo" class="header-logo"/>
             <p class="header-subtitle">A Thunderchild Energy Services Company</p>
         </header>
 
         <h1 class="procedure-title">X-TES Digital Reporting Application Procedure</h1>
-        
+
         <div class="tabs">
             <button class="tab-button active" onclick="openTab(event, 'sop')">SOP</button>
             <button class="tab-button" onclick="openTab(event, 'examples')">SaskPower DFR Examples</button>
@@ -333,165 +334,135 @@
                     <h3 id="ui-report-screen">4.3.2&emsp;The Report Creation Screen</h3>
                     <p>This is where you will do all your work.</p>
                     <ul>
-                       <li><strong>Top Bar:</strong> Contains a "Home" button to return to the Landing Page (unsaved work will be lost) and a group of action buttons on the right for "Open Project," "Save Project," and "Save to PDF."</li>
-                       <li><strong>Desktop Menu Bar:</strong> In the installed desktop app, a menu bar at the very top of the window contains:
-                           <ul>
-                               <li><strong>File > Download Photos:</strong> Exports all photos and metadata into a zip file.</li>
-                               <li><strong>Help > How to Use:</strong> Opens this SOP document.</li>
-                               <li><strong>Help > Report Issues:</strong> Opens a web form to report bugs or suggest improvements.</li>
-                           </ul>
-                       </li>
-                        <li><strong>Symbols Palette:</strong> A floating vertical tab on the right edge of the screen. Clicking it opens a palette of special characters (°, ±, µ). Clicking any character copies it to your clipboard, ready to be pasted.</li>
-                    </ul>
-                    
-                    <h2 id="report-creation">4.4&emsp;Report Creation & Data Entry</h2>
-                    <div class="note">
-                        <strong>CRITICAL DATE FORMAT:</strong> In all report headers, the date must be entered in the format <strong>Month Day, Year</strong> (e.g., <code>October 1, 2025</code>). Using other formats (e.g., <code>10/01/2025</code>) may cause errors when generating filenames or displaying dates.
-                    </div>
-                    <h3 id="report-photolog">4.4.1&emsp;Photographic Log</h3>
-                    <p>The simplest report type. Fill out all header fields (Proponent, Location, Date, Project #, Project Name) and proceed to add photos as described in section 4.5.</p>
-                    
-                    <h3 id="report-dfr-standard">4.4.2&emsp;Standard Daily Field Report (DFR)</h3>
-                    <p>A comprehensive report for most projects, combining detailed text sections with an integrated photographic log.</p>
-                    <ol>
-                        <li><strong>Header Fields:</strong> Fill out all required fields. The dropdown field (defaulting to "MOE FILE #") allows you to specify the type of environmental file number being referenced.</li>
-                        <li><strong>Using Location-Specific Activities:</strong> The Project Activities section is for the main narrative. It is broken into two types of entries:
-                            <ul>
-                                <li><strong>General Activity:</strong> Use this large text box for the main overview of the day or for activities not tied to one specific location (e.g., travel, tailgate meetings, general site inspections).</li>
-                                <li><strong>Location-Specific Activity (Optional):</strong> This is a powerful tool for projects with work at multiple, distinct locations in one day. Click "Add Location-Specific Activity" to create a separate, organized block for each location. For example, you can create one block for "Wetland A" and detail all work performed there, then a second block for "Wetland B." This creates a much clearer report than a single long narrative.</li>
-                            </ul>
-                        </li>
-                         <li><strong>Other Text Sections & Bullet-Point Editor:</strong> The multi-line text fields (Communication, Weather, etc.) use a custom editor.
-                            <ul>
-                                <li>Press <kbd>Enter</kbd> to create a new bullet point on the next line.</li>
-                                <li>Press <kbd>Tab</kbd> to indent the current line (create a sub-bullet).</li>
-                                <li>Press <kbd>Shift</kbd> + <kbd>Tab</kbd> to outdent the current line.</li>
-                                <li>Press <kbd>Enter</kbd> on an empty bulleted line to outdent or create a normal paragraph break.</li>
-                            </ul>
-                         </li>
-                    </ol>
-
-                    <h3 id="report-dfr-saskpower">4.4.3&emsp;SaskPower Daily Field Report (DFR)</h3>
-                    <p>A specialized DFR tailored for SaskPower projects with unique fields and a safety checklist.</p>
-                    <ol>
-                        <li><strong>Report Information:</strong> Fill in all fields, including the unique fields for Vendor & Foreman, ENV File Number, and Total Hours Worked.</li>
-                        <li><strong>Safety Checklist:</strong> Select "Yes," "No," or "NA" for each of the three safety-related items.</li>
-                        <li><strong>Project Activities:</strong> Unlike the standard DFR, there is only one main text box for all activities. If work occurred at multiple locations, they must be described sequentially within this single box. A detailed, timestamped log is required.</li>
-                        <div class="note">
-                            <strong>Note on Opening Older Files:</strong> If you open an older SaskPower DFR file that used separate location blocks, the application will automatically merge all activity text into the single "Project Activities" box to conform to the new standard. A notice will appear. Be sure to review and save the project to finalize this change.
-                        </div>
-                    </ol>
-                    
-                    <h2 id="photo-log-management">4.5&emsp;Photographic Log Management</h2>
-                    <ol>
-                        <li><strong>Adding Entries:</strong> Click "Add Photo" for a standard entry. In the Standard DFR, you can also click "Add Map" for overview images like GPS tracks or site plans. Maps are given their own full page in the final PDF for better readability and are automatically labeled sequentially (Map 1, Map 2, etc.). You can also click "Add Photo Here" between existing entries to insert a new photo at a specific position.</li>
-                        <li><strong>Uploading Images:</strong> Click the camera icon area and select one of your prepared, cropped and resized images.</li>
-                        <li><strong>Managing Entries:</strong>
-                            <ul>
-                                <li>Use the up and down arrows to reorder photos. All photo/map numbers will update automatically.</li>
-                                <li>Click the trash can icon to permanently delete an entry.</li>
-                                <li>Hover over an uploaded image and click the "enlarge" icon that appears in the top-right corner to view it full-screen.</li>
-                            </ul>
-                        </li>
-                    </ol>
-
-                    <h2 id="data-management">4.6&emsp;Saving, Exporting & Data Management</h2>
-                    <div class="warning">
-                        <strong>THE GOLDEN RULE: "SAVE PROJECT" VS. "SAVE TO PDF".</strong> Understanding this distinction is essential to avoid data loss and rework.
-                        <ul>
-                            <li><strong>Save Project:</strong> Creates a live, <strong>EDITABLE</strong> source file (<span class="filepath">.dfr</span>, <span class="filepath">.plog</span>). This is your master copy for saving progress and making future edits. You can only open these files with this application.</li>
-                            <li><strong>Save to PDF:</strong> Generates a final, <strong>NON-EDITABLE</strong> document for submission, printing, or sharing. It cannot be opened or edited by this application.</li>
-                        </ul>
-                    </div>
-                    <ol>
-                        <li><strong>Procedure: Saving a Project File:</strong> Click the "Save Project" button. A "Save As" dialog will appear. Choose a location on your computer to save the file. This action also automatically adds or updates the project in your "Recent Projects" list for quick access.</li>
-                        <li><strong>Procedure: Generating a PDF:</strong>
-                            <div class="note">
-                                <strong>Best Practice:</strong> Always click "Save Project" immediately before you "Save to PDF." This ensures you have an editable source file that perfectly matches the final PDF.
-                            </div>
-                            Ensure all required fields (highlighted in red if empty) are filled. Click "Save to PDF." A full-screen preview will appear. Review it carefully. If it is correct, click the "Download PDF" button to save the final file.
-                        </li>
-                        <li><strong>Procedure: Downloading All Photos (Desktop App):</strong> In the desktop app menu, go to <strong>File > Download Photos</strong>. The application will generate and ask you to save a single <span class="filepath">.zip</span> file. This file contains all your report images (named by photo/map number) and a <span class="filepath">metadata.txt</span> file with all associated text (date, location, direction, description).</li>
-                    </ol>
-
-                    <h2 id="advanced-features">4.7&emsp;Advanced Features & Data Concepts</h2>
-                    <ol>
-                        <li><strong>File Associations ("Open with..."):</strong> You can set the application as the default program for project files to open them with a double-click. Right-click a project file (e.g., <span class="filepath">my_project.dfr</span>), choose "Open with > Choose another app," and navigate to the application shortcut on your Desktop. Select the <span class="filepath">X-TES Digital Reporting</span> shortcut file and check "Always use this app...". Repeat for <span class="filepath">.plog</span> and <span class="filepath">.spdfr</span> files.</li>
-                        <li><strong>Understanding Local Data Storage:</strong> The "Recent Projects" list is powered by a local database (IndexedDB) on your computer. This allows for instant loading of your recent work. This data is stored <strong>only on the computer you are using</strong> and does not sync to the cloud or other machines.</li>
-                        <li><strong>Removing vs. Deleting Recent Projects:</strong> On the landing page, clicking the "..." on a recent project gives two options:
-                            <ul>
-                                <li><strong>Remove from recent:</strong> A safe action that only removes the project's shortcut from the landing page list. Your saved project file (<span class="filepath">.dfr</span>) on your computer is unaffected.</li>
-                                <li><strong>Delete project permanently:</strong> This removes the temporary saved file from the application's local database. You will need to open your saved project file from the server following this step.</li>
-                            </ul>
-                        </li>
-                    </ol>
-                </section>
+                   <li><strong>Top Bar:</strong> Contains a "Home" button to return to the Landing Page (unsaved work will be lost) and a group of action buttons on the right for "Open Project," "Save Project," and "Save to PDF."</li>
+                   <li><strong>Desktop Menu Bar:</strong> In the installed desktop app, a menu bar at the very top of the window contains:
+                       <ul>
+                           <li><strong>File > Download Photos:</strong> Exports all photos and metadata into a zip file.</li>
+                           <li><strong>Help > How to Use:</strong> Opens this SOP document.</li>
+                           <li><strong>Help > Report Issues:</strong> Opens a web form to report bugs or suggest improvements.</li>
+                       </ul>
+                   </li>
+                    <li><strong>Symbols Palette:</strong> A floating vertical tab on the right edge of the screen. Clicking it opens a palette of special characters (°, ±, µ). Clicking any character copies it to your clipboard, ready to be pasted.</li>
+                </ul>
                 
-                <section id="formatting-tips">
-                     <h1>5&emsp;FORMATTING TIPS</h1>
-                     <p>Here are some formatting tips to assist with your final report.</p>
-                     <div class="note">
-                        <strong>Issue: Hanging header (aka – text block is on separate page from header)</strong>
-                        <p><strong>Fix:</strong> Add blank spaces in the text box above the section header you want to push to the next page.</p>
-                     </div>
-                </section>
-
-                <section id="reference-documents">
-                    <h2>Reference Documents</h2>
-                    <p>Saskatchewan Ministry of Environment. 2020. Hunting, Angling and Biodiversity Information of Saskatchewan (HABISask) Users Guide. Fish, Wildlife and Lands Branch. 3211 Albert Street, Regina, Saskatchewan. 89 pp.</p>
-                    <table class="info-table" style="margin-top: 1rem;">
-                         <thead>
-                            <tr>
-                                <td><strong>Document Title</strong></td>
-                                <td><strong>Document Location</strong></td>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr>
-                                <td>X-Terra Shared Account Archive</td>
-                                <td>S:\Quality Management\QMS Documentation\02 - SOP</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </section>
-                
-                <p style="text-align: center; margin-top: 3rem; font-style: italic;">&lt;PAGE LEFT BLANK INTENTIONALLY&gt;</p>
-
-            </main>
-        </div>
-
-        <div id="examples" class="tab-content">
-            <section>
-                <h1>SaskPower DFR Examples</h1>
-                <p>Click an example below to open the PDF in your system's default viewer. You must place the example PDF files in the application's `assets` folder.</p>
-                <div style="margin-top: 2rem;">
-                    <button class="example-button" id="btn-monitoring">
-                        Standard Monitoring Example
-                        <p class="description">A standard daily report for slashing and mulching activities.</p>
-                    </button>
-                    <button class="example-button" id="btn-noncompliance">
-                        Non-Compliance Example
-                        <p class="description">A report detailing a non-compliance event related to herbicide application near a waterbody.</p>
-                    </button>
-                    <button class="example-button" id="btn-herbicide">
-                        Herbicide Application Example
-                        <p class="description">A report focused on herbicide application while correctly maintaining buffer zones.</p>
-                    </button>
-                    <button class="example-button" id="btn-construction">
-                        Construction Monitoring Example
-                        <p class="description">A report covering construction activities like conductor removal.</p>
-                    </button>
-                    <button class="example-button" id="btn-nestsweep">
-                        Nest Sweep / Species Survey Example
-                        <p class="description">A report focused on conducting nest sweeps and documenting active nests.</p>
-                    </button>
+                <h2 id="report-creation">4.4&emsp;Report Creation & Data Entry</h2>
+                <div class="note">
+                    <strong>CRITICAL DATE FORMAT:</strong> In all report headers, the date must be entered in the format <strong>Month Day, Year</strong> (e.g., <code>October 1, 2025</code>). Using other formats (e.g., <code>10/01/2025</code>) may cause errors when generating filenames or displaying dates.
                 </div>
+                <h3 id="report-photolog">4.4.1&emsp;Photographic Log</h3>
+                <p>The simplest report type. Fill out all header fields (Proponent, Location, Date, Project #, Project Name) and proceed to add photos as described in section 4.5.</p>
+                
+                <h3 id="report-dfr-standard">4.4.2&emsp;Standard Daily Field Report (DFR)</h3>
+                <p>A comprehensive report for most projects, combining detailed text sections with an integrated photographic log.</p>
+                <ol>
+                    <li><strong>Header Fields:</strong> Fill out all required fields. The dropdown field (defaulting to "MOE FILE #") allows you to specify the type of environmental file number being referenced.</li>
+                    <li><strong>Using Location-Specific Activities:</strong> The Project Activities section is for the main narrative. It is broken into two types of entries:
+                        <ul>
+                            <li><strong>General Activity:</strong> Use this large text box for the main overview of the day or for activities not tied to one specific location (e.g., travel, tailgate meetings, general site inspections).</li>
+                            <li><strong>Location-Specific Activity (Optional):</strong> This is a powerful tool for projects with work at multiple, distinct locations in one day. Click "Add Location-Specific Activity" to create a separate, organized block for each location. For example, you can create one block for "Wetland A" and detail all work performed there, then a second block for "Wetland B." This creates a much clearer report than a single long narrative.</li>
+                        </ul>
+                    </li>
+                     <li><strong>Other Text Sections & Bullet-Point Editor:</strong> The multi-line text fields (Communication, Weather, etc.) use a custom editor.
+                        <ul>
+                            <li>Press <kbd>Enter</kbd> to create a new bullet point on the next line.</li>
+                            <li>Press <kbd>Tab</kbd> to indent the current line (create a sub-bullet).</li>
+                            <li>Press <kbd>Shift</kbd> + <kbd>Tab</kbd> to outdent the current line.</li>
+                            <li>Press <kbd>Enter</kbd> on an empty bulleted line to outdent or create a normal paragraph break.</li>
+                        </ul>
+                     </li>
+                </ol>
+
+                <h3 id="report-dfr-saskpower">4.4.3&emsp;SaskPower Daily Field Report (DFR)</h3>
+                <p>A specialized DFR tailored for SaskPower projects with unique fields and a safety checklist.</p>
+                <ol>
+                    <li><strong>Report Information:</strong> Fill in all fields, including the unique fields for Vendor & Foreman, ENV File Number, and Total Hours Worked.</li>
+                    <li><strong>Safety Checklist:</strong> Select "Yes," "No," or "NA" for each of the three safety-related items.</li>
+                    <li><strong>Project Activities:</strong> Unlike the standard DFR, there is only one main text box for all activities. If work occurred at multiple locations, they must be described sequentially within this single box. A detailed, timestamped log is required.</li>
+                    <div class="note">
+                        <strong>Note on Opening Older Files:</strong> If you open an older SaskPower DFR file that used separate location blocks, the application will automatically merge all activity text into the single "Project Activities" box to conform to the new standard. A notice will appear. Be sure to review and save the project to finalize this change.
+                    </div>
+                </ol>
+                
+                <h2 id="photo-log-management">4.5&emsp;Photographic Log Management</h2>
+                <ol>
+                    <li><strong>Adding Entries:</strong> Click "Add Photo" for a standard entry. In the Standard DFR, you can also click "Add Map" for overview images like GPS tracks or site plans. Maps are given their own full page in the final PDF for better readability and are automatically labeled sequentially (Map 1, Map 2, etc.). You can also click "Add Photo Here" between existing entries to insert a new photo at a specific position.</li>
+                    <li><strong>Uploading Images:</strong> Click the camera icon area and select one of your prepared, cropped and resized images.</li>
+                    <li><strong>Managing Entries:</strong>
+                        <ul>
+                            <li>Use the up and down arrows to reorder photos. All photo/map numbers will update automatically.</li>
+                            <li>Click the trash can icon to permanently delete an entry.</li>
+                            <li>Hover over an uploaded image and click the "enlarge" icon that appears in the top-right corner to view it full-screen.</li>
+                        </ul>
+                    </li>
+                </ol>
+
+                <h2 id="data-management">4.6&emsp;Saving, Exporting & Data Management</h2>
+                <div class="warning">
+                    <strong>THE GOLDEN RULE: "SAVE PROJECT" VS. "SAVE TO PDF".</strong> Understanding this distinction is essential to avoid data loss and rework.
+                    <ul>
+                        <li><strong>Save Project:</strong> Creates a live, <strong>EDITABLE</strong> source file (<span class="filepath">.dfr</span>, <span class="filepath">.plog</span>). This is your master copy for saving progress and making future edits. You can only open these files with this application.</li>
+                        <li><strong>Save to PDF:</strong> Generates a final, <strong>NON-EDITABLE</strong> document for submission, printing, or sharing. It cannot be opened or edited by this application.</li>
+                    </ul>
+                </div>
+                <ol>
+                    <li><strong>Procedure: Saving a Project File:</strong> Click the "Save Project" button. A "Save As" dialog will appear. Choose a location on your computer to save the file. This action also automatically adds or updates the project in your "Recent Projects" list for quick access.</li>
+                    <li><strong>Procedure: Generating a PDF:</strong>
+                        <div class="note">
+                            <strong>Best Practice:</strong> Always click "Save Project" immediately before you "Save to PDF." This ensures you have an editable source file that perfectly matches the final PDF.
+                        </div>
+                        Ensure all required fields (highlighted in red if empty) are filled. Click "Save to PDF." A full-screen preview will appear. Review it carefully. If it is correct, click the "Download PDF" button to save the final file.
+                    </li>
+                    <li><strong>Procedure: Downloading All Photos (Desktop App):</strong> In the desktop app menu, go to <strong>File > Download Photos</strong>. The application will generate and ask you to save a single <span class="filepath">.zip</span> file. This file contains all your report images (named by photo/map number) and a <span class="filepath">metadata.txt</span> file with all associated text (date, location, direction, description).</li>
+                </ol>
+
+                <h2 id="advanced-features">4.7&emsp;Advanced Features & Data Concepts</h2>
+                <ol>
+                    <li><strong>File Associations ("Open with..."):</strong> You can set the application as the default program for project files to open them with a double-click. Right-click a project file (e.g., <span class="filepath">my_project.dfr</span>), choose "Open with > Choose another app," and navigate to the application shortcut on your Desktop. Select the <span class="filepath">X-TES Digital Reporting</span> shortcut file and check "Always use this app...". Repeat for <span class="filepath">.plog</span> and <span class="filepath">.spdfr</span> files.</li>
+                    <li><strong>Understanding Local Data Storage:</strong> The "Recent Projects" list is powered by a local database (IndexedDB) on your computer. This allows for instant loading of your recent work. This data is stored <strong>only on the computer you are using</strong> and does not sync to the cloud or other machines.</li>
+                    <li><strong>Removing vs. Deleting Recent Projects:</strong> On the landing page, clicking the "..." on a recent project gives two options:
+                        <ul>
+                            <li><strong>Remove from recent:</strong> A safe action that only removes the project's shortcut from the landing page list. Your saved project file (<span class="filepath">.dfr</span>) on your computer is unaffected.</li>
+                            <li><strong>Delete project permanently:</strong> This removes the temporary saved file from the application's local database. You will need to open your saved project file from the server following this step.</li>
+                        </ul>
+                    </li>
+                </ol>
             </section>
-        </div>
+            
+            <section id="formatting-tips">
+                 <h1>5&emsp;FORMATTING TIPS</h1>
+                 <p>Here are some formatting tips to assist with your final report.</p>
+                 <div class="note">
+                    <strong>Issue: Hanging header (aka – text block is on separate page from header)</strong>
+                    <p><strong>Fix:</strong> Add blank spaces in the text box above the section header you want to push to the next page.</p>
+                 </div>
+            </section>
+
+            <section id="reference-documents">
+                <h2>Reference Documents</h2>
+                <p>Saskatchewan Ministry of Environment. 2020. Hunting, Angling and Biodiversity Information of Saskatchewan (HABISask) Users Guide. Fish, Wildlife and Lands Branch. 3211 Albert Street, Regina, Saskatchewan. 89 pp.</p>
+                <table class="info-table" style="margin-top: 1rem;">
+                     <thead>
+                        <tr>
+                            <td><strong>Document Title</strong></td>
+                            <td><strong>Document Location</strong></td>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>X-Terra Shared Account Archive</td>
+                            <td>S:\Quality Management\QMS Documentation\02 - SOP</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </section>
+            
+            <p style="text-align: center; margin-top: 3rem; font-style: italic;">&lt;PAGE LEFT BLANK INTENTIONALLY&gt;</p>
+
+        </main>
 
         <footer>
             <div>
-                <img src="https://ik.imagekit.io/fzpijprte/Thunderchild_Energy_Services_Inc__Thunderchild_First_Nation_laun.jpg?updatedAt=1760732568158" alt="Thunderchild Energy Services Logo" />
+                <img id="footer-logo" alt="Thunderchild Energy Services Logo" />
                 <p>100-303 WHEELER PL. SASKATOON, SK, S7P 0A4</p>
                 <p>TEL (306) 373 1110</p>
                 <p>FAX (306) 373 2444</p>
@@ -519,6 +490,34 @@
             document.getElementById(tabName).classList.add("active");
             evt.currentTarget.className += " active";
         }
+
+        async function loadImages() {
+            if (window.helpAPI && window.helpAPI.getAssetPath) {
+                try {
+                    const headerLogoPath = await window.helpAPI.getAssetPath('xterra-logo.jpg');
+                    const imgHeader = document.getElementById('header-logo');
+                    if (imgHeader) imgHeader.src = headerLogoPath;
+                    
+                    const footerLogoPath = await window.helpAPI.getAssetPath('thunderchild-logo.jpg');
+                    const imgFooter = document.getElementById('footer-logo');
+                    if (imgFooter) imgFooter.src = footerLogoPath;
+                } catch (e) {
+                    console.error("Failed to load assets:", e);
+                    // Fallback
+                    const imgHeader = document.getElementById('header-logo');
+                    if (imgHeader) imgHeader.src = 'assets/xterra-logo.jpg';
+                    const imgFooter = document.getElementById('footer-logo');
+                    if (imgFooter) imgFooter.src = 'assets/thunderchild-logo.jpg';
+                }
+            } else {
+                // Fallback for dev/browser
+                const imgHeader = document.getElementById('header-logo');
+                if (imgHeader) imgHeader.src = 'assets/xterra-logo.jpg';
+                const imgFooter = document.getElementById('footer-logo');
+                if (imgFooter) imgFooter.src = 'assets/thunderchild-logo.jpg';
+            }
+        }
+        loadImages();
 
         document.getElementById('btn-monitoring').addEventListener('click', () => {
             window.helpAPI.openPdf('Example_DFR_Monitoring.pdf');

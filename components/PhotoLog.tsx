@@ -9,10 +9,9 @@ import { storeImage, retrieveImage, deleteImage, storeProject, deleteProject, re
 import { SpecialCharacterPalette } from './SpecialCharacterPalette';
 import ImageModal from './ImageModal';
 import ActionStatusModal from './ActionStatusModal';
-
-// @ts-ignore
-const { jsPDF } = window.jspdf;
-declare const JSZip: any;
+import { jsPDF } from 'jspdf';
+import JSZip from 'jszip';
+import SafeImage, { getAssetUrl } from './SafeImage';
 
 // --- Recent Projects Utility ---
 const RECENT_PROJECTS_KEY = 'xtec_recent_projects';
@@ -41,7 +40,6 @@ const addRecentProject = async (projectData: any, projectInfo: { type: AppType; 
         await storeProject(timestamp, projectData);
     } catch (e) {
         console.error("Failed to save project to IndexedDB:", e);
-        alert("Could not save the project to the local database. Your browser's storage might be full or corrupted.");
         return;
     }
     
@@ -90,7 +88,6 @@ const addRecentProject = async (projectData: any, projectInfo: { type: AppType; 
         localStorage.setItem(RECENT_PROJECTS_KEY, JSON.stringify(updatedProjects));
     } catch (e) {
         console.error("Failed to save recent projects to localStorage:", e);
-        alert("Could not update recent projects list. Your browser's local storage may be full.");
     }
 };
 
@@ -113,12 +110,10 @@ const formatDateForRecentProject = (dateString: string): string => {
         if (isNaN(tempDate.getTime())) {
             return dateString; // Return original if invalid
         }
-        // Use local methods to get the components of the date the user intended
         const year = tempDate.getFullYear();
         const month = tempDate.getMonth();
         const day = tempDate.getDate();
 
-        // Reconstruct as a UTC date to avoid timezone shifts during formatting
         const utcDate = new Date(Date.UTC(year, month, day));
         
         const formattedYear = utcDate.getUTCFullYear();
@@ -131,7 +126,30 @@ const formatDateForRecentProject = (dateString: string): string => {
     }
 };
 
-const PdfPreviewModal: React.FC<{ url: string; filename: string; onClose: () => void; }> = ({ url, filename, onClose }) => {
+const formatDateForFilename = (dateString: string): string => {
+    if (!dateString) return 'NoDate';
+    try {
+        const tempDate = new Date(dateString);
+        if (isNaN(tempDate.getTime())) {
+            return dateString.replace(/[^a-z0-9]/gi, '');
+        }
+        const year = tempDate.getFullYear();
+        const month = tempDate.getMonth();
+        const day = tempDate.getDate();
+
+        const utcDate = new Date(Date.UTC(year, month, day));
+        
+        const formattedMonth = String(utcDate.getUTCMonth() + 1).padStart(2, '0');
+        const formattedDay = String(utcDate.getUTCDate()).padStart(2, '0');
+        const formattedYear = utcDate.getUTCFullYear();
+        
+        return `${formattedMonth}-${formattedDay}-${formattedYear}`;
+    } catch (e) {
+        return dateString.replace(/[^a-z0-9]/gi, '');
+    }
+};
+
+const PdfPreviewModal: React.FC<{ url: string; filename: string; onClose: () => void; pdfBlob?: Blob; }> = ({ url, filename, onClose, pdfBlob }) => {
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
             if (e.key === 'Escape') {
@@ -150,43 +168,68 @@ const PdfPreviewModal: React.FC<{ url: string; filename: string; onClose: () => 
         };
     }, [onClose, url]);
 
-    const handleDownload = () => {
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = filename;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+    const handleDownload = async () => {
+        // @ts-ignore
+        if (window.electronAPI && window.electronAPI.savePdf) {
+            try {
+                let arrayBuffer;
+                if (pdfBlob) {
+                    arrayBuffer = await pdfBlob.arrayBuffer();
+                } else {
+                    const response = await fetch(url);
+                    const blob = await response.blob();
+                    arrayBuffer = await blob.arrayBuffer();
+                }
+                
+                // @ts-ignore
+                const result = await window.electronAPI.savePdf(arrayBuffer, filename);
+                
+                if (result.success) {
+                    alert('PDF saved successfully!');
+                } else if (result.error) {
+                    alert(`Failed to save PDF: ${result.error}`);
+                }
+            } catch (e) {
+                console.error("Error saving PDF via Electron:", e);
+                alert("An error occurred while saving the PDF.");
+            }
+        } else {
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
     };
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-75 flex flex-col items-center justify-center z-50 p-4" role="dialog" aria-modal="true">
-            <div className="bg-white rounded-lg shadow-2xl w-full h-full flex flex-col">
-                <div className="flex justify-between items-center p-4 border-b bg-gray-50">
-                    <h3 className="text-xl font-bold text-gray-800">PDF Preview</h3>
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl w-full h-full flex flex-col overflow-hidden">
+                <div className="flex justify-between items-center p-4 border-b bg-gray-50 dark:bg-gray-700 dark:border-gray-600">
+                    <h3 className="text-xl font-bold text-gray-800 dark:text-white">PDF Preview</h3>
                     <div className="flex items-center gap-4">
                         <button onClick={handleDownload} className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
                             <DownloadIcon />
                             <span>Download PDF</span>
                         </button>
-                        <button onClick={onClose} className="text-gray-500 hover:text-gray-800 transition-colors" aria-label="Close preview">
+                        <button onClick={onClose} className="text-gray-500 hover:text-gray-800 dark:text-gray-300 dark:hover:text-white transition-colors" aria-label="Close preview">
                             <CloseIcon className="h-8 w-8" />
                         </button>
                     </div>
                 </div>
-                <div className="flex-grow bg-gray-200">
+                <div className="flex-grow bg-gray-200 dark:bg-gray-900 relative">
                     <object data={url} type="application/pdf" className="w-full h-full">
                         <div className="flex flex-col items-center justify-center h-full bg-gray-100 p-8 text-center text-gray-700">
                             <p className="mb-4 text-lg font-semibold">It appears your browser cannot preview PDFs directly.</p>
                             <p className="mb-6">You can download the file to view it instead.</p>
-                            <a
-                                href={url}
-                                download={filename}
+                            <button
+                                onClick={handleDownload}
                                 className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200"
                             >
                                 <DownloadIcon />
                                 <span>Download PDF</span>
-                            </a>
+                            </button>
                         </div>
                     </object>
                 </div>
@@ -217,11 +260,26 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, initialData }) => {
     const [showValidationErrorModal, setShowValidationErrorModal] = useState<boolean>(false);
     const [showNoInternetModal, setShowNoInternetModal] = useState<boolean>(false);
     const [enlargedImageUrl, setEnlargedImageUrl] = useState<string | null>(null);
-    const [pdfPreview, setPdfPreview] = useState<{ url: string; filename: string } | null>(null);
+    const [pdfPreview, setPdfPreview] = useState<{ url: string; filename: string; blob?: Blob } | null>(null);
     const [showStatusModal, setShowStatusModal] = useState(false);
     const [statusMessage, setStatusMessage] = useState('');
     const fileInputRef = useRef<HTMLInputElement>(null);
     const isDownloadingRef = useRef(false);
+
+    const prepareStateForRecentProjectStorage = async (header: HeaderData, photos: PhotoData[]) => {
+        const photosForStorage = await Promise.all(
+            photos.map(async (photo) => {
+                if (photo.imageUrl) {
+                    const imageId = photo.imageId || `${header.projectNumber || 'proj'}-${photo.id}-${Date.now()}`;
+                    await storeImage(imageId, photo.imageUrl);
+                    const { imageUrl, ...rest } = photo;
+                    return { ...rest, imageId };
+                }
+                return photo;
+            })
+        );
+        return { headerData: header, photosData: photosForStorage };
+    };
 
     const parseAndLoadProject = async (fileContent: string) => {
         try {
@@ -233,12 +291,10 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, initialData }) => {
 
                 const hydratedPhotos = await Promise.all(
                     loadedPhotos.map(async (photo: PhotoData) => {
-                        // This handles projects from "Recent" that need image hydration from IndexedDB
                         if (photo.imageId && !photo.imageUrl) {
                             const imageUrl = await retrieveImage(photo.imageId);
                             return { ...photo, imageUrl: imageUrl || null };
                         }
-                        // This handles projects from files that have imageUrl directly
                         return photo;
                     })
                 );
@@ -248,7 +304,6 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, initialData }) => {
                 const dateSuffix = formattedDate ? ` - ${formattedDate}` : '';
                 const projectName = `${loadedHeader.projectName || 'Untitled Photo Log'}${dateSuffix}`;
 
-                // Add to recent projects upon opening
                 const stateForRecent = await prepareStateForRecentProjectStorage(loadedHeader, hydratedPhotos);
                 await addRecentProject(stateForRecent, {
                     type: 'photoLog',
@@ -263,7 +318,6 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, initialData }) => {
             console.error(err);
         }
     };
-
 
     useEffect(() => {
         const loadInitialData = async () => {
@@ -285,7 +339,6 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, initialData }) => {
                     setPhotosData(initialData.photosData || []);
                 }
             } else {
-                // Load defaults from settings for new projects
                 try {
                     const settings = JSON.parse(localStorage.getItem('xtec_general_settings') || '{}');
                     if (settings.defaultProponent) {
@@ -380,7 +433,7 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, initialData }) => {
         const newId = photosData.length > 0 ? Math.max(...photosData.map(p => p.id)) + 1 : 1;
         const newPhoto: PhotoData = {
             id: newId,
-            photoNumber: '', // Will be re-assigned by renumberPhotos
+            photoNumber: '', 
             date: '',
             location: '',
             description: '',
@@ -445,374 +498,8 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, initialData }) => {
         }
         return true;
     };
-    
-    /**
-     * Prepares state for storing in IndexedDB for the "Recent Projects" list.
-     * This replaces image data URLs with an ID and stores the image separately.
-     */
-    const prepareStateForRecentProjectStorage = async (headerData: HeaderData, photosData: PhotoData[]) => {
-        const photosForStorage = await Promise.all(
-            photosData.map(async (photo) => {
-                if (photo.imageUrl) {
-                    const imageId = photo.imageId || `${headerData.projectNumber || 'proj'}-${photo.id}-${Date.now()}`;
-                    await storeImage(imageId, photo.imageUrl);
-                    // Return photo data with imageId but without the full data URL
-                    const { imageUrl, ...rest } = photo;
-                    return { ...rest, imageId };
-                }
-                return photo;
-            })
-        );
-        return { headerData, photosData: photosForStorage };
-    };
-
-    const handleSavePdf = async () => {
-        if (!navigator.onLine) {
-            setShowNoInternetModal(true);
-            return;
-        }
-        if (!validateForm()) return;
-        
-        // Save to recent projects first
-        const stateForRecentProjects = await prepareStateForRecentProjectStorage(headerData, photosData);
-        const formattedDate = formatDateForRecentProject(headerData.date);
-        const dateSuffix = formattedDate ? ` - ${formattedDate}` : '';
-        const projectName = `${headerData.projectName || 'Untitled Photo Log'}${dateSuffix}`;
-
-        await addRecentProject(stateForRecentProjects, {
-            type: 'photoLog',
-            name: projectName,
-            projectNumber: headerData.projectNumber,
-        });
-    
-        try {
-            const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'letter' });
-            const pageWidth = doc.internal.pageSize.getWidth();
-            const pageHeight = doc.internal.pageSize.getHeight();
-            const margin = 10;
-            const contentWidth = pageWidth - margin * 2;
-    
-            const drawHeader = (docInstance: any) => {
-                const headerStartY = margin;
-                
-                const logoUrl = "https://ik.imagekit.io/fzpijprte/XTerraLogo2019_Horizontal.jpg?updatedAt=1758827714962";
-                docInstance.addImage(logoUrl, 'JPEG', margin, headerStartY, 40, 10);
-                
-                docInstance.setFontSize(18);
-                docInstance.setFont('times', 'bold');
-                docInstance.setTextColor(0, 125, 140);
-                docInstance.text('PHOTOGRAPHIC LOG', pageWidth / 2, headerStartY + 7, { align: 'center' });
-                
-                docInstance.setTextColor(0, 0, 0);
-                
-                const firstLineY = headerStartY + 18;
-                docInstance.setLineWidth(0.5);
-                docInstance.setDrawColor(0, 125, 140);
-                docInstance.line(margin, firstLineY, pageWidth - margin, firstLineY);
-                
-                const col1X = margin;
-                const col2X = pageWidth * 0.55;
-                const col1MaxWidth = col2X - col1X - 5;
-                const col2MaxWidth = pageWidth - margin - col2X;
-                const fieldGap = 2;
-                
-                // This helper draws the field and returns its calculated height
-                const drawFieldAndGetHeight = (label: string, value: string, x: number, y: number, maxWidth: number): number => {
-                    const valueOrDefault = value || ' '; 
-                    const labelText = `${label}:`;
-                    
-                    docInstance.setFontSize(13);
-                    docInstance.setFont('times', 'bold');
-                    const labelWidth = docInstance.getTextWidth(labelText);
-                    const labelHeight = docInstance.getTextDimensions(labelText).h;
-                    docInstance.text(labelText, x, y);
-                    
-                    docInstance.setFontSize(12);
-                    docInstance.setFont('times', 'normal');
-            
-                    const valueX = x + labelWidth + 1; // 1mm gap
-                    const valueMaxWidth = maxWidth - labelWidth - 1;
-            
-                    const valueLines = docInstance.splitTextToSize(valueOrDefault, valueMaxWidth);
-                    const valueHeight = docInstance.getTextDimensions(valueLines).h;
-                    
-                    docInstance.text(valueLines, valueX, y);
-            
-                    return Math.max(labelHeight, valueHeight);
-                };
-                
-                const topPadding = 5; // Increased from 3
-                let yPos = firstLineY + topPadding;
-            
-                // --- Row 1: Proponent & Date ---
-                const proponentHeight = drawFieldAndGetHeight('Proponent', headerData.proponent, col1X, yPos, col1MaxWidth);
-                const dateHeight = drawFieldAndGetHeight('Date', headerData.date, col2X, yPos, col2MaxWidth);
-                yPos += Math.max(proponentHeight, dateHeight) + fieldGap;
-            
-                // --- Row 2: Location & Project # ---
-                const locationHeight = drawFieldAndGetHeight('Location', headerData.location, col1X, yPos, col1MaxWidth);
-                const projectNumHeight = drawFieldAndGetHeight('Project', headerData.projectNumber, col2X, yPos, col2MaxWidth);
-                yPos += Math.max(locationHeight, projectNumHeight) + fieldGap;
-                
-                // --- Row 3: Project Name (full width) ---
-                const projectNameHeight = drawFieldAndGetHeight('Project Name', headerData.projectName, col1X, yPos, contentWidth);
-                yPos += projectNameHeight;
-            
-                const contentEndY = yPos;
-                const bottomPadding = 2; // Decreased from 3
-                const secondLineY = contentEndY + bottomPadding;
-            
-                docInstance.setLineWidth(0.5);
-                docInstance.setDrawColor(0, 125, 140);
-                docInstance.line(margin, secondLineY, pageWidth - margin, secondLineY);
-                
-                return secondLineY; 
-            };
-    
-            const footerHeight = 15;
-            const maxYPos = pageHeight - footerHeight;
-
-            const drawFooterLine = (docInstance: any) => {
-                const lineY = pageHeight - 12;
-                docInstance.setLineWidth(0.5);
-                docInstance.setDrawColor(0, 125, 140);
-                docInstance.line(margin, lineY, pageWidth - margin, lineY);
-            };
-
-            const calculateEntryHeight = async (docInstance: any, photo: PhotoData) => {
-                const tempDoc = new jsPDF({ format: 'letter', unit: 'mm' });
-                const gap = 5;
-                const availableWidth = contentWidth - gap;
-                const textBlockWidth = availableWidth * 0.40;
-                const imageBlockWidth = availableWidth * 0.60;
-                
-                let totalTextHeight = 0;
-                
-                const measureFieldHeight = (label: string, value: string, isDesc = false) => {
-                    if (isDesc) {
-                         tempDoc.setFontSize(13);
-                         let height = tempDoc.getTextDimensions(label + ':', { maxWidth: textBlockWidth }).h + 2;
-                         
-                         tempDoc.setFontSize(12);
-                         const valueLines = tempDoc.splitTextToSize(value || ' ', textBlockWidth);
-                         height += tempDoc.getTextDimensions(valueLines).h;
-                         return height;
-                    }
-                    
-                    const labelText = `${label}:`;
-                    tempDoc.setFontSize(13);
-                    const labelWidth = tempDoc.getTextWidth(labelText);
-                    const labelHeight = tempDoc.getTextDimensions(labelText).h;
-                    
-                    tempDoc.setFontSize(12);
-                    const valueMaxWidth = textBlockWidth - labelWidth - 1;
-                    const valueLines = tempDoc.splitTextToSize(value || ' ', valueMaxWidth);
-                    const valueHeight = tempDoc.getTextDimensions(valueLines).h;
-                    
-                    return Math.max(labelHeight, valueHeight) + 2;
-                };
-
-                totalTextHeight += measureFieldHeight('Photo', photo.photoNumber);
-                totalTextHeight += measureFieldHeight('Direction', photo.direction || 'N/A');
-                totalTextHeight += measureFieldHeight('Date', photo.date);
-                totalTextHeight += measureFieldHeight('Location', photo.location);
-                totalTextHeight += measureFieldHeight('Description', photo.description, true);
-
-                let scaledHeight = 0;
-                if (photo.imageUrl) {
-                    const { width, height } = await getImageDimensions(photo.imageUrl);
-                    scaledHeight = height * (imageBlockWidth / width);
-                }
-                
-                return Math.max(totalTextHeight, scaledHeight);
-            };
-
-            const drawPhotoEntry = async (docInstance: any, photo: PhotoData, yStart: number) => {
-                const gap = 5;
-                const availableWidth = contentWidth - gap;
-                const textBlockWidth = availableWidth * 0.40;
-                const imageBlockWidth = availableWidth * 0.60;
-                const imageX = margin + textBlockWidth + gap;
-
-                let textY = yStart;
-                
-                const drawTextField = (label: string, value: string, isDesc = false) => {
-                    const valueOrDefault = value || ' ';
-                    if (isDesc) {
-                        docInstance.setFontSize(13); // Label size
-                        docInstance.setFont('times', 'bold');
-                        docInstance.text(`${label}:`, margin, textY);
-                        textY += docInstance.getTextDimensions(`${label}:`, { maxWidth: textBlockWidth }).h + 2;
-                        
-                        docInstance.setFontSize(12); // Value size
-                        docInstance.setFont('times', 'normal');
-                        const dims = docInstance.getTextDimensions(valueOrDefault, { maxWidth: textBlockWidth });
-                        docInstance.text(valueOrDefault, margin, textY, { maxWidth: textBlockWidth });
-                        textY += dims.h;
-                        return;
-                    }
-                    
-                    const labelText = `${label}:`;
-
-                    // Get label dimensions at size 13
-                    docInstance.setFontSize(13);
-                    docInstance.setFont('times', 'bold');
-                    const labelWidth = docInstance.getTextWidth(labelText);
-                    const labelHeight = docInstance.getTextDimensions(labelText).h;
-
-                    // Draw Label
-                    docInstance.text(labelText, margin, textY);
-                    
-                    // Switch to size 12 for value
-                    docInstance.setFontSize(12);
-                    docInstance.setFont('times', 'normal');
-                    
-                    const valueX = margin + labelWidth + 1; // 1mm gap
-                    const valueMaxWidth = textBlockWidth - labelWidth - 1;
-                    
-                    const valueLines = docInstance.splitTextToSize(valueOrDefault, valueMaxWidth);
-                    const valueHeight = docInstance.getTextDimensions(valueLines).h;
-
-                    // Draw value
-                    docInstance.text(valueLines, valueX, textY);
-                    
-                    // Move y position by max height of either label or value (since value can wrap)
-                    textY += Math.max(labelHeight, valueHeight) + 2;
-                };
-
-                drawTextField('Photo', photo.photoNumber);
-                drawTextField('Direction', photo.direction || 'N/A');
-                drawTextField('Date', photo.date);
-                drawTextField('Location', photo.location);
-                drawTextField('Description', photo.description, true);
-
-                const textBottom = textY;
-
-                let scaledHeight = 0;
-                let imageBottom = yStart;
-                if (photo.imageUrl) {
-                    const { width, height } = await getImageDimensions(photo.imageUrl);
-                    scaledHeight = height * (imageBlockWidth / width);
-                    docInstance.addImage(photo.imageUrl, 'JPEG', imageX, yStart, imageBlockWidth, scaledHeight);
-                    imageBottom = yStart + scaledHeight;
-                }
-
-                return Math.max(textBottom, imageBottom);
-            };
-            
-            const entryHeights = await Promise.all(
-                photosData.map(photo => calculateEntryHeight(doc, photo))
-            );
-
-            const pages: number[][] = [];
-            if (photosData.length > 0) {
-                const tempDoc = new jsPDF();
-                const yAfterHeader = drawHeader(tempDoc);
-                const pageContentHeight = maxYPos - yAfterHeader;
-                const separatorHeight = 10;
-
-                let currentPageGroup: number[] = [];
-                let currentHeight = 0;
-
-                photosData.forEach((_, i) => {
-                    const photoHeight = entryHeights[i];
-                    const spaceForSeparator = currentPageGroup.length > 0 ? separatorHeight : 0;
-                    const spaceNeeded = photoHeight + spaceForSeparator;
-
-                    if (currentPageGroup.length < 2 && currentHeight + spaceNeeded <= pageContentHeight) {
-                        currentPageGroup.push(i);
-                        currentHeight += spaceNeeded;
-                    } else {
-                        pages.push(currentPageGroup);
-                        currentPageGroup = [i];
-                        currentHeight = photoHeight;
-                    }
-                });
-                pages.push(currentPageGroup);
-            }
-            
-            for (let i = 0; i < pages.length; i++) {
-                const group = pages[i];
-                if (i > 0) {
-                    doc.addPage();
-                }
-
-                let yPos = drawHeader(doc);
-                const photosOnPage = group.map(i => photosData[i]);
-                const heightsOnPage = group.map(i => entryHeights[i]);
-                const numPhotosOnPage = photosOnPage.length;
-
-                if (numPhotosOnPage > 0) {
-                    const availableHeight = maxYPos - yPos;
-
-                    if (numPhotosOnPage === 1) {
-                        const photoHeight = heightsOnPage[0];
-                        const virtualTotalContentHeight = photoHeight * 2;
-                        const totalGapsHeight = availableHeight - virtualTotalContentHeight;
-                        const numGaps = 4;
-                        const gap = totalGapsHeight > 0 ? totalGapsHeight / numGaps : 2;
-
-                        yPos += gap;
-                        await drawPhotoEntry(doc, photosOnPage[0], yPos);
-                        yPos += photoHeight;
-                        
-                        yPos += gap;
-                        doc.setLineWidth(0.5);
-                        doc.setDrawColor(0, 125, 140);
-                        doc.line(margin, yPos, pageWidth - margin, yPos);
-                    } else {
-                        const totalContentHeight = heightsOnPage.reduce((sum, h) => sum + h, 0);
-                        const totalGapsHeight = availableHeight - totalContentHeight;
-                        const numGaps = numPhotosOnPage * 2;
-                        const gap = totalGapsHeight > 0 ? totalGapsHeight / numGaps : 2;
-
-                        yPos += gap; 
-
-                        for (let i = 0; i < numPhotosOnPage; i++) {
-                            const photo = photosOnPage[i];
-                            const photoHeight = heightsOnPage[i];
-                            await drawPhotoEntry(doc, photo, yPos);
-
-                            yPos += photoHeight;
-
-                            if (i < numPhotosOnPage - 1) {
-                                yPos += gap; 
-                                doc.setLineWidth(0.5);
-                                doc.setDrawColor(0, 125, 140);
-                                doc.line(margin, yPos, pageWidth - margin, yPos);
-                                yPos += gap; 
-                            }
-                        }
-                    }
-                }
-                
-                drawFooterLine(doc);
-            }
-            
-            const totalPages = doc.internal.getNumberOfPages();
-            for (let i = 1; i <= totalPages; i++) {
-                doc.setPage(i);
-                doc.setFontSize(10);
-                doc.setFont('times', 'normal');
-                doc.setTextColor(0, 0, 0);
-                doc.text(`Page ${i} of ${totalPages}`, pageWidth - margin, pageHeight - 7, { align: 'right' });
-            }
-
-            const sanitize = (name: string) => name.replace(/[^a-z0-9_]/gi, '-').toLowerCase();
-            const filename = `${sanitize(headerData.projectNumber) || 'project'}_${sanitize(headerData.projectName) || 'photolog'}_Photolog.pdf`;
-            
-            const pdfBlob = doc.output('blob');
-            const pdfUrl = URL.createObjectURL(pdfBlob);
-            setPdfPreview({ url: pdfUrl, filename });
-
-        } catch (error) {
-            console.error("Failed to generate PDF:", error);
-            alert("An unexpected error occurred while generating the PDF. Please check the console for details.");
-        }
-    };
 
     const handleSaveProject = async () => {
-        // First, save to the "Recent Projects" list, which uses IndexedDB for images
         const stateForRecentProjects = await prepareStateForRecentProjectStorage(headerData, photosData);
         
         const formattedDate = formatDateForRecentProject(headerData.date);
@@ -825,14 +512,12 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, initialData }) => {
             projectNumber: headerData.projectNumber,
         });
         
-        // Second, prepare a self-contained state for file export with embedded images
         const photosForExport = photosData.map(({ imageId, ...photo }) => photo);
         const stateForFileExport = { headerData, photosData: photosForExport };
 
         const sanitize = (name: string) => name.replace(/[^a-z0-9_]/gi, '-').toLowerCase();
-        const filename = `${sanitize(headerData.projectNumber) || 'project'}_${sanitize(headerData.projectName) || 'photolog'}_Photolog.plog`;
+        const filename = `${sanitize(headerData.projectNumber) || 'project'}_${sanitize(headerData.projectName) || 'photolog'}.plog`;
 
-        // Save the self-contained state to a file
         // @ts-ignore
         if (window.electronAPI) {
             // @ts-ignore
@@ -848,36 +533,394 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, initialData }) => {
             URL.revokeObjectURL(link.href);
         }
     };
+
+    const addSafeLogo = async (docInstance: any, x: number, y: number, w: number, h: number) => {
+        const logoUrl = await getAssetUrl("xterra-logo.jpg");
+        try {
+            const response = await fetch(logoUrl);
+            if (!response.ok) throw new Error('Logo fetch failed');
+            const blob = await response.blob();
+            const reader = new FileReader();
+            return new Promise<void>((resolve) => {
+                reader.onloadend = () => {
+                    const base64data = reader.result as string;
+                    docInstance.addImage(base64data, 'JPEG', x, y, w, h);
+                    resolve();
+                };
+                reader.readAsDataURL(blob);
+            });
+        } catch (e) {
+            console.error("Could not load logo:", e);
+            // Fallback: draw text if logo fails
+            docInstance.setFontSize(10);
+            docInstance.setTextColor(0,0,0);
+            docInstance.text("X-TERRA", x, y + 5);
+        }
+    };
+
+    const handleSavePdf = async () => {
+        if (!validateForm()) return;
+
+        const stateForSaving = await prepareStateForRecentProjectStorage(headerData, photosData);
+    
+        const formattedDate = formatDateForRecentProject(headerData.date);
+        const dateSuffix = formattedDate ? ` - ${formattedDate}` : '';
+        const projectName = `${headerData.projectName || 'Untitled Photo Log'}${dateSuffix}`;
+
+        await addRecentProject(stateForSaving, {
+            type: 'photoLog',
+            name: projectName,
+            projectNumber: headerData.projectNumber,
+        });
+
+        const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'letter' });
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const pageHeight = doc.internal.pageSize.getHeight();
+        
+        const borderMargin = 12.7;
+        const contentPadding = 4;
+        const contentMargin = borderMargin + contentPadding;
+        const contentWidth = pageWidth - contentMargin * 2;
+        
+        const maxYPos = pageHeight - contentMargin;
+        let pageNum = 1;
+
+        const drawPageBorder = (docInstance: any) => {
+            docInstance.setDrawColor(0, 125, 140); // Teal
+            docInstance.setLineWidth(0.5);
+            const startX = borderMargin;
+            const endX = pageWidth - borderMargin;
+            const bottomY = pageHeight - borderMargin;
+
+            // Bottom line only
+            docInstance.line(startX, bottomY, endX, bottomY);
+        };
+
+        const drawProjectInfoBlock = (docInstance: any, startY: number, options: { drawTopLine?: boolean, drawBottomLine?: boolean } = {}) => {
+            const { drawTopLine = true, drawBottomLine = true } = options;
+            
+            const blockPaddingTop = 4;
+            const blockPaddingBottom = 0; // Move line up
+            
+            let yPos = startY + blockPaddingTop;
+
+            const drawField = (label: string, value: string, x: number, y: number, maxWidth: number): number => {
+                const labelText = (label || '').toUpperCase() + ':';
+                
+                docInstance.setFontSize(12);
+                docInstance.setFont('times', 'bold');
+                const labelWidth = docInstance.getTextWidth(labelText);
+                docInstance.text(labelText, x, y);
+                
+                docInstance.setFontSize(11);
+                docInstance.setFont('times', 'normal');
+                const valueMaxWidth = maxWidth - labelWidth - 2;
+                const valueLines = docInstance.splitTextToSize(value || ' ', valueMaxWidth);
+                docInstance.text(valueLines, x + labelWidth + 2, y);
+                
+                return docInstance.getTextDimensions(valueLines).h;
+            };
+
+             const col1Fields = [
+                {label: 'Proponent', value: headerData.proponent},
+                {label: 'Location', value: headerData.location},
+            ];
+            const col2Fields = [
+                {label: 'Date', value: headerData.date},
+                {label: 'Project', value: headerData.projectNumber},
+            ];
+            const fullWidthFields = [
+                {label: 'Project Name', value: headerData.projectName},
+            ];
+        
+            const col1X = contentMargin;
+            const col1MaxWidth = contentWidth * 0.55;
+            const col2X = contentMargin + contentWidth * 0.60;
+            const col2MaxWidth = contentWidth * 0.40;
+            
+            let yPos1 = yPos;
+            let yPos2 = yPos;
+        
+            col1Fields.forEach(field => {
+                const height = drawField(field.label, field.value, col1X, yPos1, col1MaxWidth);
+                yPos1 += height + 1.5;
+            });
+        
+            col2Fields.forEach(field => {
+                const height = drawField(field.label, field.value, col2X, yPos2, col2MaxWidth);
+                yPos2 += height + 1.5;
+            });
+        
+            yPos = Math.max(yPos1, yPos2);
+        
+            fullWidthFields.forEach(field => {
+                const height = drawField(field.label, field.value, contentMargin, yPos, contentWidth);
+                yPos += height + 1.5;
+            });
+
+            const fieldsEndY = yPos;
+            const blockBottomY = fieldsEndY - 1.5 + blockPaddingBottom;
+            
+            docInstance.setDrawColor(0, 125, 140); // Teal
+            docInstance.setLineWidth(0.5);
+            if (drawTopLine) {
+                docInstance.line(borderMargin, startY, pageWidth - borderMargin, startY);
+            }
+            if (drawBottomLine) {
+                docInstance.line(borderMargin, blockBottomY, pageWidth - borderMargin, blockBottomY);
+            }
+
+            return blockBottomY;
+        };
+        
+        const drawPhotoPageHeader = async (docInstance: any) => {
+            const startY = borderMargin;
+
+            const headerContentStartY = contentMargin;
+
+            await addSafeLogo(docInstance, contentMargin, headerContentStartY, 40, 10);
+
+            docInstance.setFontSize(18);
+            docInstance.setFont('times', 'bold');
+            docInstance.setTextColor(0, 125, 140);
+            const titleY = headerContentStartY + 7;
+            docInstance.text('PHOTOGRAPHIC LOG', pageWidth / 2, titleY, { align: 'center' });
+            
+            docInstance.setTextColor(0, 0, 0);
+            
+            let yPos = headerContentStartY + 15;
+            
+            // Manually draw the top line since drawPageBorder no longer does it.
+            docInstance.setDrawColor(0, 125, 140); // Teal
+            docInstance.setLineWidth(0.5);
+            docInstance.line(borderMargin, yPos, pageWidth - borderMargin, yPos);
+
+            const yAfterBlock = drawProjectInfoBlock(docInstance, yPos, { drawTopLine: false });
+            return yAfterBlock + 1;
+        };
+
+        const sitePhotos = photosData.filter(p => !p.isMap && p.imageUrl);
+        
+        const calculatePhotoEntryHeight = async (docInstance: any, photo: PhotoData): Promise<number> => {
+            const gap = 5;
+            const availableWidth = contentWidth - gap;
+            const textBlockWidth = availableWidth * 0.35;
+            const imageBlockWidth = availableWidth * 0.65;
+            
+            docInstance.setFontSize(12);
+            let textHeight = 0;
+            const textMetrics = docInstance.getTextDimensions('Photo');
+            textHeight += textMetrics.h * 0.75;
+            
+            const measureField = (label: string, value: string) => {
+                const labelText = `${label}:`;
+                docInstance.setFont('times', 'bold');
+                const labelWidth = docInstance.getTextWidth(labelText);
+                docInstance.setFont('times', 'normal');
+                const valueMaxWidth = textBlockWidth - labelWidth - 2;
+                const valueLines = docInstance.splitTextToSize(value || ' ', valueMaxWidth);
+                return docInstance.getTextDimensions(valueLines).h + 1.5;
+            };
+
+            textHeight += measureField(photo.isMap ? "Map" : "Photo", photo.photoNumber);
+            if (!photo.isMap) textHeight += measureField("Direction", photo.direction || 'N/A');
+            textHeight += measureField("Date", photo.date);
+            textHeight += measureField("Location", photo.location);
+            textHeight += 5;
+            const descLines = docInstance.splitTextToSize(photo.description || ' ', textBlockWidth);
+            textHeight += docInstance.getTextDimensions(descLines).h;
+
+            let imageH = 0;
+            if (photo.imageUrl) {
+                try {
+                    const { width, height } = await getImageDimensions(photo.imageUrl);
+                    imageH = height * (imageBlockWidth / width);
+                } catch (e) {
+                    console.error("Could not load image for height calculation", e);
+                }
+            }
+            return Math.max(textHeight, imageH);
+        };
+        
+        const drawPhotoEntryText = (docInstance: any, photo: PhotoData, xStart: number, yStart: number, textBlockWidth: number) => {
+            docInstance.setFontSize(12);
+            docInstance.setFont('times', 'normal');
+
+            const textMetrics = docInstance.getTextDimensions('Photo');
+            const ascent = textMetrics.h * 0.75;
+            let textY = yStart + ascent;
+
+            const drawTextField = (label: string, value: string) => {
+                docInstance.setFont('times', 'bold');
+                const labelText = `${label}:`;
+                docInstance.text(labelText, xStart, textY);
+                
+                docInstance.setFont('times', 'normal');
+                const labelWidth = docInstance.getTextWidth(labelText);
+                const valueMaxWidth = textBlockWidth - labelWidth - 2;
+                const valueLines = docInstance.splitTextToSize(value || ' ', valueMaxWidth);
+                docInstance.text(valueLines, xStart + labelWidth + 2, textY);
+                textY += docInstance.getTextDimensions(valueLines).h + 1.5;
+            };
+
+            drawTextField(photo.isMap ? "Map" : "Photo", photo.photoNumber);
+            if (!photo.isMap) drawTextField("Direction", photo.direction || 'N/A');
+            drawTextField("Date", photo.date);
+            drawTextField("Location", photo.location);
+
+            docInstance.setFont('times', 'bold');
+            docInstance.text(`Description:`, xStart, textY);
+            textY += 5;
+            docInstance.setFont('times', 'normal');
+            const descLines = docInstance.splitTextToSize(photo.description || ' ', textBlockWidth);
+            docInstance.text(descLines, xStart, textY);
+        };
+        
+        const drawPhotoEntry = async (docInstance: any, photo: PhotoData, yStart: number) => {
+            const gap = 5;
+            const availableWidth = contentWidth - gap;
+            const textBlockWidth = availableWidth * 0.35;
+            const imageBlockWidth = availableWidth * 0.65;
+            const imageX = contentMargin + textBlockWidth + gap;
+            
+            drawPhotoEntryText(docInstance, photo, contentMargin, yStart, textBlockWidth);
+
+            if (photo.imageUrl) {
+                const { width, height } = await getImageDimensions(photo.imageUrl);
+                const scaledHeight = height * (imageBlockWidth / width);
+                docInstance.addImage(photo.imageUrl, 'JPEG', imageX, yStart, imageBlockWidth, scaledHeight);
+            }
+        };
+
+        if (sitePhotos.length > 0) {
+            const entryHeights = await Promise.all(sitePhotos.map(p => calculatePhotoEntryHeight(doc, p)));
+            
+            const pages: number[][] = [];
+            let currentPageGroup: number[] = [];
+            let currentHeight = 0;
+
+            // Measure available height on page 1 (since doc starts with 1 page)
+            const dummyDoc = new jsPDF({ format: 'letter', unit: 'mm' });
+            const yAfterHeader = await drawPhotoPageHeader(dummyDoc);
+            const pageContentHeight = maxYPos - yAfterHeader;
+            
+            sitePhotos.forEach((_, i) => {
+                const photoHeight = entryHeights[i];
+                if (currentPageGroup.length === 0) {
+                    currentPageGroup.push(i);
+                    currentHeight = photoHeight;
+                } else if (currentPageGroup.length === 1) {
+                    if (currentHeight + photoHeight + 10 <= pageContentHeight) { 
+                        currentPageGroup.push(i);
+                    } else {
+                        pages.push(currentPageGroup);
+                        currentPageGroup = [i];
+                        currentHeight = photoHeight;
+                    }
+                }
+                
+                if (currentPageGroup.length === 2) {
+                    pages.push(currentPageGroup);
+                    currentPageGroup = [];
+                    currentHeight = 0;
+                }
+            });
+
+            if (currentPageGroup.length > 0) pages.push(currentPageGroup);
+
+            for (let i = 0; i < pages.length; i++) {
+                const group = pages[i];
+                if (i > 0) {
+                    doc.addPage();
+                    pageNum++;
+                }
+                
+                let yPos = await drawPhotoPageHeader(doc);
+                const photosOnPage = group.map(i => sitePhotos[i]);
+                const heightsOnPage = group.map(i => entryHeights[i]);
+                const availableHeight = maxYPos - yPos;
+
+                if (photosOnPage.length === 1) {
+                    await drawPhotoEntry(doc, photosOnPage[0], yPos);
+                } else {
+                    const totalContentHeight = heightsOnPage.reduce((sum, h) => sum + h, 0);
+                    const tightGap = 4; // The smaller gap above photos
+                    
+                    const totalRemainingSpace = availableHeight - totalContentHeight - (tightGap * 2);
+                    const largeGap = totalRemainingSpace > 0 ? totalRemainingSpace / 2 : 2;
+
+                    // Position first photo
+                    yPos += tightGap;
+                    await drawPhotoEntry(doc, photosOnPage[0], yPos);
+                    yPos += heightsOnPage[0];
+
+                    // Position separator line
+                    yPos += largeGap;
+                    doc.setDrawColor(0, 125, 140); // Teal
+                    doc.setLineWidth(0.5);
+                    doc.line(borderMargin, yPos, pageWidth - borderMargin, yPos);
+                    
+                    // Position second photo
+                    yPos += tightGap;
+                    await drawPhotoEntry(doc, photosOnPage[1], yPos);
+                }
+                drawPageBorder(doc);
+            }
+        } else {
+             // If no photos, just draw header on the single page
+             await drawPhotoPageHeader(doc);
+             drawPageBorder(doc);
+        }
+        
+        const sanitize = (name: string) => name.replace(/[^a-z0-9_]/gi, '-').toLowerCase();
+        const formattedFilenameDate = formatDateForFilename(headerData.date);
+        const sanitizedProjectName = sanitize(headerData.projectName);
+        const filename = `${sanitizedProjectName || 'project'}_${formattedFilenameDate}.pdf`;
+        
+        const totalPages = (doc.internal as any).getNumberOfPages();
+        for (let i = 1; i <= totalPages; i++) {
+            doc.setPage(i);
+            doc.setFontSize(10);
+            doc.setFont('times', 'normal');
+            doc.setTextColor(0, 0, 0);
+            const footerTextY = pageHeight - borderMargin + 4;
+            doc.text(`Page ${i} of ${totalPages}`, pageWidth - borderMargin, footerTextY, { align: 'right' });
+        }
+        
+        const pdfBlob = doc.output('blob');
+        const pdfUrl = URL.createObjectURL(pdfBlob);
+        setPdfPreview({ url: pdfUrl, filename, blob: pdfBlob });
+    };
     
     const handleDownloadPhotos = useCallback(async () => {
         if (isDownloadingRef.current) return;
         isDownloadingRef.current = true;
-
+    
         try {
             setStatusMessage('Checking for photos...');
             setShowStatusModal(true);
             await new Promise(resolve => setTimeout(resolve, 100));
-
+    
             const photosWithImages = photosData.filter(p => p.imageUrl);
-
+    
             if (photosWithImages.length === 0) {
                 setStatusMessage('No photos found to download.');
                 await new Promise(resolve => setTimeout(resolve, 2000));
                 setShowStatusModal(false);
                 return;
             }
-
+    
             setStatusMessage(`Preparing ${photosWithImages.length} photos...`);
             await new Promise(resolve => setTimeout(resolve, 100));
-
+    
             const zip = new JSZip();
             let metadata = '';
             const sanitizeFilename = (name: string) => name.replace(/[^a-z0-9_.\-]/gi, '_');
-
+    
             for (const photo of photosWithImages) {
                 const photoNumberSanitized = sanitizeFilename(photo.photoNumber);
                 const filename = `${photoNumberSanitized}.jpg`;
-
+    
                 metadata += `---
 File: ${filename}
 Photo Number: ${photo.photoNumber}
@@ -886,12 +929,12 @@ Location: ${photo.location || 'N/A'}
 Direction: ${photo.direction || 'N/A'}
 Description: ${photo.description || 'N/A'}
 ---\n\n`;
-
+    
                 const response = await fetch(photo.imageUrl!);
                 const blob = await response.blob();
                 zip.file(filename, blob);
             }
-
+    
             zip.file('metadata.txt', metadata);
             
             setStatusMessage('Creating zip file...');
@@ -915,46 +958,49 @@ Description: ${photo.description || 'N/A'}
                 document.body.removeChild(link);
                 URL.revokeObjectURL(link.href);
             }
-
+    
         } finally {
             setShowStatusModal(false);
             isDownloadingRef.current = false;
         }
     }, [photosData, headerData]);
 
-    // Create a ref to hold the latest handler function.
     const downloadHandlerRef = useRef(handleDownloadPhotos);
     useEffect(() => {
         downloadHandlerRef.current = handleDownloadPhotos;
     }, [handleDownloadPhotos]);
 
-    // Create a stable listener function that always calls the latest handler from the ref.
     const stableListener = useCallback(() => {
         if (downloadHandlerRef.current) {
             downloadHandlerRef.current();
         }
     }, []);
 
-    // Effect to add and remove the stable listener.
     useEffect(() => {
+        // @ts-ignore
         const api = window.electronAPI;
         if (api && api.onDownloadPhotos && api.removeAllDownloadPhotosListeners) {
-            // On mount, defensively remove any lingering listeners. This ensures that only
-            // this active component instance reacts to the download command from the main menu.
             api.removeAllDownloadPhotosListeners();
-            
-            // Then, add the listener for this specific component instance.
             api.onDownloadPhotos(stableListener);
         }
-        
         return () => {
-            // On unmount, clean up the listener we added to prevent memory leaks.
             if (api && api.removeDownloadPhotosListener) {
                 api.removeDownloadPhotosListener(stableListener);
             }
         };
-    }, [stableListener]); // stableListener is memoized, so this effect runs once on mount/unmount.
+    }, [stableListener]);
 
+    const handleFileSelected = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        const fileContent = await file.text();
+        await parseAndLoadProject(fileContent);
+       
+        if (event.target) {
+            event.target.value = '';
+        }
+    };
 
     const handleOpenProject = async () => {
         // @ts-ignore
@@ -969,18 +1015,16 @@ Description: ${photo.description || 'N/A'}
         }
     };
 
-    const handleFileSelected = async (event: React.ChangeEvent<HTMLInputElement>) => {
-        const file = event.target.files?.[0];
-        if (!file) return;
-
-        const fileContent = await file.text();
-        await parseAndLoadProject(fileContent);
-
-        if (event.target) {
-            event.target.value = '';
-        }
+    const getHeaderErrors = (): Set<keyof HeaderData> => {
+        const headerErrors = new Set<keyof HeaderData>();
+        errors.forEach(errorKey => {
+            if (!errorKey.startsWith('photo-') && Object.keys(headerData).includes(errorKey)) {
+                headerErrors.add(errorKey as keyof HeaderData);
+            }
+        });
+        return headerErrors;
     };
-
+    
     const getPhotoErrors = (id: number): Set<keyof PhotoData> => {
         const photoErrors = new Set<keyof PhotoData>();
         errors.forEach(errorKey => {
@@ -991,24 +1035,15 @@ Description: ${photo.description || 'N/A'}
         });
         return photoErrors;
     };
-    
-    const getHeaderErrors = (): Set<keyof HeaderData> => {
-        const headerErrors = new Set<keyof HeaderData>();
-        errors.forEach(errorKey => {
-            if (!errorKey.startsWith('photo-')) {
-                headerErrors.add(errorKey as keyof HeaderData);
-            }
-        });
-        return headerErrors;
-    };
 
     return (
-        <div className="bg-gray-100 min-h-screen">
+        <div className="bg-gray-100 dark:bg-gray-900 min-h-screen transition-colors duration-200">
             {pdfPreview && (
                 <PdfPreviewModal 
                     url={pdfPreview.url} 
                     filename={pdfPreview.filename} 
                     onClose={() => setPdfPreview(null)} 
+                    pdfBlob={pdfPreview.blob}
                 />
             )}
             {enlargedImageUrl && (
@@ -1016,36 +1051,39 @@ Description: ${photo.description || 'N/A'}
             )}
             {showStatusModal && <ActionStatusModal message={statusMessage} />}
             <SpecialCharacterPalette />
+            
             <div className="max-w-7xl mx-auto p-4 md:p-8">
                 <div className="flex flex-wrap justify-between items-center gap-2 mb-4">
-                    <button onClick={onBack} className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
+                    <button onClick={onBack} className="bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-white text-gray-800 font-bold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
                         <ArrowLeftIcon /> <span>Home</span>
                     </button>
                     <div className="flex flex-wrap justify-end gap-2">
-                        <button onClick={handleOpenProject} className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
-                            <FolderOpenIcon /> <span>Open Project</span>
+                        <button onClick={handleOpenProject} className="bg-gray-600 hover:bg-gray-700 dark:bg-gray-500 dark:hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
+                            <FolderOpenIcon /> <span>Open</span>
                         </button>
-                        <input
+                         <input
                             type="file"
                             ref={fileInputRef}
                             onChange={handleFileSelected}
                             style={{ display: 'none' }}
                             accept=".plog"
                         />
+                        
                         <button onClick={handleSaveProject} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
-                            <SaveIcon /> <span>Save Project</span>
+                            <SaveIcon /> <span>Save</span>
                         </button>
                         {/* @ts-ignore */}
                         {!window.electronAPI && (
                             <button onClick={handleDownloadPhotos} className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
-                                <FolderArrowDownIcon /> <span>Download Photos</span>
+                                <FolderArrowDownIcon /> <span>Photos</span>
                             </button>
                         )}
                         <button onClick={handleSavePdf} className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
-                            <DownloadIcon /> <span>Save to PDF</span>
+                            <DownloadIcon /> <span>PDF</span>
                         </button>
                     </div>
                 </div>
+                
                 <div className="main-content">
                     <Header data={headerData} onDataChange={handleHeaderChange} errors={getHeaderErrors()} />
                     <div className="mt-8">
@@ -1072,8 +1110,7 @@ Description: ${photo.description || 'N/A'}
                                         <div className="relative">
                                             <button
                                                 onClick={() => addPhoto(index)}
-                                                className="bg-white hover:bg-gray-100 text-[#007D8C] font-bold py-2 px-4 rounded-full border-2 border-[#007D8C] inline-flex items-center gap-2 transition duration-200 shadow-sm"
-                                                aria-label={`Add new photo after photo ${index + 1}`}
+                                                className="bg-white hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 text-[#007D8C] font-bold py-2 px-4 rounded-full border-2 border-[#007D8C] inline-flex items-center gap-2 transition duration-200 shadow-sm"
                                             >
                                                 <PlusIcon />
                                                 <span>Add Photo Here</span>
@@ -1084,41 +1121,42 @@ Description: ${photo.description || 'N/A'}
                             </div>
                         ))}
                     </div>
-                </div>
-                <div className="mt-8 flex justify-center">
-                    <button
-                        onClick={() => addPhoto()}
-                        className="bg-[#007D8C] hover:bg-[#006b7a] text-white font-bold py-3 px-6 rounded-lg shadow-md inline-flex items-center gap-2 transition duration-200 text-lg"
-                    >
-                        <PlusIcon />
-                        <span>Add Photo</span>
-                    </button>
+
+                    <div className="mt-8 flex justify-center">
+                        <button
+                            onClick={() => addPhoto()}
+                            className="bg-[#007D8C] hover:bg-[#006b7a] text-white font-bold py-3 px-6 rounded-lg shadow-md inline-flex items-center gap-2 transition duration-200 text-lg"
+                        >
+                            <PlusIcon />
+                            <span>Add Photo</span>
+                        </button>
+                    </div>
                 </div>
                 {photosData.length > 0 && <div className="border-t-4 border-[#007D8C] my-8" />}
-                <footer className="text-center text-gray-500 text-sm py-4">
-                    X-TES Digital Reporting v1.0.7
+                <footer className="text-center text-gray-500 dark:text-gray-400 text-sm py-4">
+                    X-TES Digital Reporting v1.0.9
                 </footer>
             </div>
-             {showUnsupportedFileModal && (
+            {showUnsupportedFileModal && (
                 <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 transition-opacity duration-300">
-                    <div className="bg-white p-8 rounded-lg shadow-2xl text-center relative max-w-md transform scale-95 hover:scale-100 transition-transform duration-300">
+                    <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-2xl text-center relative max-w-md transform scale-95 hover:scale-100 transition-transform duration-300">
                         <button
                             onClick={() => setShowUnsupportedFileModal(false)}
-                            className="absolute top-2 right-2 p-1 text-gray-400 hover:text-gray-700 transition-colors"
+                            className="absolute top-2 right-2 p-1 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
                             aria-label="Close"
                         >
                             <CloseIcon className="h-6 w-6" />
                         </button>
-                        <img
-                            src="https://ik.imagekit.io/fzpijprte/200.gif?updatedAt=1758919911063"
+                        <SafeImage
+                            fileName="loading-error.gif"
                             alt="Unsupported file type animation"
                             className="mx-auto mb-4 w-40 h-40"
                         />
-                        <h3 className="text-2xl font-bold mb-2 text-gray-800">Unsupported File Type</h3>
-                        <p className="text-gray-600">
+                        <h3 className="text-2xl font-bold mb-2 text-gray-800 dark:text-white">Unsupported File Type</h3>
+                        <p className="text-gray-600 dark:text-gray-300">
                             Please upload a supported image file.
                         </p>
-                        <p className="text-sm text-gray-500 mt-3">
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-3">
                             Supported formats: <strong>JPG, PNG</strong>
                         </p>
                     </div>
@@ -1126,24 +1164,24 @@ Description: ${photo.description || 'N/A'}
             )}
             {showValidationErrorModal && (
                 <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 transition-opacity duration-300">
-                    <div className="bg-white p-8 rounded-lg shadow-2xl text-center relative max-w-md transform scale-95 hover:scale-100 transition-transform duration-300">
+                    <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-2xl text-center relative max-w-md transform scale-95 hover:scale-100 transition-transform duration-300">
                         <button
                             onClick={() => setShowValidationErrorModal(false)}
-                            className="absolute top-2 right-2 p-1 text-gray-400 hover:text-gray-700 transition-colors"
+                            className="absolute top-2 right-2 p-1 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
                             aria-label="Close"
                         >
                             <CloseIcon className="h-6 w-6" />
                         </button>
-                        <img
-                            src="https://ik.imagekit.io/fzpijprte/200.gif?updatedAt=1758919911063"
+                        <SafeImage
+                            fileName="loading-error.gif"
                             alt="Missing information animation"
                             className="mx-auto mb-4 w-40 h-40"
                         />
-                        <h3 className="text-2xl font-bold mb-2 text-gray-800">Missing Information</h3>
-                        <p className="text-gray-600">
+                        <h3 className="text-2xl font-bold mb-2 text-gray-800 dark:text-white">Missing Information</h3>
+                        <p className="text-gray-600 dark:text-gray-300">
                             Please fill in all required fields.
                         </p>
-                        <p className="text-sm text-gray-500 mt-3">
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-3">
                             Missing fields are highlighted in red.
                         </p>
                     </div>
@@ -1151,16 +1189,16 @@ Description: ${photo.description || 'N/A'}
             )}
              {showNoInternetModal && (
                 <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
-                    <div className="bg-white p-8 rounded-lg shadow-2xl text-center relative max-w-md">
+                    <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-2xl text-center relative max-w-md">
                         <button
                             onClick={() => setShowNoInternetModal(false)}
-                            className="absolute top-2 right-2 p-1 text-gray-400 hover:text-gray-700"
+                            className="absolute top-2 right-2 p-1 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
                             aria-label="Close"
                         >
                             <CloseIcon className="h-6 w-6" />
                         </button>
-                        <h3 className="text-2xl font-bold mb-2 text-gray-800">No Internet Connection</h3>
-                        <p className="text-gray-600">
+                        <h3 className="text-2xl font-bold mb-2 text-gray-800 dark:text-white">No Internet Connection</h3>
+                        <p className="text-gray-600 dark:text-gray-300">
                             An internet connection is required to save the PDF. Please connect to the internet and try again.
                         </p>
                     </div>

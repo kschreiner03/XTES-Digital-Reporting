@@ -1,3 +1,4 @@
+
 import React, { useState, ReactElement, useEffect, useRef, useCallback } from 'react';
 import { DfrHeader } from './DfrHeader';
 import PhotoEntry from './PhotoEntry';
@@ -9,11 +10,9 @@ import { SpecialCharacterPalette } from './SpecialCharacterPalette';
 import BulletPointEditor from './BulletPointEditor';
 import ImageModal from './ImageModal';
 import ActionStatusModal from './ActionStatusModal';
-
-
-// @ts-ignore
-const { jsPDF } = window.jspdf;
-declare const JSZip: any;
+import { jsPDF } from 'jspdf';
+import JSZip from 'jszip';
+import SafeImage, { getAssetUrl } from './SafeImage';
 
 const dfrPlaceholders = {
     header: {
@@ -77,7 +76,8 @@ const addRecentProject = async (projectData: any, projectInfo: { type: AppType; 
         await storeProject(timestamp, projectData);
     } catch (e) {
         console.error("Failed to save project to IndexedDB:", e);
-        alert("Could not save the project to the local database. Your browser's storage might be full or corrupted.");
+        // Suppress alert to allow process to continue
+        // alert("Could not save the project to the local database.");
         return;
     }
     
@@ -126,7 +126,7 @@ const addRecentProject = async (projectData: any, projectInfo: { type: AppType; 
         localStorage.setItem(RECENT_PROJECTS_KEY, JSON.stringify(updatedProjects));
     } catch (e) {
         console.error("Failed to save recent projects to localStorage:", e);
-        alert("Could not update recent projects list. Your browser's local storage may be full.");
+        // alert("Could not update recent projects list. Your browser's local storage may be full.");
     }
 };
 // --- End Utility ---
@@ -188,7 +188,7 @@ const autoCropImage = (imageUrl: string): Promise<string> => {
     });
 };
 
-const PdfPreviewModal: React.FC<{ url: string; filename: string; onClose: () => void; }> = ({ url, filename, onClose }) => {
+const PdfPreviewModal: React.FC<{ url: string; filename: string; onClose: () => void; pdfBlob?: Blob; }> = ({ url, filename, onClose, pdfBlob }) => {
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
             if (e.key === 'Escape') {
@@ -207,43 +207,67 @@ const PdfPreviewModal: React.FC<{ url: string; filename: string; onClose: () => 
         };
     }, [onClose, url]);
 
-    const handleDownload = () => {
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = filename;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+    const handleDownload = async () => {
+        // @ts-ignore
+        if (window.electronAPI && window.electronAPI.savePdf) {
+            try {
+                let arrayBuffer;
+                if (pdfBlob) {
+                    arrayBuffer = await pdfBlob.arrayBuffer();
+                } else {
+                    const response = await fetch(url);
+                    const blob = await response.blob();
+                    arrayBuffer = await blob.arrayBuffer();
+                }
+                
+                // @ts-ignore
+                const result = await window.electronAPI.savePdf(arrayBuffer, filename);
+                if (result.success) {
+                    alert('PDF saved successfully!');
+                } else if (result.error) {
+                    alert(`Failed to save PDF: ${result.error}`);
+                }
+            } catch (e) {
+                console.error("Error saving PDF via Electron:", e);
+                alert("An error occurred while saving the PDF.");
+            }
+        } else {
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
     };
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-75 flex flex-col items-center justify-center z-50 p-4" role="dialog" aria-modal="true">
-            <div className="bg-white rounded-lg shadow-2xl w-full h-full flex flex-col">
-                <div className="flex justify-between items-center p-4 border-b bg-gray-50">
-                    <h3 className="text-xl font-bold text-gray-800">PDF Preview</h3>
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl w-full h-full flex flex-col overflow-hidden">
+                <div className="flex justify-between items-center p-4 border-b bg-gray-50 dark:bg-gray-700 dark:border-gray-600">
+                    <h3 className="text-xl font-bold text-gray-800 dark:text-white">PDF Preview</h3>
                     <div className="flex items-center gap-4">
                         <button onClick={handleDownload} className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
                             <DownloadIcon />
                             <span>Download PDF</span>
                         </button>
-                        <button onClick={onClose} className="text-gray-500 hover:text-gray-800 transition-colors" aria-label="Close preview">
+                        <button onClick={onClose} className="text-gray-500 hover:text-gray-800 dark:text-gray-300 dark:hover:text-white transition-colors" aria-label="Close preview">
                             <CloseIcon className="h-8 w-8" />
                         </button>
                     </div>
                 </div>
-                <div className="flex-grow bg-gray-200">
+                <div className="flex-grow bg-gray-200 dark:bg-gray-900 relative">
                     <object data={url} type="application/pdf" className="w-full h-full">
                         <div className="flex flex-col items-center justify-center h-full bg-gray-100 p-8 text-center text-gray-700">
                             <p className="mb-4 text-lg font-semibold">It appears your browser cannot preview PDFs directly.</p>
                             <p className="mb-6">You can download the file to view it instead.</p>
-                            <a
-                                href={url}
-                                download={filename}
+                            <button
+                                onClick={handleDownload}
                                 className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200"
                             >
                                 <DownloadIcon />
                                 <span>Download PDF</span>
-                            </a>
+                            </button>
                         </div>
                     </object>
                 </div>
@@ -309,19 +333,19 @@ const formatDateForFilename = (dateString: string): string => {
 
 // --- Local UI Components ---
 const Section: React.FC<{ title: string; children: React.ReactNode; }> = ({ title, children }) => (
-    <div className="bg-white p-6 shadow-md rounded-lg">
-        <h2 className="text-xl font-bold text-gray-800 border-b-2 border-gray-200 pb-2 mb-4">{title}</h2>
+    <div className="bg-white dark:bg-gray-800 p-6 shadow-md rounded-lg transition-colors duration-200">
+        <h2 className="text-xl font-bold text-gray-800 dark:text-gray-100 border-b-2 border-gray-200 dark:border-gray-700 pb-2 mb-4">{title}</h2>
         <div className="space-y-4">{children}</div>
     </div>
 );
 
 const EditableField: React.FC<{ label: string; value: string; onChange: (value: string) => void; type?: string; isTextArea?: boolean; rows?: number; placeholder?: string; }> = ({ label, value, onChange, type = 'text', isTextArea = false, rows = 1, placeholder = '' }) => {
-    const commonClasses = "block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-2 focus:ring-[#007D8C] focus:border-[#007D8C] transition";
+    const commonClasses = "block w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-2 focus:ring-[#007D8C] focus:border-[#007D8C] transition bg-white dark:bg-gray-700 text-black dark:text-white dark:placeholder-gray-400";
     const elementRef = React.useRef<HTMLInputElement & HTMLTextAreaElement>(null);
 
     return (
         <div>
-            {label && <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>}
+            {label && <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{label}</label>}
             {isTextArea ? (
                 <textarea
                     ref={elementRef}
@@ -361,26 +385,26 @@ const LocationBlockEntry: React.FC<{
 }> = ({ data, onDataChange, onRemove, onMove, isFirst, isLast }) => {
     const [isCommentOpen, setIsCommentOpen] = useState(false);
     return (
-        <div className="p-4 border border-gray-200 rounded-md">
+        <div className="p-4 border border-gray-200 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 transition-colors duration-200">
             <div className="flex justify-between items-center mb-2">
                 <div className="flex items-center gap-2">
-                    <h3 className="font-bold text-gray-600">Location Specific Activity</h3>
+                    <h3 className="font-bold text-gray-600 dark:text-gray-300">Location Specific Activity</h3>
                     <button
                         onClick={() => setIsCommentOpen(!isCommentOpen)}
                         title="Toggle comment"
-                        className={`p-1 rounded-full ${isCommentOpen ? 'bg-yellow-200 text-yellow-800' : 'text-gray-400 hover:text-gray-600'}`}
+                        className={`p-1 rounded-full ${isCommentOpen ? 'bg-yellow-200 text-yellow-800' : 'text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300'}`}
                     >
                         <ChatBubbleLeftIcon className="h-5 w-5" />
                     </button>
                 </div>
                 <div className="flex items-center space-x-2">
-                    <button onClick={() => onMove(data.id, 'up')} disabled={isFirst} className="p-1 text-gray-500 hover:text-gray-800 disabled:opacity-30 disabled:cursor-not-allowed transition duration-200" aria-label="Move Up">
+                    <button onClick={() => onMove(data.id, 'up')} disabled={isFirst} className="p-1 text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition duration-200" aria-label="Move Up">
                         <ArrowUpIcon className="h-6 w-6" />
                     </button>
-                    <button onClick={() => onMove(data.id, 'down')} disabled={isLast} className="p-1 text-gray-500 hover:text-gray-800 disabled:opacity-30 disabled:cursor-not-allowed transition duration-200" aria-label="Move Down">
+                    <button onClick={() => onMove(data.id, 'down')} disabled={isLast} className="p-1 text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition duration-200" aria-label="Move Down">
                         <ArrowDownIcon className="h-6 w-6" />
                     </button>
-                    <button onClick={() => onRemove(data.id)} className="p-1 text-red-500 hover:text-red-700 transition duration-200" aria-label="Remove Location Activity">
+                    <button onClick={() => onRemove(data.id)} className="p-1 text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 transition duration-200" aria-label="Remove Location Activity">
                         <TrashIcon className="h-6 w-6" />
                     </button>
                 </div>
@@ -391,7 +415,7 @@ const LocationBlockEntry: React.FC<{
                     onChange={(e) => onDataChange(data.id, 'comment', e.target.value)}
                     placeholder="Add a comment for this location..."
                     rows={2}
-                    className="block w-full p-2 border border-yellow-300 bg-yellow-50 rounded-md shadow-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition mb-2"
+                    className="block w-full p-2 border border-yellow-300 bg-yellow-50 text-gray-900 rounded-md shadow-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition mb-2"
                 />
             )}
             <div className="space-y-4">
@@ -404,6 +428,7 @@ const LocationBlockEntry: React.FC<{
 
 
 const DfrStandard = ({ onBack, initialData }: DfrStandardProps): ReactElement => {
+    // ... rest of the component is unchanged, but ensuring `jsPDF` works via import
     const [headerData, setHeaderData] = useState<DfrHeaderData>({
         proponent: '',
         projectName: '',
@@ -434,7 +459,7 @@ const DfrStandard = ({ onBack, initialData }: DfrStandardProps): ReactElement =>
     const [showMigrationNotice, setShowMigrationNotice] = useState(false);
     const [enlargedImageUrl, setEnlargedImageUrl] = useState<string | null>(null);
     const [showUnsupportedFileModal, setShowUnsupportedFileModal] = useState<boolean>(false);
-    const [pdfPreview, setPdfPreview] = useState<{ url: string; filename: string } | null>(null);
+    const [pdfPreview, setPdfPreview] = useState<{ url: string; filename: string; blob?: Blob } | null>(null);
     const [showStatusModal, setShowStatusModal] = useState(false);
     const [statusMessage, setStatusMessage] = useState('');
     const [openComments, setOpenComments] = useState<Set<string>>(new Set());
@@ -985,12 +1010,32 @@ Description: ${photo.description || 'N/A'}
         return true;
     };
 
+    const addSafeLogo = async (docInstance: any, x: number, y: number, w: number, h: number) => {
+        const logoUrl = await getAssetUrl("xterra-logo.jpg");
+        try {
+            const response = await fetch(logoUrl);
+            if (!response.ok) throw new Error('Logo fetch failed');
+            const blob = await response.blob();
+            const reader = new FileReader();
+            return new Promise<void>((resolve) => {
+                reader.onloadend = () => {
+                    const base64data = reader.result as string;
+                    docInstance.addImage(base64data, 'JPEG', x, y, w, h);
+                    resolve();
+                };
+                reader.readAsDataURL(blob);
+            });
+        } catch (e) {
+            console.error("Could not load logo:", e);
+            // Fallback: draw text if logo fails
+            docInstance.setFontSize(10);
+            docInstance.setTextColor(0,0,0);
+            docInstance.text("X-TERRA", x, y + 5);
+        }
+    };
 
     const handleSavePdf = async () => {
-        if (!navigator.onLine) {
-            setShowNoInternetModal(true);
-            return;
-        }
+        // Removed internet check to allow offline PDF generation
         if (!validateForm()) return;
 
         const stateForSaving = await prepareStateForRecentProjectStorage();
@@ -1108,11 +1153,11 @@ Description: ${photo.description || 'N/A'}
             return blockBottomY;
         };
         
-        const drawDfrHeader = (docInstance: any) => {
+        const drawDfrHeader = async (docInstance: any) => {
             const headerContentStartY = contentMargin;
 
-            const logoUrl = "https://ik.imagekit.io/fzpijprte/XTerraLogo2019_Horizontal.jpg?updatedAt=1758827714962";
-            docInstance.addImage(logoUrl, 'JPEG', contentMargin, headerContentStartY, 40, 10);
+            // Replaced doc.addImage with addSafeLogo
+            await addSafeLogo(docInstance, contentMargin, headerContentStartY, 40, 10);
             
             docInstance.setFontSize(18);
             docInstance.setFont('times', 'bold');
@@ -1128,14 +1173,13 @@ Description: ${photo.description || 'N/A'}
             return yPos + 6; // Keep content in same spot by increasing padding here
         };
 
-        const drawPhotoPageHeader = (docInstance: any) => {
+        const drawPhotoPageHeader = async (docInstance: any) => {
             const startY = borderMargin;
 
             const headerContentStartY = contentMargin;
 
-            const logoUrl = "https://ik.imagekit.io/fzpijprte/XTerraLogo2019_Horizontal.jpg?updatedAt=1758827714962";
-
-            docInstance.addImage(logoUrl, 'JPEG', contentMargin, headerContentStartY, 40, 10);
+            // Replaced doc.addImage with addSafeLogo
+            await addSafeLogo(docInstance, contentMargin, headerContentStartY, 40, 10);
 
             docInstance.setFontSize(18);
             docInstance.setFont('times', 'bold');
@@ -1157,19 +1201,19 @@ Description: ${photo.description || 'N/A'}
             return yAfterBlock + 1;
         };
         
-        let yPos = drawDfrHeader(doc);
+        let yPos = await drawDfrHeader(doc);
         
-        const renderTextWithBullets = (text: string, startY: number) => {
+        const renderTextWithBullets = async (text: string, startY: number) => {
             let y = startY;
             doc.setFontSize(12);
             doc.setFont('times', 'normal');
             if (!text) return y;
             const contentParagraphs = text.split('\n');
 
-            contentParagraphs.forEach(paragraph => {
+            for (const paragraph of contentParagraphs) {
                 if (paragraph.trim() === '') {
                     if (y + 3 <= maxYPos) { y += 3; }
-                    return;
+                    continue;
                 }
                 
                 const indentationMatch = paragraph.match(/^\s*/);
@@ -1181,14 +1225,14 @@ Description: ${photo.description || 'N/A'}
                 const isBulleted = trimmedPara.startsWith('-');
                 const textToRender = isBulleted ? trimmedPara.substring(1).trim() : trimmedPara;
 
-                if (!textToRender) return;
+                if (!textToRender) continue;
 
                 const textMaxWidth = contentWidth - (isBulleted ? 5 : 0) - indentWidth;
                 const splitText = doc.splitTextToSize(textToRender, textMaxWidth);
                 const textHeight = doc.getTextDimensions(splitText).h;
 
                 if (y + textHeight > maxYPos) {
-                    drawPageBorder(doc); doc.addPage(); pageNum++; y = drawDfrHeader(doc);
+                    drawPageBorder(doc); doc.addPage(); pageNum++; y = await drawDfrHeader(doc);
                     doc.setFontSize(12); doc.setFont('times', 'normal');
                 }
                 
@@ -1201,7 +1245,7 @@ Description: ${photo.description || 'N/A'}
                 doc.text(splitText, textX, y);
 
                 y += textHeight + 2;
-            });
+            }
             return y;
         }
 
@@ -1211,28 +1255,28 @@ Description: ${photo.description || 'N/A'}
             doc.setFontSize(13); doc.setFont('times', 'bold');
             const mainTitleDims = doc.getTextDimensions(mainTitle);
             if (yPos + mainTitleDims.h + 2 > maxYPos) {
-                drawPageBorder(doc); doc.addPage(); pageNum++; yPos = drawDfrHeader(doc);
+                drawPageBorder(doc); doc.addPage(); pageNum++; yPos = await drawDfrHeader(doc);
             }
             doc.text(mainTitle, contentMargin, yPos);
             yPos += mainTitleDims.h + 2;
 
             if (bodyData.generalActivity && bodyData.generalActivity.trim()) {
-                yPos = renderTextWithBullets(bodyData.generalActivity, yPos);
+                yPos = await renderTextWithBullets(bodyData.generalActivity, yPos);
             }
 
-            bodyData.locationActivities.forEach(block => {
-                if (!block.activities || !block.activities.trim()) return;
+            for (const block of bodyData.locationActivities) {
+                if (!block.activities || !block.activities.trim()) continue;
                 doc.setFontSize(12); doc.setFont('times', 'bold');
                 const subTitle = `Location: ${block.location || 'N/A'}`;
                 const subTitleHeight = doc.getTextDimensions(subTitle).h + 2;
                 if (yPos + subTitleHeight > maxYPos) {
-                    drawPageBorder(doc); doc.addPage(); pageNum++; yPos = drawDfrHeader(doc);
+                    drawPageBorder(doc); doc.addPage(); pageNum++; yPos = await drawDfrHeader(doc);
                 }
                 doc.text(subTitle, contentMargin, yPos);
                 yPos += subTitleHeight;
-                yPos = renderTextWithBullets(block.activities, yPos);
+                yPos = await renderTextWithBullets(block.activities, yPos);
                 yPos += 2;
-            });
+            }
         }
 
         const textSections = [
@@ -1243,21 +1287,21 @@ Description: ${photo.description || 'N/A'}
             { title: 'Further Restoration or Monitoring Required:', content: bodyData.furtherRestoration },
         ];
 
-        textSections.forEach(({ title, content }) => {
-            if (!content || !content.trim()) return;
+        for (const { title, content } of textSections) {
+            if (!content || !content.trim()) continue;
             const spaceBeforeSection = 4;
             doc.setFontSize(13); doc.setFont('times', 'bold');
             const titleHeight = doc.getTextDimensions(title).h + 2;
             if (yPos + spaceBeforeSection + titleHeight > maxYPos) {
-                drawPageBorder(doc); doc.addPage(); pageNum++; yPos = drawDfrHeader(doc);
+                drawPageBorder(doc); doc.addPage(); pageNum++; yPos = await drawDfrHeader(doc);
             } else {
                 yPos += spaceBeforeSection;
             }
             doc.setFontSize(13); doc.setFont('times', 'bold');
             doc.text(title, contentMargin, yPos);
             yPos += titleHeight;
-            yPos = renderTextWithBullets(content, yPos);
-        });
+            yPos = await renderTextWithBullets(content, yPos);
+        }
 
 
         drawPageBorder(doc);
@@ -1359,7 +1403,7 @@ Description: ${photo.description || 'N/A'}
         if (sitePhotos.length > 0) {
             const entryHeights = await Promise.all(sitePhotos.map(p => calculatePhotoEntryHeight(doc, p)));
             const dummyDoc = new jsPDF();
-            const yAfterHeader = drawPhotoPageHeader(dummyDoc);
+            const yAfterHeader = await drawPhotoPageHeader(dummyDoc);
             const pageContentHeight = maxYPos - yAfterHeader;
             
             const pages: number[][] = [];
@@ -1395,7 +1439,7 @@ Description: ${photo.description || 'N/A'}
                 doc.addPage(); pageNum++;
                 isFirstPhotoPage = false;
                 
-                let yPos = drawPhotoPageHeader(doc);
+                let yPos = await drawPhotoPageHeader(doc);
                 const photosOnPage = group.map(i => sitePhotos[i]);
                 const heightsOnPage = group.map(i => entryHeights[i]);
                 const availableHeight = maxYPos - yPos;
@@ -1463,7 +1507,7 @@ Description: ${photo.description || 'N/A'}
                 doc.addPage(); 
                 pageNum++;
         
-                let yPos = drawPhotoPageHeader(doc);
+                let yPos = await drawPhotoPageHeader(doc);
                 const footerAndGapHeight = 25;
                 const textBlockHeight = calculateMapTextHeight(doc, map, contentWidth);
                 const availableHeightForImage = pageHeight - yPos - footerAndGapHeight - textBlockHeight;
@@ -1495,7 +1539,7 @@ Description: ${photo.description || 'N/A'}
         const sanitizedProjectName = sanitize(headerData.projectName);
         const filename = `${sanitizedProjectName || 'project'}_DFR_${formattedFilenameDate}.pdf`;
         
-        const totalPages = doc.internal.getNumberOfPages();
+        const totalPages = (doc.internal as any).getNumberOfPages();
         for (let i = 1; i <= totalPages; i++) {
             doc.setPage(i);
             doc.setFontSize(10);
@@ -1507,7 +1551,7 @@ Description: ${photo.description || 'N/A'}
         
         const pdfBlob = doc.output('blob');
         const pdfUrl = URL.createObjectURL(pdfBlob);
-        setPdfPreview({ url: pdfUrl, filename });
+        setPdfPreview({ url: pdfUrl, filename, blob: pdfBlob });
     };
 
     const getHeaderErrors = (): Set<keyof DfrHeaderData> => {
@@ -1532,12 +1576,13 @@ Description: ${photo.description || 'N/A'}
     };
     
     return (
-        <div className="bg-gray-100 min-h-screen">
+        <div className="bg-gray-100 dark:bg-gray-900 min-h-screen transition-colors duration-200">
             {pdfPreview && (
                 <PdfPreviewModal 
                     url={pdfPreview.url} 
                     filename={pdfPreview.filename} 
                     onClose={() => setPdfPreview(null)} 
+                    pdfBlob={pdfPreview.blob}
                 />
             )}
             {enlargedImageUrl && (
@@ -1564,11 +1609,11 @@ Description: ${photo.description || 'N/A'}
                     </div>
                 )}
                 <div className="flex flex-wrap justify-between items-center gap-2 mb-4">
-                    <button onClick={onBack} className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
+                    <button onClick={onBack} className="bg-gray-200 hover:bg-gray-300 text-gray-800 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-white font-bold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
                         <ArrowLeftIcon /> <span>Home</span>
                     </button>
                     <div className="flex flex-wrap justify-end gap-2">
-                        <button onClick={handleOpenProject} className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
+                        <button onClick={handleOpenProject} className="bg-gray-600 hover:bg-gray-700 dark:bg-gray-500 dark:hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
                             <FolderOpenIcon /> <span>Open Project</span>
                         </button>
                          <input
@@ -1599,13 +1644,13 @@ Description: ${photo.description || 'N/A'}
                     <Section title="Project Activities">
                         <div>
                             <div className="flex items-center justify-between mb-1">
-                                <label className="block text-sm font-medium text-gray-700">General Activity</label>
-                                <button onClick={() => toggleComment('generalActivity')} title="Toggle comment" className={`p-1 rounded-full ${openComments.has('generalActivity') ? 'bg-yellow-200 text-yellow-800' : 'text-gray-400 hover:text-gray-600'}`}>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">General Activity</label>
+                                <button onClick={() => toggleComment('generalActivity')} title="Toggle comment" className={`p-1 rounded-full ${openComments.has('generalActivity') ? 'bg-yellow-200 text-yellow-800' : 'text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300'}`}>
                                     <ChatBubbleLeftIcon className="h-5 w-5" />
                                 </button>
                             </div>
                             {openComments.has('generalActivity') && (
-                                <textarea value={bodyData.comments?.generalActivity || ''} onChange={(e) => handleCommentChange('generalActivity', e.target.value)} placeholder="Add a comment for editing purposes..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 rounded-md shadow-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition mb-2" />
+                                <textarea value={bodyData.comments?.generalActivity || ''} onChange={(e) => handleCommentChange('generalActivity', e.target.value)} placeholder="Add a comment for editing purposes..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 text-gray-900 rounded-md shadow-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition mb-2" />
                             )}
                             <BulletPointEditor label="" value={bodyData.generalActivity} onChange={handleGeneralActivityChange} rows={15} placeholder={dfrPlaceholders.body.generalActivity} isInvalid={errors.has('generalActivity')} />
                         </div>
@@ -1623,7 +1668,7 @@ Description: ${photo.description || 'N/A'}
                             ))}
                         </div>
                         <div className="text-center">
-                            <button onClick={addLocationActivity} className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
+                            <button onClick={addLocationActivity} className="bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-white font-bold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
                                 <PlusIcon />
                                 <span>Add Location-Specific Activity</span>
                             </button>
@@ -1633,25 +1678,25 @@ Description: ${photo.description || 'N/A'}
                     <Section title="Communications & Conditions">
                         <div>
                             <div className="flex items-center justify-between mb-1">
-                                <label className="block text-sm font-medium text-gray-700">Communication</label>
-                                <button onClick={() => toggleComment('communication')} title="Toggle comment" className={`p-1 rounded-full ${openComments.has('communication') ? 'bg-yellow-200 text-yellow-800' : 'text-gray-400 hover:text-gray-600'}`}>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Communication</label>
+                                <button onClick={() => toggleComment('communication')} title="Toggle comment" className={`p-1 rounded-full ${openComments.has('communication') ? 'bg-yellow-200 text-yellow-800' : 'text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300'}`}>
                                     <ChatBubbleLeftIcon className="h-5 w-5" />
                                 </button>
                             </div>
                             {openComments.has('communication') && (
-                                <textarea value={bodyData.comments?.communication || ''} onChange={(e) => handleCommentChange('communication', e.target.value)} placeholder="Add a comment for editing purposes..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 rounded-md shadow-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition mb-2" />
+                                <textarea value={bodyData.comments?.communication || ''} onChange={(e) => handleCommentChange('communication', e.target.value)} placeholder="Add a comment for editing purposes..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 text-gray-900 rounded-md shadow-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition mb-2" />
                             )}
                             <BulletPointEditor label="" value={bodyData.communication} onChange={v => handleBodyDataChange('communication', v)} rows={3} placeholder={dfrPlaceholders.body.communication} isInvalid={errors.has('communication')}/>
                         </div>
                         <div>
                              <div className="flex items-center justify-between mb-1">
-                                <label className="block text-sm font-medium text-gray-700">Weather and Ground Conditions</label>
-                                <button onClick={() => toggleComment('weatherAndGroundConditions')} title="Toggle comment" className={`p-1 rounded-full ${openComments.has('weatherAndGroundConditions') ? 'bg-yellow-200 text-yellow-800' : 'text-gray-400 hover:text-gray-600'}`}>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Weather and Ground Conditions</label>
+                                <button onClick={() => toggleComment('weatherAndGroundConditions')} title="Toggle comment" className={`p-1 rounded-full ${openComments.has('weatherAndGroundConditions') ? 'bg-yellow-200 text-yellow-800' : 'text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300'}`}>
                                     <ChatBubbleLeftIcon className="h-5 w-5" />
                                 </button>
                             </div>
                             {openComments.has('weatherAndGroundConditions') && (
-                                <textarea value={bodyData.comments?.weatherAndGroundConditions || ''} onChange={(e) => handleCommentChange('weatherAndGroundConditions', e.target.value)} placeholder="Add a comment for editing purposes..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 rounded-md shadow-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition mb-2" />
+                                <textarea value={bodyData.comments?.weatherAndGroundConditions || ''} onChange={(e) => handleCommentChange('weatherAndGroundConditions', e.target.value)} placeholder="Add a comment for editing purposes..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 text-gray-900 rounded-md shadow-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition mb-2" />
                             )}
                             <BulletPointEditor label="" value={bodyData.weatherAndGroundConditions} onChange={v => handleBodyDataChange('weatherAndGroundConditions', v)} rows={3} placeholder={dfrPlaceholders.body.weatherAndGroundConditions} isInvalid={errors.has('weatherAndGroundConditions')}/>
                         </div>
@@ -1660,37 +1705,37 @@ Description: ${photo.description || 'N/A'}
                     <Section title="Environmental & Wildlife">
                         <div>
                             <div className="flex items-center justify-between mb-1">
-                                <label className="block text-sm font-medium text-gray-700">Environmental Protection Measures & Mitigation</label>
-                                <button onClick={() => toggleComment('environmentalProtection')} title="Toggle comment" className={`p-1 rounded-full ${openComments.has('environmentalProtection') ? 'bg-yellow-200 text-yellow-800' : 'text-gray-400 hover:text-gray-600'}`}>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Environmental Protection Measures & Mitigation</label>
+                                <button onClick={() => toggleComment('environmentalProtection')} title="Toggle comment" className={`p-1 rounded-full ${openComments.has('environmentalProtection') ? 'bg-yellow-200 text-yellow-800' : 'text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300'}`}>
                                     <ChatBubbleLeftIcon className="h-5 w-5" />
                                 </button>
                             </div>
                             {openComments.has('environmentalProtection') && (
-                                <textarea value={bodyData.comments?.environmentalProtection || ''} onChange={(e) => handleCommentChange('environmentalProtection', e.target.value)} placeholder="Add a comment for editing purposes..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 rounded-md shadow-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition mb-2" />
+                                <textarea value={bodyData.comments?.environmentalProtection || ''} onChange={(e) => handleCommentChange('environmentalProtection', e.target.value)} placeholder="Add a comment for editing purposes..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 text-gray-900 rounded-md shadow-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition mb-2" />
                             )}
                             <BulletPointEditor label="" value={bodyData.environmentalProtection} onChange={v => handleBodyDataChange('environmentalProtection', v)} rows={7} placeholder={dfrPlaceholders.body.environmentalProtection} isInvalid={errors.has('environmentalProtection')} />
                         </div>
                         <div>
                             <div className="flex items-center justify-between mb-1">
-                                <label className="block text-sm font-medium text-gray-700">Wildlife Observations</label>
-                                <button onClick={() => toggleComment('wildlifeObservations')} title="Toggle comment" className={`p-1 rounded-full ${openComments.has('wildlifeObservations') ? 'bg-yellow-200 text-yellow-800' : 'text-gray-400 hover:text-gray-600'}`}>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Wildlife Observations</label>
+                                <button onClick={() => toggleComment('wildlifeObservations')} title="Toggle comment" className={`p-1 rounded-full ${openComments.has('wildlifeObservations') ? 'bg-yellow-200 text-yellow-800' : 'text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300'}`}>
                                     <ChatBubbleLeftIcon className="h-5 w-5" />
                                 </button>
                             </div>
                             {openComments.has('wildlifeObservations') && (
-                                <textarea value={bodyData.comments?.wildlifeObservations || ''} onChange={(e) => handleCommentChange('wildlifeObservations', e.target.value)} placeholder="Add a comment for editing purposes..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 rounded-md shadow-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition mb-2" />
+                                <textarea value={bodyData.comments?.wildlifeObservations || ''} onChange={(e) => handleCommentChange('wildlifeObservations', e.target.value)} placeholder="Add a comment for editing purposes..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 text-gray-900 rounded-md shadow-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition mb-2" />
                             )}
                             <BulletPointEditor label="" value={bodyData.wildlifeObservations} onChange={v => handleBodyDataChange('wildlifeObservations', v)} rows={3} placeholder={dfrPlaceholders.body.wildlifeObservations} isInvalid={errors.has('wildlifeObservations')}/>
                         </div>
                         <div>
                             <div className="flex items-center justify-between mb-1">
-                                <label className="block text-sm font-medium text-gray-700">Further Restoration or Monitoring Required</label>
-                                <button onClick={() => toggleComment('furtherRestoration')} title="Toggle comment" className={`p-1 rounded-full ${openComments.has('furtherRestoration') ? 'bg-yellow-200 text-yellow-800' : 'text-gray-400 hover:text-gray-600'}`}>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Further Restoration or Monitoring Required</label>
+                                <button onClick={() => toggleComment('furtherRestoration')} title="Toggle comment" className={`p-1 rounded-full ${openComments.has('furtherRestoration') ? 'bg-yellow-200 text-yellow-800' : 'text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300'}`}>
                                     <ChatBubbleLeftIcon className="h-5 w-5" />
                                 </button>
                             </div>
                             {openComments.has('furtherRestoration') && (
-                                <textarea value={bodyData.comments?.furtherRestoration || ''} onChange={(e) => handleCommentChange('furtherRestoration', e.target.value)} placeholder="Add a comment for editing purposes..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 rounded-md shadow-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition mb-2" />
+                                <textarea value={bodyData.comments?.furtherRestoration || ''} onChange={(e) => handleCommentChange('furtherRestoration', e.target.value)} placeholder="Add a comment for editing purposes..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 text-gray-900 rounded-md shadow-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition mb-2" />
                             )}
                             <BulletPointEditor label="" value={bodyData.furtherRestoration} onChange={v => handleBodyDataChange('furtherRestoration', v)} rows={3} placeholder={dfrPlaceholders.body.furtherRestoration} isInvalid={errors.has('furtherRestoration')} />
                         </div>
@@ -1698,7 +1743,7 @@ Description: ${photo.description || 'N/A'}
 
                     <div className="border-t-4 border-[#007D8C] my-10" />
 
-                    <h2 className="text-3xl font-bold text-gray-700 text-center">Photographic Log</h2>
+                    <h2 className="text-3xl font-bold text-gray-700 dark:text-white text-center">Photographic Log</h2>
                     
                     <div>
                         {photosData.map((photo, index) => (
@@ -1719,12 +1764,12 @@ Description: ${photo.description || 'N/A'}
                                 {index < photosData.length - 1 && (
                                      <div className="relative my-6 flex items-center justify-center">
                                         <div className="absolute inset-0 flex items-center" aria-hidden="true">
-                                            <div className="w-full border-t-2 border-gray-300"></div>
+                                            <div className="w-full border-t-2 border-gray-300 dark:border-gray-600"></div>
                                         </div>
                                         <div className="relative">
                                             <button
                                                 onClick={() => addPhoto(false, index)}
-                                                className="bg-white hover:bg-gray-100 text-[#007D8C] font-bold py-2 px-4 rounded-full border border-gray-300 inline-flex items-center gap-2 transition duration-200 shadow-sm"
+                                                className="bg-white hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 text-[#007D8C] font-bold py-2 px-4 rounded-full border border-gray-300 dark:border-gray-600 inline-flex items-center gap-2 transition duration-200 shadow-sm"
                                             >
                                                 <PlusIcon />
                                                 <span>Add Photo Here</span>
@@ -1746,7 +1791,7 @@ Description: ${photo.description || 'N/A'}
                         </button>
                          <button
                             onClick={() => addPhoto(true)}
-                            className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-3 px-6 rounded-lg shadow-md inline-flex items-center gap-2 transition duration-200 text-lg"
+                            className="bg-gray-600 hover:bg-gray-700 dark:bg-gray-500 dark:hover:bg-gray-600 text-white font-bold py-3 px-6 rounded-lg shadow-md inline-flex items-center gap-2 transition duration-200 text-lg"
                         >
                             <PlusIcon />
                             <span>Add Map</span>
@@ -1754,30 +1799,30 @@ Description: ${photo.description || 'N/A'}
                     </div>
                 </div>
                 {photosData.length > 0 && <div className="border-t-4 border-[#007D8C] my-8" />}
-                <footer className="text-center text-gray-500 text-sm py-4">
+                <footer className="text-center text-gray-500 dark:text-gray-400 text-sm py-4">
                     X-TES Digital Reporting v1.0.9
                 </footer>
             </div>
             {showUnsupportedFileModal && (
                 <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 transition-opacity duration-300">
-                    <div className="bg-white p-8 rounded-lg shadow-2xl text-center relative max-w-md transform scale-95 hover:scale-100 transition-transform duration-300">
+                    <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-2xl text-center relative max-w-md transform scale-95 hover:scale-100 transition-transform duration-300">
                         <button
                             onClick={() => setShowUnsupportedFileModal(false)}
-                            className="absolute top-2 right-2 p-1 text-gray-400 hover:text-gray-700 transition-colors"
+                            className="absolute top-2 right-2 p-1 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
                             aria-label="Close"
                         >
                             <CloseIcon className="h-6 w-6" />
                         </button>
-                        <img
-                            src="https://ik.imagekit.io/fzpijprte/200.gif?updatedAt=1758919911063"
+                        <SafeImage
+                            fileName="loading-error.gif"
                             alt="Unsupported file type animation"
                             className="mx-auto mb-4 w-40 h-40"
                         />
-                        <h3 className="text-2xl font-bold mb-2 text-gray-800">Unsupported File Type</h3>
-                        <p className="text-gray-600">
+                        <h3 className="text-2xl font-bold mb-2 text-gray-800 dark:text-white">Unsupported File Type</h3>
+                        <p className="text-gray-600 dark:text-gray-300">
                             Please upload a supported image file.
                         </p>
-                        <p className="text-sm text-gray-500 mt-3">
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-3">
                             Supported formats: <strong>JPG, PNG</strong>
                         </p>
                     </div>
@@ -1785,24 +1830,24 @@ Description: ${photo.description || 'N/A'}
             )}
             {showValidationErrorModal && (
                 <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 transition-opacity duration-300">
-                    <div className="bg-white p-8 rounded-lg shadow-2xl text-center relative max-w-md transform scale-95 hover:scale-100 transition-transform duration-300">
+                    <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-2xl text-center relative max-w-md transform scale-95 hover:scale-100 transition-transform duration-300">
                         <button
                             onClick={() => setShowValidationErrorModal(false)}
-                            className="absolute top-2 right-2 p-1 text-gray-400 hover:text-gray-700 transition-colors"
+                            className="absolute top-2 right-2 p-1 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
                             aria-label="Close"
                         >
                             <CloseIcon className="h-6 w-6" />
                         </button>
-                        <img
-                            src="https://ik.imagekit.io/fzpijprte/200.gif?updatedAt=1758919911063"
+                        <SafeImage
+                            fileName="loading-error.gif"
                             alt="Missing information animation"
                             className="mx-auto mb-4 w-40 h-40"
                         />
-                        <h3 className="text-2xl font-bold mb-2 text-gray-800">Missing Information</h3>
-                        <p className="text-gray-600">
+                        <h3 className="text-2xl font-bold mb-2 text-gray-800 dark:text-white">Missing Information</h3>
+                        <p className="text-gray-600 dark:text-gray-300">
                             Please fill in all required fields.
                         </p>
-                        <p className="text-sm text-gray-500 mt-3">
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-3">
                             Missing fields are highlighted in red.
                         </p>
                     </div>
@@ -1810,16 +1855,16 @@ Description: ${photo.description || 'N/A'}
             )}
              {showNoInternetModal && (
                 <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
-                    <div className="bg-white p-8 rounded-lg shadow-2xl text-center relative max-w-md">
+                    <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-2xl text-center relative max-w-md">
                         <button
                             onClick={() => setShowNoInternetModal(false)}
-                            className="absolute top-2 right-2 p-1 text-gray-400 hover:text-gray-700"
+                            className="absolute top-2 right-2 p-1 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
                             aria-label="Close"
                         >
                             <CloseIcon className="h-6 w-6" />
                         </button>
-                        <h3 className="text-2xl font-bold mb-2 text-gray-800">No Internet Connection</h3>
-                        <p className="text-gray-600">
+                        <h3 className="text-2xl font-bold mb-2 text-gray-800 dark:text-white">No Internet Connection</h3>
+                        <p className="text-gray-600 dark:text-gray-300">
                             An internet connection is required to save the PDF. Please connect to the internet and try again.
                         </p>
                     </div>

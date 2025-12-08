@@ -1,31 +1,39 @@
+
 module.exports = {
   packagerConfig: {
     asar: true,
-    icon: 'assets/icon.ico',
+    // Use 'assets/icon' without extension. Forge will use .ico on Win and .icns on Mac.
+    icon: 'public/assets/icon',
     executableName: 'X-TES Digital Reporting',
+    appBundleId: 'com.xterra.digitalreporting',
     extraResource: [
-      'assets'
+      'public/assets'
     ],
     fileAssociations: [
       {
         ext: 'spdfr',
         name: 'SaskPower DFR Project',
-        icon: 'assets/SASKPOWERICON.ico'
+        icon: 'public/assets/SASKPOWERICON.ico'
       },
       {
         ext: 'dfr',
         name: 'X-TES DFR Project',
-        icon: 'assets/XTERRAICON.ico'
+        icon: 'public/assets/XTERRAICON.ico'
       },
       {
         ext: 'plog',
         name: 'X-TES Photo Log',
-        icon: 'assets/PHOTOLOGICON.ico'
+        icon: 'public/assets/PHOTOLOGICON.ico'
       },
       {
         ext: 'clog',
         name: 'X-TES Combine Logs',
-        icon: 'assets/COMBINEDLOGICON.ico'
+        icon: 'public/assets/COMBINEDLOGICON.ico'
+      },
+      {
+        ext: 'iogc',
+        name: 'IOGC Audit File',
+        icon: 'public/assets/XTERRAICON.ico'
       }
     ]
   },
@@ -39,9 +47,20 @@ module.exports = {
         // The name of the main executable
         exe: 'X-TES Digital Reporting.exe',
         // Path to the .ico file for the installer and shortcuts
-        setupIcon: 'assets/icon.ico',
+        setupIcon: 'public/assets/icon.ico',
         createDesktopShortcut: true
       },
+    },
+    {
+      name: '@electron-forge/maker-zip',
+      platforms: ['darwin'],
+    },
+    {
+      name: '@electron-forge/maker-dmg',
+      config: {
+        icon: 'public/assets/icon.icns',
+        format: 'ULFO'
+      }
     }
   ],
   publishers: [

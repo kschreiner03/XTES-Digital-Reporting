@@ -1,3 +1,4 @@
+
 import React from 'react';
 
 export const PlusIcon: React.FC<{ className?: string }> = ({ className = "h-7 w-7" }) => (
@@ -121,5 +122,18 @@ export const DocumentDuplicateIcon: React.FC<{ className?: string }> = ({ classN
 export const ChatBubbleLeftIcon: React.FC<{ className?: string }> = ({ className = "h-7 w-7" }) => (
     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.76 9.76 0 01-2.555-.337A5.972 5.972 0 015.41 20.97a5.969 5.969 0 01-.474-.065 4.48 4.48 0 00.978-2.025c.09-.457-.133-.917-.466-1.259a4.5 4.5 0 01-5.975-2.151A5.972 5.972 0 013 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z" />
+    </svg>
+);
+
+export const ClipboardDocumentCheckIcon: React.FC<{ className?: string }> = ({ className = "h-7 w-7" }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M11.35 3.836c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75 2.25 2.25 0 0 0-.1-.664m-5.8 0A2.251 2.251 0 0 1 13.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25m-4.875 8.25a2.25 2.25 0 0 0-2.25 2.25.75.75 0 0 0 .75.75h9.75a.75.75 0 0 0 .75-.75 2.25 2.25 0 0 0-2.25-2.25H3.375Z" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="m9 13.5 3 3m0 0 3-3m-3 3v-6" />
+    </svg>
+);
+
+export const ShieldCheckIcon: React.FC<{ className?: string }> = ({ className = "h-7 w-7" }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75m-7.641-4.74 8.58-3.256a2.25 2.25 0 0 1 1.724 0l8.586 3.256c.963.366 1.621 1.22 1.761 2.233 1.2 8.72-6.088 15.87-11.25 17.754a.5.5 0 0 1-.316 0c-5.163-1.883-12.45-9.034-11.25-17.754.14-1.013.798-1.867 1.761-2.233Z" />
     </svg>
 );

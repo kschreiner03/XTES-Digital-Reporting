@@ -1,3 +1,4 @@
+
 import React from 'react';
 
 export interface HeaderData {
@@ -103,4 +104,70 @@ export interface DfrSaskpowerData {
     wildlifeObservations: string;
     futureMonitoring: string;
     comments?: { [key: string]: string };
+}
+
+// --- IOGC Audit Types ---
+export interface IogcAuditData {
+    // Title Page Specific
+    xTerraFileNumber?: string;
+    followUpDate?: string;
+    reportDate?: string;
+    writtenBy?: string;
+    reviewedBy?: string; // "File Review and Report Professional Sign Off"
+    coverPhotoUrl?: string;
+    titlePageComplianceStatus?: string; // e.g. "LESSEE: Is in compliance"
+    titlePageSummary?: string; // The purple highlighted text box
+
+    // Header / Site Info (Shared)
+    iogcFileNumber: string;
+    legalLocation: string;
+    province: string;
+    reserveName: string;
+    lesseeName: string;
+    spudDate: string;
+    auditDate: string;
+    
+    // Checkboxes & Selections
+    siteStatus: string[]; // Active, Suspended...
+    siteType: string[]; // Well Site...
+    products: string[]; // Gas, Oil...
+    
+    auditType: string; // 1st Year, 5 Year...
+    copySentToFirstNation: boolean;
+
+    // Cover Sheet Sections (Checkboxes for "Included")
+    reportAddresses: {
+        leaseFacilities: boolean;
+        vegetation: boolean;
+        housekeeping: boolean;
+        protection: boolean;
+        summary: boolean;
+        complianceReview: boolean;
+    };
+    
+    // Attachments checkboxes
+    attachments: {
+        termsLetter: boolean;
+        sketch: boolean;
+        photos: boolean;
+        followUpLog: boolean;
+    };
+    
+    // Compliance
+    complianceStatus: 'In Compliance' | 'Not In Compliance' | '';
+    nonComplianceIssues: 'included' | 'N/A' | '';
+    recommendations: 'included' | 'N/A' | '';
+    complianceDescription: 'included' | 'not included' | 'N/A' | '';
+
+    // Declaration
+    declarationName: string;
+    declarationDate: string;
+
+    // Sections Content
+    // We store questions as a map of QuestionID -> Data
+    questions: Record<string, {
+        response: string; // Yes, No, N/A, or custom text
+        comments: string;
+        extraData?: Record<string, string>;
+    }>;
 }

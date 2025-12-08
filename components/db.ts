@@ -1,6 +1,5 @@
-// This file uses the 'idb' library, which is loaded via a script tag in index.html.
-// It provides a Promise-based API for IndexedDB.
-declare const idb: any;
+
+import { openDB } from 'idb';
 
 let dbPromise: Promise<any> | null = null;
 
@@ -10,7 +9,7 @@ const PROJECT_STORE_NAME = 'projects';
 
 const initDB = () => {
   if (!dbPromise) {
-    dbPromise = idb.openDB(DB_NAME, 2, {
+    dbPromise = openDB(DB_NAME, 2, {
       upgrade(db: any, oldVersion: number) {
         if (!db.objectStoreNames.contains(IMAGE_STORE_NAME)) {
           db.createObjectStore(IMAGE_STORE_NAME);

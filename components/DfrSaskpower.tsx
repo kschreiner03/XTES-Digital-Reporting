@@ -9,10 +9,9 @@ import { SpecialCharacterPalette } from './SpecialCharacterPalette';
 import BulletPointEditor from './BulletPointEditor';
 import ImageModal from './ImageModal';
 import ActionStatusModal from './ActionStatusModal';
-
-// @ts-ignore
-const { jsPDF } = window.jspdf;
-declare const JSZip: any;
+import { jsPDF } from 'jspdf';
+import JSZip from 'jszip';
+import SafeImage, { getAssetUrl } from './SafeImage';
 
 // --- Recent Projects Utility ---
 const RECENT_PROJECTS_KEY = 'xtec_recent_projects';
@@ -41,7 +40,7 @@ const addRecentProject = async (projectData: any, projectInfo: { type: AppType; 
         await storeProject(timestamp, projectData);
     } catch (e) {
         console.error("Failed to save project to IndexedDB:", e);
-        alert("Could not save the project to the local database. Your browser's storage might be full or corrupted.");
+        // alert("Could not save the project to the local database.");
         return;
     }
     
@@ -90,7 +89,7 @@ const addRecentProject = async (projectData: any, projectInfo: { type: AppType; 
         localStorage.setItem(RECENT_PROJECTS_KEY, JSON.stringify(updatedProjects));
     } catch (e) {
         console.error("Failed to save recent projects to localStorage:", e);
-        alert("Could not update recent projects list. Your browser's local storage may be full.");
+        // alert("Could not update recent projects list. Your browser's local storage may be full.");
     }
 };
 
@@ -180,7 +179,7 @@ const formatDateForFilename = (dateString: string): string => {
 // --- End Helper Functions ---
 
 
-const PdfPreviewModal: React.FC<{ url: string; filename: string; onClose: () => void; }> = ({ url, filename, onClose }) => {
+const PdfPreviewModal: React.FC<{ url: string; filename: string; onClose: () => void; pdfBlob?: Blob; }> = ({ url, filename, onClose, pdfBlob }) => {
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
             if (e.key === 'Escape') {
@@ -199,43 +198,64 @@ const PdfPreviewModal: React.FC<{ url: string; filename: string; onClose: () => 
         };
     }, [onClose, url]);
 
-    const handleDownload = () => {
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = filename;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+    const handleDownload = async () => {
+        // @ts-ignore
+        if (window.electronAPI && window.electronAPI.savePdf) {
+            try {
+                let arrayBuffer;
+                if (pdfBlob) {
+                    arrayBuffer = await pdfBlob.arrayBuffer();
+                } else {
+                    const response = await fetch(url);
+                    const blob = await response.blob();
+                    arrayBuffer = await blob.arrayBuffer();
+                }
+                
+                // @ts-ignore
+                const result = await window.electronAPI.savePdf(arrayBuffer, filename);
+                if (result.success) {
+                    alert('PDF saved successfully!');
+                } else if (result.error) {
+                    alert(`Failed to save PDF: ${result.error}`);
+                }
+            } catch (e) {
+                console.error("Error saving PDF via Electron:", e);
+                alert("An error occurred while saving the PDF.");
+            }
+        } else {
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
     };
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-75 flex flex-col items-center justify-center z-50 p-4" role="dialog" aria-modal="true">
-            <div className="bg-white rounded-lg shadow-2xl w-full h-full flex flex-col">
-                <div className="flex justify-between items-center p-4 border-b bg-gray-50">
-                    <h3 className="text-xl font-bold text-gray-800">PDF Preview</h3>
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl w-full h-full flex flex-col overflow-hidden">
+                <div className="flex justify-between items-center p-4 border-b bg-gray-50 dark:bg-gray-700 dark:border-gray-600">
+                    <h3 className="text-xl font-bold text-gray-800 dark:text-white">PDF Preview</h3>
                     <div className="flex items-center gap-4">
                         <button onClick={handleDownload} className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
                             <DownloadIcon />
                             <span>Download PDF</span>
                         </button>
-                        <button onClick={onClose} className="text-gray-500 hover:text-gray-800 transition-colors" aria-label="Close preview">
+                        <button onClick={onClose} className="text-gray-500 hover:text-gray-800 dark:text-gray-300 dark:hover:text-white transition-colors" aria-label="Close preview">
                             <CloseIcon className="h-8 w-8" />
                         </button>
                     </div>
                 </div>
-                <div className="flex-grow bg-gray-200">
+                <div className="flex-grow bg-gray-200 dark:bg-gray-900 relative">
                     <object data={url} type="application/pdf" className="w-full h-full">
                         <div className="flex flex-col items-center justify-center h-full bg-gray-100 p-8 text-center text-gray-700">
                             <p className="mb-4 text-lg font-semibold">It appears your browser cannot preview PDFs directly.</p>
                             <p className="mb-6">You can download the file to view it instead.</p>
-                            <a
-                                href={url}
-                                download={filename}
-                                className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200"
-                            >
+                            <button onClick={handleDownload} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
                                 <DownloadIcon />
                                 <span>Download PDF</span>
-                            </a>
+                            </button>
                         </div>
                     </object>
                 </div>
@@ -247,19 +267,19 @@ const PdfPreviewModal: React.FC<{ url: string; filename: string; onClose: () => 
 
 // --- UI Components ---
 const Section: React.FC<{ title: string; children: React.ReactNode; }> = ({ title, children }) => (
-    <div className="bg-white p-6 shadow-md rounded-lg">
-        <h2 className="text-xl font-bold text-gray-800 border-b-2 border-gray-200 pb-2 mb-4">{title}</h2>
+    <div className="bg-white dark:bg-gray-800 p-6 shadow-md rounded-lg transition-colors duration-200">
+        <h2 className="text-xl font-bold text-gray-800 dark:text-gray-100 border-b-2 border-gray-200 dark:border-gray-700 pb-2 mb-4">{title}</h2>
         <div className="space-y-4">{children}</div>
     </div>
 );
 
 const EditableField: React.FC<{ label: string; value: string; onChange: (value: string) => void; type?: string; isTextArea?: boolean; rows?: number; placeholder?: string; isInvalid?: boolean; }> = ({ label, value, onChange, type = 'text', isTextArea = false, rows = 1, placeholder = '', isInvalid = false }) => {
-    const commonClasses = `block w-full p-2 border rounded-md shadow-sm focus:ring-2 focus:ring-[#007D8C] focus:border-[#007D8C] transition ${isInvalid ? 'border-red-500' : 'border-gray-300'}`;
+    const commonClasses = `block w-full p-2 border rounded-md shadow-sm focus:ring-2 focus:ring-[#007D8C] focus:border-[#007D8C] transition bg-white dark:bg-gray-700 text-black dark:text-white dark:placeholder-gray-400 ${isInvalid ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'}`;
     const elementRef = React.useRef<HTMLInputElement & HTMLTextAreaElement>(null);
 
     return (
         <div>
-            {label && <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>}
+            {label && <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{label}</label>}
             {isTextArea ? (
                 <textarea
                     ref={elementRef}
@@ -286,11 +306,11 @@ const EditableField: React.FC<{ label: string; value: string; onChange: (value: 
 };
 
 const ChecklistRow: React.FC<{ label: string; value: ChecklistOption; onChange: (value: ChecklistOption) => void; }> = ({ label, value, onChange }) => (
-    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between py-2 border-b border-gray-200 last:border-b-0">
-        <span className="text-gray-800 font-medium mb-2 sm:mb-0">{label}</span>
+    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between py-2 border-b border-gray-200 dark:border-gray-700 last:border-b-0">
+        <span className="text-gray-800 dark:text-gray-200 font-medium mb-2 sm:mb-0">{label}</span>
         <div className="flex items-center space-x-6">
             {(['Yes', 'No', 'NA'] as ChecklistOption[]).map(option => (
-                <label key={option} className="flex items-center space-x-2 cursor-pointer text-gray-600">
+                <label key={option} className="flex items-center space-x-2 cursor-pointer text-gray-600 dark:text-gray-300">
                     <input
                         type="radio"
                         name={label}
@@ -351,7 +371,7 @@ const DfrSaskpower = ({ onBack, initialData }: DfrSaskpowerProps): ReactElement 
     const [showNoInternetModal, setShowNoInternetModal] = useState(false);
     const [showMigrationNotice, setShowMigrationNotice] = useState(false);
     const [enlargedImageUrl, setEnlargedImageUrl] = useState<string | null>(null);
-    const [pdfPreview, setPdfPreview] = useState<{ url: string; filename: string } | null>(null);
+    const [pdfPreview, setPdfPreview] = useState<{ url: string; filename: string; blob?: Blob } | null>(null);
     const [showStatusModal, setShowStatusModal] = useState(false);
     const [statusMessage, setStatusMessage] = useState('');
     const [openComments, setOpenComments] = useState<Set<string>>(new Set());
@@ -623,12 +643,32 @@ const DfrSaskpower = ({ onBack, initialData }: DfrSaskpowerProps): ReactElement 
         return true;
     };
 
+    const addSafeLogo = async (docInstance: any, x: number, y: number, w: number, h: number) => {
+        const logoUrl = await getAssetUrl("xterra-logo.jpg");
+        try {
+            const response = await fetch(logoUrl);
+            if (!response.ok) throw new Error('Logo fetch failed');
+            const blob = await response.blob();
+            const reader = new FileReader();
+            return new Promise<void>((resolve) => {
+                reader.onloadend = () => {
+                    const base64data = reader.result as string;
+                    docInstance.addImage(base64data, 'JPEG', x, y, w, h);
+                    resolve();
+                };
+                reader.readAsDataURL(blob);
+            });
+        } catch (e) {
+            console.error("Could not load logo:", e);
+            // Fallback: draw text if logo fails
+            docInstance.setFontSize(10);
+            docInstance.setTextColor(0,0,0);
+            docInstance.text("X-TERRA", x, y + 5);
+        }
+    };
 
     const handleSavePdf = async () => {
-        if (!navigator.onLine) {
-            setShowNoInternetModal(true);
-            return;
-        }
+        // Removed internet check to allow offline PDF generation
         if (!validateForm()) return;
 
         const stateForSaving = await prepareStateForRecentProjectStorage(data);
@@ -739,10 +779,10 @@ const DfrSaskpower = ({ onBack, initialData }: DfrSaskpowerProps): ReactElement 
             return blockBottomY;
         };
         
-        const drawDfrHeader = (docInstance: any) => {
+        const drawDfrHeader = async (docInstance: any) => {
             const headerContentStartY = contentMargin;
-            const logoUrl = "https://ik.imagekit.io/fzpijprte/XTerraLogo2019_Horizontal.jpg?updatedAt=1758827714962";
-            docInstance.addImage(logoUrl, 'JPEG', contentMargin, headerContentStartY, 40, 10);
+            // Use addSafeLogo instead of direct addImage
+            await addSafeLogo(docInstance, contentMargin, headerContentStartY, 40, 10);
             
             docInstance.setFontSize(18);
             docInstance.setFont('times', 'bold');
@@ -755,7 +795,7 @@ const DfrSaskpower = ({ onBack, initialData }: DfrSaskpowerProps): ReactElement 
             return yPos + 4;
         };
         
-        const renderTextSection = (docInstance: any, currentY: number, title: string, content: string, options: { spaceBefore?: number, box?: boolean } = {}) => {
+        const renderTextSection = async (docInstance: any, currentY: number, title: string, content: string, options: { spaceBefore?: number, box?: boolean } = {}) => {
             let y = currentY;
             const { spaceBefore = 4, box = false } = options;
         
@@ -798,7 +838,7 @@ const DfrSaskpower = ({ onBack, initialData }: DfrSaskpowerProps): ReactElement 
         
             if (y + spaceBefore + sectionHeight > maxYPos) {
                 flushDrawBuffer(docInstance, y);
-                drawPageBorder(docInstance); docInstance.addPage(); pageNum++; y = drawDfrHeader(docInstance);
+                drawPageBorder(docInstance); docInstance.addPage(); pageNum++; y = await drawDfrHeader(docInstance);
                 sectionStartYOnPage = y;
             } else {
                 y += spaceBefore;
@@ -814,10 +854,10 @@ const DfrSaskpower = ({ onBack, initialData }: DfrSaskpowerProps): ReactElement 
             });
             y = titleY + titleHeight + 2;
         
-            contentLines.forEach(line => {
+            for (const line of contentLines) {
                 if (line.trim() === '') {
                     y += 3;
-                    return;
+                    continue;
                 }
 
                 const indentationMatch = line.match(/^\s*/);
@@ -829,7 +869,7 @@ const DfrSaskpower = ({ onBack, initialData }: DfrSaskpowerProps): ReactElement 
                 const isBulleted = trimmedLine.startsWith('-');
                 const textToRender = isBulleted ? trimmedLine.substring(1).trim() : trimmedLine;
 
-                if (!textToRender) return;
+                if (!textToRender) continue;
 
                 const textMaxWidth = contentWidth - (isBulleted ? 5 : 0) - indentWidth - (box ? 4 : 0);
                 const splitText = docInstance.splitTextToSize(textToRender, textMaxWidth);
@@ -837,7 +877,7 @@ const DfrSaskpower = ({ onBack, initialData }: DfrSaskpowerProps): ReactElement 
 
                 if (y + textHeight > maxYPos) {
                     flushDrawBuffer(docInstance, y);
-                    drawPageBorder(docInstance); docInstance.addPage(); pageNum++; y = drawDfrHeader(docInstance);
+                    drawPageBorder(docInstance); docInstance.addPage(); pageNum++; y = await drawDfrHeader(docInstance);
                     sectionStartYOnPage = y;
                 }
                 const lineY = y;
@@ -851,13 +891,13 @@ const DfrSaskpower = ({ onBack, initialData }: DfrSaskpowerProps): ReactElement 
                     doc.text(splitText, textX, lineY);
                 });
                 y += textHeight;
-            });
+            }
             return y + (box ? 4 : 0);
         };
         
-        let yPos = drawDfrHeader(doc);
+        let yPos = await drawDfrHeader(doc);
         
-        yPos = renderTextSection(doc, yPos, 'Project Activities (detailed description with timestamps):', data.generalActivity);
+        yPos = await renderTextSection(doc, yPos, 'Project Activities (detailed description with timestamps):', data.generalActivity);
         flushDrawBuffer(doc, yPos);
         
         const otherTextSections = [
@@ -868,10 +908,10 @@ const DfrSaskpower = ({ onBack, initialData }: DfrSaskpowerProps): ReactElement 
             { title: 'Future Monitoring Requirements:', content: data.futureMonitoring },
         ];
         
-        otherTextSections.forEach(({ title, content }) => {
-            yPos = renderTextSection(doc, yPos, title, content);
+        for (const { title, content } of otherTextSections) {
+            yPos = await renderTextSection(doc, yPos, title, content);
             flushDrawBuffer(doc, yPos);
-        });
+        }
 
         const checklistItems = [
             { label: 'Completed/Reviewed X-Terra Tailgate:', value: data.completedTailgate },
@@ -881,7 +921,7 @@ const DfrSaskpower = ({ onBack, initialData }: DfrSaskpowerProps): ReactElement 
         
         const checklistSectionHeight = 4 + (checklistItems.length * 8) + 10;
         if (yPos + checklistSectionHeight > maxYPos) {
-            drawPageBorder(doc); doc.addPage(); pageNum++; yPos = drawDfrHeader(doc);
+            drawPageBorder(doc); doc.addPage(); pageNum++; yPos = await drawDfrHeader(doc);
         }
         
         sectionStartYOnPage = yPos + 4;
@@ -918,7 +958,7 @@ const DfrSaskpower = ({ onBack, initialData }: DfrSaskpowerProps): ReactElement 
         drawPageBorder(doc);
         
         // --- Photo Log Section ---
-        const drawPhotoPageHeader = (docInstance: any) => {
+        const drawPhotoPageHeader = async (docInstance: any) => {
             const startY = borderMargin;
             docInstance.setDrawColor(0, 125, 140);
             docInstance.setLineWidth(0.5);
@@ -974,7 +1014,7 @@ const DfrSaskpower = ({ onBack, initialData }: DfrSaskpowerProps): ReactElement 
 
         if (sitePhotos.length > 0) {
             const entryHeights = await Promise.all(sitePhotos.map(p => calculatePhotoEntryHeight(doc, p)));
-            const dummyDoc = new jsPDF(); const yAfterHeader = drawPhotoPageHeader(dummyDoc); const pageContentHeight = maxYPos - yAfterHeader;
+            const dummyDoc = new jsPDF(); const yAfterHeader = await drawPhotoPageHeader(dummyDoc); const pageContentHeight = maxYPos - yAfterHeader;
             const pages: number[][] = []; let currentPageGroup: number[] = []; let currentHeight = 0;
             sitePhotos.forEach((_, i) => {
                 const photoHeight = entryHeights[i];
@@ -984,7 +1024,7 @@ const DfrSaskpower = ({ onBack, initialData }: DfrSaskpowerProps): ReactElement 
             });
             if (currentPageGroup.length > 0) pages.push(currentPageGroup);
             for (const group of pages) {
-                doc.addPage(); pageNum++; let yPosPhoto = drawPhotoPageHeader(doc);
+                doc.addPage(); pageNum++; let yPosPhoto = await drawPhotoPageHeader(doc);
                 const photosOnPage = group.map(i => sitePhotos[i]); const heightsOnPage = group.map(i => entryHeights[i]);
                 const availableHeight = maxYPos - yPosPhoto;
                 if (photosOnPage.length === 1) { await drawPhotoEntry(doc, photosOnPage[0], yPosPhoto); }
@@ -1012,7 +1052,7 @@ const DfrSaskpower = ({ onBack, initialData }: DfrSaskpowerProps): ReactElement 
 
         if (mapPhotosData.length > 0) {
             for (const map of mapPhotosData) {
-                doc.addPage(); pageNum++; let yPosMap = drawPhotoPageHeader(doc);
+                doc.addPage(); pageNum++; let yPosMap = await drawPhotoPageHeader(doc);
                 const footerAndGapHeight = 25; const textBlockHeight = calculateMapTextHeight(doc, map, contentWidth);
                 const availableHeightForImage = pageHeight - yPosMap - footerAndGapHeight - textBlockHeight; const availableWidthForImage = contentWidth; let yPosAfterImage = yPosMap;
                 if (map.imageUrl) {
@@ -1027,7 +1067,7 @@ const DfrSaskpower = ({ onBack, initialData }: DfrSaskpowerProps): ReactElement 
 
         const sanitize = (name: string) => name.replace(/[^a-z0-9_]/gi, '-').toLowerCase();
         const filename = `${sanitize(data.projectNumber) || 'project'}_SaskPower_DFR.pdf`;
-        const totalPages = doc.internal.getNumberOfPages();
+        const totalPages = (doc.internal as any).getNumberOfPages();
         for (let i = 1; i <= totalPages; i++) {
             doc.setPage(i); doc.setFontSize(10); doc.setFont('times', 'normal'); doc.setTextColor(0, 0, 0);
             const footerTextY = pageHeight - borderMargin + 4; doc.text(`Page ${i} of ${totalPages}`, pageWidth - borderMargin, footerTextY, { align: 'right' });
@@ -1035,7 +1075,7 @@ const DfrSaskpower = ({ onBack, initialData }: DfrSaskpowerProps): ReactElement 
         
         const pdfBlob = doc.output('blob');
         const pdfUrl = URL.createObjectURL(pdfBlob);
-        setPdfPreview({ url: pdfUrl, filename });
+        setPdfPreview({ url: pdfUrl, filename, blob: pdfBlob });
     };
 
     const handleSaveProject = async () => {
@@ -1135,6 +1175,7 @@ Description: ${photo.description || 'N/A'}
                 document.body.removeChild(link);
                 URL.revokeObjectURL(link.href);
             }
+    
         } finally {
             setShowStatusModal(false);
             isDownloadingRef.current = false;
@@ -1211,12 +1252,13 @@ Description: ${photo.description || 'N/A'}
 
 
     return (
-        <div className="bg-gray-100 min-h-screen">
+        <div className="bg-gray-100 dark:bg-gray-900 min-h-screen transition-colors duration-200">
             {pdfPreview && (
                 <PdfPreviewModal 
                     url={pdfPreview.url} 
                     filename={pdfPreview.filename} 
                     onClose={() => setPdfPreview(null)} 
+                    pdfBlob={pdfPreview.blob}
                 />
             )}
             {enlargedImageUrl && (
@@ -1243,15 +1285,14 @@ Description: ${photo.description || 'N/A'}
                     </div>
                 )}
                 <div className="flex flex-wrap justify-between items-center gap-2 mb-4">
-                     <button onClick={onBack} className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
+                    <button onClick={onBack} className="bg-gray-200 hover:bg-gray-300 text-gray-800 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-white font-bold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
                         <ArrowLeftIcon /> <span>Home</span>
                     </button>
-                    <h1 className="text-2xl font-bold text-gray-700">SaskPower Daily Field Report</h1>
                     <div className="flex flex-wrap justify-end gap-2">
-                        <button onClick={handleOpenProject} className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
-                            <FolderOpenIcon /> <span>Open</span>
+                        <button onClick={handleOpenProject} className="bg-gray-600 hover:bg-gray-700 dark:bg-gray-500 dark:hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
+                            <FolderOpenIcon /> <span>Open Project</span>
                         </button>
-                        <input
+                         <input
                             type="file"
                             ref={fileInputRef}
                             onChange={handleFileSelected}
@@ -1259,7 +1300,7 @@ Description: ${photo.description || 'N/A'}
                             accept=".spdfr"
                         />
                         <button onClick={handleSaveProject} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
-                            <SaveIcon /> <span>Save</span>
+                            <SaveIcon /> <span>Save Project</span>
                         </button>
                         {/* @ts-ignore */}
                         {!window.electronAPI && (
@@ -1268,114 +1309,143 @@ Description: ${photo.description || 'N/A'}
                             </button>
                         )}
                         <button onClick={handleSavePdf} className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
-                            <DownloadIcon /> <span>Save PDF</span>
+                            <DownloadIcon /> <span>Save to PDF</span>
                         </button>
                     </div>
                 </div>
 
-                <div className="space-y-8">
+                <div className="main-content space-y-8">
                     {/* Header Section */}
-                    <Section title="Report Information">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
-                            <EditableField label="Date" value={data.date} onChange={v => handleChange('date', v)} placeholder="October 1, 2025" isInvalid={errors.has('date')} />
-                            <EditableField label="X-Terra Project #" value={data.projectNumber} onChange={v => handleChange('projectNumber', v)} isInvalid={errors.has('projectNumber')} />
-                            <EditableField label="Proponent" value={data.proponent} onChange={v => handleChange('proponent', v)} isInvalid={errors.has('proponent')} />
-                            <EditableField label="ENV File Number" value={data.envFileNumber} onChange={v => handleChange('envFileNumber', v)} isInvalid={errors.has('envFileNumber')} />
-                            <EditableField label="Project" value={data.projectName} onChange={v => handleChange('projectName', v)} isInvalid={errors.has('projectName')} />
-                            <EditableField label="Vendor & Foreman" value={data.vendorAndForeman} onChange={v => handleChange('vendorAndForeman', v)} isInvalid={errors.has('vendorAndForeman')} />
-                            <EditableField label="Location" value={data.location} onChange={v => handleChange('location', v)} isTextArea rows={2} isInvalid={errors.has('location')} />
-                            <EditableField label="Environmental Monitor" value={data.environmentalMonitor} onChange={v => handleChange('environmentalMonitor', v)} isInvalid={errors.has('environmentalMonitor')} />
-                            <EditableField label="Total Hours Worked" value={data.totalHoursWorked} onChange={v => handleChange('totalHoursWorked', v)} isInvalid={errors.has('totalHoursWorked')} />
+                    <div className="bg-white dark:bg-gray-800 p-6 shadow-md rounded-lg transition-colors duration-200">
+                        <div className="flex justify-center md:justify-start mb-4">
+                             <SafeImage fileName="xterra-logo.jpg" alt="X-TERRA Logo" className="h-14 w-auto mix-blend-multiply dark:mix-blend-normal dark:bg-white dark:p-1 dark:rounded-sm" />
+                        </div>
+                         <h1 className="font-extrabold text-[#007D8C] tracking-wider text-center text-3xl mb-4">
+                            DAILY FIELD REPORT
+                        </h1>
+                        <div className="border-t-4 border-[#007D8C] mb-4"></div>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                             {/* Col 1 */}
+                            <div className="space-y-4">
+                                <EditableField label="PROPONENT" value={data.proponent} onChange={(v) => handleChange('proponent', v)} />
+                                <EditableField label="PROJECT" value={data.projectName} onChange={(v) => handleChange('projectName', v)} />
+                                <EditableField label="LOCATION" value={data.location} onChange={(v) => handleChange('location', v)} isTextArea />
+                                <EditableField label="ENV FILE NUMBER" value={data.envFileNumber} onChange={(v) => handleChange('envFileNumber', v)} />
+                            </div>
+                            {/* Col 2 */}
+                             <div className="space-y-4">
+                                <EditableField label="DATE" value={data.date} onChange={(v) => handleChange('date', v)} placeholder="Month Day, Year" />
+                                <EditableField label="X-TERRA PROJECT #" value={data.projectNumber} onChange={(v) => handleChange('projectNumber', v)} />
+                                <EditableField label="MONITOR" value={data.environmentalMonitor} onChange={(v) => handleChange('environmentalMonitor', v)} />
+                                <EditableField label="VENDOR & FOREMAN" value={data.vendorAndForeman} onChange={(v) => handleChange('vendorAndForeman', v)} />
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Project Activities */}
+                    <Section title="Project Activities">
+                         <div className="flex items-center justify-between mb-1">
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Project Activities (detailed description with timestamps)</label>
+                             <button onClick={() => toggleComment('generalActivity')} title="Toggle comment" className={`p-1 rounded-full ${openComments.has('generalActivity') ? 'bg-yellow-200 text-yellow-800' : 'text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300'}`}>
+                                <ChatBubbleLeftIcon className="h-5 w-5" />
+                            </button>
+                        </div>
+                         {openComments.has('generalActivity') && (
+                            <textarea value={data.comments?.generalActivity || ''} onChange={(e) => handleCommentChange('generalActivity', e.target.value)} placeholder="Add a comment for editing purposes..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 text-gray-900 rounded-md shadow-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition mb-2" />
+                        )}
+                        <BulletPointEditor label="" value={data.generalActivity} onChange={(v) => handleChange('generalActivity', v)} rows={15} placeholder={activityPlaceholder} />
+                    </Section>
+
+                    {/* Equipment & Conditions */}
+                    <Section title="Equipment and Conditions">
+                        <div className="space-y-4">
+                            <div>
+                                <div className="flex items-center justify-between mb-1">
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">X-Terra Equipment Onsite</label>
+                                     <button onClick={() => toggleComment('equipmentOnsite')} title="Toggle comment" className={`p-1 rounded-full ${openComments.has('equipmentOnsite') ? 'bg-yellow-200 text-yellow-800' : 'text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300'}`}>
+                                        <ChatBubbleLeftIcon className="h-5 w-5" />
+                                    </button>
+                                </div>
+                                {openComments.has('equipmentOnsite') && (
+                                    <textarea value={data.comments?.equipmentOnsite || ''} onChange={(e) => handleCommentChange('equipmentOnsite', e.target.value)} placeholder="Add a comment..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 text-gray-900 rounded-md shadow-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition mb-2" />
+                                )}
+                                <BulletPointEditor label="" value={data.equipmentOnsite} onChange={(v) => handleChange('equipmentOnsite', v)} rows={3} />
+                            </div>
+
+                            <div>
+                                <div className="flex items-center justify-between mb-1">
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Weather and Ground Conditions</label>
+                                     <button onClick={() => toggleComment('weatherAndGroundConditions')} title="Toggle comment" className={`p-1 rounded-full ${openComments.has('weatherAndGroundConditions') ? 'bg-yellow-200 text-yellow-800' : 'text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300'}`}>
+                                        <ChatBubbleLeftIcon className="h-5 w-5" />
+                                    </button>
+                                </div>
+                                {openComments.has('weatherAndGroundConditions') && (
+                                    <textarea value={data.comments?.weatherAndGroundConditions || ''} onChange={(e) => handleCommentChange('weatherAndGroundConditions', e.target.value)} placeholder="Add a comment..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 text-gray-900 rounded-md shadow-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition mb-2" />
+                                )}
+                                <BulletPointEditor label="" value={data.weatherAndGroundConditions} onChange={(v) => handleChange('weatherAndGroundConditions', v)} rows={3} />
+                            </div>
+
+                            <div>
+                                <div className="flex items-center justify-between mb-1">
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Environmental Protection Measures and Mitigation</label>
+                                     <button onClick={() => toggleComment('environmentalProtection')} title="Toggle comment" className={`p-1 rounded-full ${openComments.has('environmentalProtection') ? 'bg-yellow-200 text-yellow-800' : 'text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300'}`}>
+                                        <ChatBubbleLeftIcon className="h-5 w-5" />
+                                    </button>
+                                </div>
+                                {openComments.has('environmentalProtection') && (
+                                    <textarea value={data.comments?.environmentalProtection || ''} onChange={(e) => handleCommentChange('environmentalProtection', e.target.value)} placeholder="Add a comment..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 text-gray-900 rounded-md shadow-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition mb-2" />
+                                )}
+                                <BulletPointEditor label="" value={data.environmentalProtection} onChange={(v) => handleChange('environmentalProtection', v)} rows={3} />
+                            </div>
+                            
+                            <div>
+                                <div className="flex items-center justify-between mb-1">
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Wildlife Observations</label>
+                                     <button onClick={() => toggleComment('wildlifeObservations')} title="Toggle comment" className={`p-1 rounded-full ${openComments.has('wildlifeObservations') ? 'bg-yellow-200 text-yellow-800' : 'text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300'}`}>
+                                        <ChatBubbleLeftIcon className="h-5 w-5" />
+                                    </button>
+                                </div>
+                                {openComments.has('wildlifeObservations') && (
+                                    <textarea value={data.comments?.wildlifeObservations || ''} onChange={(e) => handleCommentChange('wildlifeObservations', e.target.value)} placeholder="Add a comment..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 text-gray-900 rounded-md shadow-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition mb-2" />
+                                )}
+                                <BulletPointEditor label="" value={data.wildlifeObservations} onChange={(v) => handleChange('wildlifeObservations', v)} rows={3} />
+                            </div>
+
+                             <div>
+                                <div className="flex items-center justify-between mb-1">
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Future Monitoring Requirements</label>
+                                     <button onClick={() => toggleComment('futureMonitoring')} title="Toggle comment" className={`p-1 rounded-full ${openComments.has('futureMonitoring') ? 'bg-yellow-200 text-yellow-800' : 'text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300'}`}>
+                                        <ChatBubbleLeftIcon className="h-5 w-5" />
+                                    </button>
+                                </div>
+                                {openComments.has('futureMonitoring') && (
+                                    <textarea value={data.comments?.futureMonitoring || ''} onChange={(e) => handleCommentChange('futureMonitoring', e.target.value)} placeholder="Add a comment..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 text-gray-900 rounded-md shadow-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition mb-2" />
+                                )}
+                                <BulletPointEditor label="" value={data.futureMonitoring} onChange={(v) => handleChange('futureMonitoring', v)} rows={3} />
+                            </div>
                         </div>
                     </Section>
 
-                    {/* Checklist Section */}
-                    <Section title="Safety Checklist">
-                        <ChecklistRow label="Completed/Reviewed X-Terra Tailgate" value={data.completedTailgate} onChange={v => handleChange('completedTailgate', v)} />
-                        <ChecklistRow label="Reviewed/Signed Crew Tailgate" value={data.reviewedTailgate} onChange={v => handleChange('reviewedTailgate', v)} />
-                        <ChecklistRow label="Reviewed Permit(s) with Crew(s)" value={data.reviewedPermits} onChange={v => handleChange('reviewedPermits', v)} />
-                    </Section>
-                    
-                    {/* Main Body Sections */}
-                    <Section title="Project Activities & Observations">
-                         <div>
-                            <div className="flex items-center justify-between mb-1">
-                                <label className="block text-sm font-medium text-gray-700">Project Activities (detailed description with timestamps)</label>
-                                <button onClick={() => toggleComment('generalActivity')} title="Toggle comment" className={`p-1 rounded-full ${openComments.has('generalActivity') ? 'bg-yellow-200 text-yellow-800' : 'text-gray-400 hover:text-gray-600'}`}>
-                                    <ChatBubbleLeftIcon className="h-5 w-5" />
-                                </button>
+                    {/* Checklists & Hours */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <Section title="Daily Checklists">
+                             <div className="space-y-0">
+                                <ChecklistRow label="Completed/Reviewed X-Terra Tailgate" value={data.completedTailgate} onChange={(v) => handleChange('completedTailgate', v)} />
+                                <ChecklistRow label="Reviewed/Signed Crew Tailgate" value={data.reviewedTailgate} onChange={(v) => handleChange('reviewedTailgate', v)} />
+                                <ChecklistRow label="Reviewed Permit(s) with Crew(s)" value={data.reviewedPermits} onChange={(v) => handleChange('reviewedPermits', v)} />
                             </div>
-                            {openComments.has('generalActivity') && (
-                                <textarea value={data.comments?.generalActivity || ''} onChange={(e) => handleCommentChange('generalActivity', e.target.value)} placeholder="Add a comment for editing purposes..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 rounded-md shadow-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition mb-2" />
-                            )}
-                            <BulletPointEditor label="" value={data.generalActivity} onChange={v => handleChange('generalActivity', v)} rows={10} placeholder={activityPlaceholder} isInvalid={errors.has('generalActivity')} />
-                        </div>
-                        <div>
-                             <div className="flex items-center justify-between mb-1">
-                                <label className="block text-sm font-medium text-gray-700">X-Terra Equipment Onsite</label>
-                                <button onClick={() => toggleComment('equipmentOnsite')} title="Toggle comment" className={`p-1 rounded-full ${openComments.has('equipmentOnsite') ? 'bg-yellow-200 text-yellow-800' : 'text-gray-400 hover:text-gray-600'}`}>
-                                    <ChatBubbleLeftIcon className="h-5 w-5" />
-                                </button>
-                            </div>
-                            {openComments.has('equipmentOnsite') && (
-                                <textarea value={data.comments?.equipmentOnsite || ''} onChange={(e) => handleCommentChange('equipmentOnsite', e.target.value)} placeholder="Add a comment for editing purposes..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 rounded-md shadow-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition mb-2" />
-                            )}
-                            <BulletPointEditor label="" value={data.equipmentOnsite} onChange={v => handleChange('equipmentOnsite', v)} rows={3} isInvalid={errors.has('equipmentOnsite')} />
-                        </div>
-                         <div>
-                             <div className="flex items-center justify-between mb-1">
-                                <label className="block text-sm font-medium text-gray-700">Weather and Ground Conditions</label>
-                                <button onClick={() => toggleComment('weatherAndGroundConditions')} title="Toggle comment" className={`p-1 rounded-full ${openComments.has('weatherAndGroundConditions') ? 'bg-yellow-200 text-yellow-800' : 'text-gray-400 hover:text-gray-600'}`}>
-                                    <ChatBubbleLeftIcon className="h-5 w-5" />
-                                </button>
-                            </div>
-                            {openComments.has('weatherAndGroundConditions') && (
-                                <textarea value={data.comments?.weatherAndGroundConditions || ''} onChange={(e) => handleCommentChange('weatherAndGroundConditions', e.target.value)} placeholder="Add a comment for editing purposes..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 rounded-md shadow-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition mb-2" />
-                            )}
-                            <BulletPointEditor label="" value={data.weatherAndGroundConditions} onChange={v => handleChange('weatherAndGroundConditions', v)} rows={3} isInvalid={errors.has('weatherAndGroundConditions')} />
-                        </div>
-                         <div>
-                            <div className="flex items-center justify-between mb-1">
-                                <label className="block text-sm font-medium text-gray-700">Environmental Protection Measures and Mitigation</label>
-                                <button onClick={() => toggleComment('environmentalProtection')} title="Toggle comment" className={`p-1 rounded-full ${openComments.has('environmentalProtection') ? 'bg-yellow-200 text-yellow-800' : 'text-gray-400 hover:text-gray-600'}`}>
-                                    <ChatBubbleLeftIcon className="h-5 w-5" />
-                                </button>
-                            </div>
-                            {openComments.has('environmentalProtection') && (
-                                <textarea value={data.comments?.environmentalProtection || ''} onChange={(e) => handleCommentChange('environmentalProtection', e.target.value)} placeholder="Add a comment for editing purposes..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 rounded-md shadow-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition mb-2" />
-                            )}
-                            <BulletPointEditor label="" value={data.environmentalProtection} onChange={v => handleChange('environmentalProtection', v)} rows={4} isInvalid={errors.has('environmentalProtection')} />
-                        </div>
-                         <div>
-                             <div className="flex items-center justify-between mb-1">
-                                <label className="block text-sm font-medium text-gray-700">Wildlife Observations</label>
-                                <button onClick={() => toggleComment('wildlifeObservations')} title="Toggle comment" className={`p-1 rounded-full ${openComments.has('wildlifeObservations') ? 'bg-yellow-200 text-yellow-800' : 'text-gray-400 hover:text-gray-600'}`}>
-                                    <ChatBubbleLeftIcon className="h-5 w-5" />
-                                </button>
-                            </div>
-                            {openComments.has('wildlifeObservations') && (
-                                <textarea value={data.comments?.wildlifeObservations || ''} onChange={(e) => handleCommentChange('wildlifeObservations', e.target.value)} placeholder="Add a comment for editing purposes..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 rounded-md shadow-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition mb-2" />
-                            )}
-                            <BulletPointEditor label="" value={data.wildlifeObservations} onChange={v => handleChange('wildlifeObservations', v)} rows={3} isInvalid={errors.has('wildlifeObservations')} />
-                        </div>
-                         <div>
-                             <div className="flex items-center justify-between mb-1">
-                                <label className="block text-sm font-medium text-gray-700">Future Monitoring Requirements</label>
-                                <button onClick={() => toggleComment('futureMonitoring')} title="Toggle comment" className={`p-1 rounded-full ${openComments.has('futureMonitoring') ? 'bg-yellow-200 text-yellow-800' : 'text-gray-400 hover:text-gray-600'}`}>
-                                    <ChatBubbleLeftIcon className="h-5 w-5" />
-                                </button>
-                            </div>
-                            {openComments.has('futureMonitoring') && (
-                                <textarea value={data.comments?.futureMonitoring || ''} onChange={(e) => handleCommentChange('futureMonitoring', e.target.value)} placeholder="Add a comment for editing purposes..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 rounded-md shadow-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition mb-2" />
-                            )}
-                            <BulletPointEditor label="" value={data.futureMonitoring} onChange={v => handleChange('futureMonitoring', v)} rows={3} isInvalid={errors.has('futureMonitoring')} />
-                        </div>
-                    </Section>
+                        </Section>
+                        
+                         <Section title="Total Hours">
+                            <EditableField label="Total Hours Worked" value={data.totalHoursWorked} onChange={(v) => handleChange('totalHoursWorked', v)} placeholder="e.g., 10.5" />
+                        </Section>
+                    </div>
 
-                    {/* Photo Log Section */}
                     <div className="border-t-4 border-[#007D8C] my-10" />
-                    <h2 className="text-3xl font-bold text-gray-700 text-center">Photographic Log</h2>
 
+                    <h2 className="text-3xl font-bold text-gray-700 dark:text-white text-center">Photographic Log</h2>
+                    
                     <div>
                         {photosData.map((photo, index) => (
                            <div key={photo.id}>
@@ -1393,11 +1463,17 @@ Description: ${photo.description || 'N/A'}
                                     showDirectionField={!photo.isMap}
                                 />
                                 {index < photosData.length - 1 && (
-                                    <div className="relative my-6 flex items-center justify-center">
-                                        <div className="absolute inset-0 flex items-center" aria-hidden="true"><div className="w-full border-t-2 border-gray-300"></div></div>
+                                     <div className="relative my-6 flex items-center justify-center">
+                                        <div className="absolute inset-0 flex items-center" aria-hidden="true">
+                                            <div className="w-full border-t-2 border-gray-300 dark:border-gray-600"></div>
+                                        </div>
                                         <div className="relative">
-                                            <button onClick={() => addPhoto(index)} className="bg-white hover:bg-gray-100 text-[#007D8C] font-bold py-2 px-4 rounded-full border border-gray-300 inline-flex items-center gap-2 transition duration-200 shadow-sm">
-                                                <PlusIcon /><span>Add Photo Here</span>
+                                            <button
+                                                onClick={() => addPhoto(index)}
+                                                className="bg-white hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 text-[#007D8C] font-bold py-2 px-4 rounded-full border border-gray-300 dark:border-gray-600 inline-flex items-center gap-2 transition duration-200 shadow-sm"
+                                            >
+                                                <PlusIcon />
+                                                <span>Add Photo Here</span>
                                             </button>
                                         </div>
                                     </div>
@@ -1405,73 +1481,53 @@ Description: ${photo.description || 'N/A'}
                             </div>
                         ))}
                     </div>
-                    
-                    <div className="mt-8 flex justify-center">
-                        <button onClick={() => addPhoto()} className="bg-[#007D8C] hover:bg-[#006b7a] text-white font-bold py-3 px-6 rounded-lg shadow-md inline-flex items-center gap-2 transition duration-200 text-lg">
-                            <PlusIcon /><span>Add Photo</span>
+
+                    <div className="mt-8 flex justify-center gap-4">
+                        <button
+                            onClick={() => addPhoto()}
+                            className="bg-[#007D8C] hover:bg-[#006b7a] text-white font-bold py-3 px-6 rounded-lg shadow-md inline-flex items-center gap-2 transition duration-200 text-lg"
+                        >
+                            <PlusIcon />
+                            <span>Add Photo</span>
                         </button>
                     </div>
                 </div>
-                <footer className="text-center text-gray-500 text-sm py-4 mt-8">
+                {photosData.length > 0 && <div className="border-t-4 border-[#007D8C] my-8" />}
+                <footer className="text-center text-gray-500 dark:text-gray-400 text-sm py-4">
                     X-TES Digital Reporting v1.0.9
                 </footer>
             </div>
-            {showUnsupportedFileModal && (
+            {/* Modals */}
+             {showUnsupportedFileModal && (
                 <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 transition-opacity duration-300">
-                    <div className="bg-white p-8 rounded-lg shadow-2xl text-center relative max-w-md transform scale-95 hover:scale-100 transition-transform duration-300">
-                        <button
-                            onClick={() => setShowUnsupportedFileModal(false)}
-                            className="absolute top-2 right-2 p-1 text-gray-400 hover:text-gray-700 transition-colors"
-                            aria-label="Close"
-                        >
+                    <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-2xl text-center relative max-w-md transform scale-95 hover:scale-100 transition-transform duration-300">
+                        <button onClick={() => setShowUnsupportedFileModal(false)} className="absolute top-2 right-2 p-1 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors">
                             <CloseIcon className="h-6 w-6" />
                         </button>
-                        <img
-                            src="https://ik.imagekit.io/fzpijprte/200.gif?updatedAt=1758919911063"
-                            alt="Unsupported file type animation"
-                            className="mx-auto mb-4 w-40 h-40"
-                        />
-                        <h3 className="text-2xl font-bold mb-2 text-gray-800">Unsupported File Type</h3>
-                        <p className="text-gray-600">
-                            Please upload a supported image file.
-                        </p>
-                        <p className="text-sm text-gray-500 mt-3">
-                            Supported formats: <strong>JPG, PNG</strong>
-                        </p>
+                        <SafeImage fileName="loading-error.gif" alt="Unsupported file type" className="mx-auto mb-4 w-40 h-40" />
+                        <h3 className="text-2xl font-bold mb-2 text-gray-800 dark:text-white">Unsupported File Type</h3>
+                        <p className="text-gray-600 dark:text-gray-300">Please upload a supported image file (JPG, PNG).</p>
                     </div>
                 </div>
             )}
             {showValidationErrorModal && (
                 <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 transition-opacity duration-300">
-                    <div className="bg-white p-8 rounded-lg shadow-2xl text-center relative max-w-md transform scale-95 hover:scale-100 transition-transform duration-300">
-                        <button
-                            onClick={() => setShowValidationErrorModal(false)}
-                            className="absolute top-2 right-2 p-1 text-gray-400 hover:text-gray-700 transition-colors"
-                            aria-label="Close"
-                        >
+                    <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-2xl text-center relative max-w-md transform scale-95 hover:scale-100 transition-transform duration-300">
+                        <button onClick={() => setShowValidationErrorModal(false)} className="absolute top-2 right-2 p-1 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors">
                             <CloseIcon className="h-6 w-6" />
                         </button>
-                        <img
-                            src="https://ik.imagekit.io/fzpijprte/200.gif?updatedAt=1758919911063"
-                            alt="Missing information animation"
-                            className="mx-auto mb-4 w-40 h-40"
-                        />
-                        <h3 className="text-2xl font-bold mb-2 text-gray-800">Missing Information</h3>
-                        <p className="text-gray-600">
-                            Please fill in all required fields.
-                        </p>
-                        <p className="text-sm text-gray-500 mt-3">
-                            Missing fields are highlighted in red.
-                        </p>
+                        <SafeImage fileName="loading-error.gif" alt="Missing info" className="mx-auto mb-4 w-40 h-40" />
+                        <h3 className="text-2xl font-bold mb-2 text-gray-800 dark:text-white">Missing Information</h3>
+                        <p className="text-gray-600 dark:text-gray-300">Please fill in all required fields (highlighted in red).</p>
                     </div>
                 </div>
             )}
-             {showNoInternetModal && (
+            {showNoInternetModal && (
                 <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
-                    <div className="bg-white p-8 rounded-lg shadow-2xl text-center relative max-w-md">
-                        <button onClick={() => setShowNoInternetModal(false)} className="absolute top-2 right-2 p-1 text-gray-400 hover:text-gray-700" aria-label="Close"><CloseIcon className="h-6 w-6" /></button>
-                        <h3 className="text-2xl font-bold mb-2 text-gray-800">No Internet Connection</h3>
-                        <p className="text-gray-600">An internet connection is required to save the PDF. Please connect to the internet and try again.</p>
+                     <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-2xl text-center relative max-w-md">
+                        <button onClick={() => setShowNoInternetModal(false)} className="absolute top-2 right-2 p-1 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"><CloseIcon className="h-6 w-6" /></button>
+                        <h3 className="text-2xl font-bold mb-2 text-gray-800 dark:text-white">No Internet Connection</h3>
+                        <p className="text-gray-600 dark:text-gray-300">Internet is required for PDF generation.</p>
                     </div>
                 </div>
             )}

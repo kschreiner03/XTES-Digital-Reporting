@@ -1,3 +1,4 @@
+
 const { app, BrowserWindow, ipcMain, dialog, Menu, shell, autoUpdater } = require('electron');
 const { spawn } = require('child_process');
 const path = require('path');
@@ -16,7 +17,7 @@ if (!gotTheLock) {
       if (mainWindow.isMinimized()) mainWindow.restore();
       mainWindow.focus();
       const filePath = commandLine.find(arg =>
-        arg.endsWith('.dfr') || arg.endsWith('.spdfr') || arg.endsWith('.plog') || arg.endsWith('.clog')
+        arg.endsWith('.dfr') || arg.endsWith('.spdfr') || arg.endsWith('.plog') || arg.endsWith('.clog') || arg.endsWith('.iogc')
       );
       if (filePath) {
         mainWindow.webContents.send('open-file-path', filePath);
@@ -161,12 +162,17 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 960,
+    show: false, // Start hidden to prevent flickering before maximize
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
       contextIsolation: true,
     },
   });
+
+  mainWindow.maximize();
+  mainWindow.show();
+  // mainWindow.webContents.openDevTools();
 
   if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
     mainWindow.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL);
@@ -188,7 +194,7 @@ function createWindow() {
 
   mainWindow.webContents.on('did-finish-load', () => {
     const filePath = process.argv.find(arg =>
-      arg.endsWith('.dfr') || arg.endsWith('.spdfr') || arg.endsWith('.plog') || arg.endsWith('.clog')
+      arg.endsWith('.dfr') || arg.endsWith('.spdfr') || arg.endsWith('.plog') || arg.endsWith('.clog') || arg.endsWith('.iogc')
     );
     if (filePath) {
       mainWindow.webContents.send('open-file-path', filePath);
@@ -264,7 +270,7 @@ app.whenReady().then(() => {
 
     const assetsDir = app.isPackaged
         ? path.join(process.resourcesPath, 'assets')
-        : path.resolve(app.getAppPath(), 'assets');
+        : path.join(app.getAppPath(), 'public', 'assets');
     
     const pdfPath = path.join(assetsDir, filename);
 
@@ -273,6 +279,15 @@ app.whenReady().then(() => {
     } catch (err) {
         console.error(`Failed to open PDF: ${pdfPath}`, err);
         dialog.showErrorBox('Error', `Could not open the file: ${pdfPath}`);
+    }
+  });
+
+  ipcMain.handle('get-asset-path', (event, filename) => {
+    if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
+      return `${MAIN_WINDOW_VITE_DEV_SERVER_URL}/assets/${filename}`;
+    } else {
+      const assetPath = path.join(process.resourcesPath, 'assets', filename);
+      return `file://${assetPath.replace(/\\/g, '/')}`;
     }
   });
 
@@ -285,6 +300,7 @@ app.whenReady().then(() => {
     else if (ext === '.dfr') filters = [{ name: 'X-TES DFR Project', extensions: ['dfr'] }];
     else if (ext === '.plog') filters = [{ name: 'X-TES Photo Log', extensions: ['plog'] }];
     else if (ext === '.clog') filters = [{ name: 'X-TES Combine Logs', extensions: ['clog'] }];
+    else if (ext === '.iogc') filters = [{ name: 'IOGC Audit File', extensions: ['iogc'] }];
 
     const { filePath } = await dialog.showSaveDialog(window, {
       title: 'Save Project',
@@ -312,7 +328,8 @@ app.whenReady().then(() => {
     else if (fileType === 'dfr') filters.push({ name: 'DFR Standard Files', extensions: ['dfr'] });
     else if (fileType === 'spdfr') filters.push({ name: 'SaskPower DFR Files', extensions: ['spdfr'] });
     else if (fileType === 'clog') filters.push({ name: 'Combine Logs Files', extensions: ['clog'] });
-    else filters.push({ name: 'All Project Files', extensions: ['plog', 'dfr', 'spdfr', 'clog'] });
+    else if (fileType === 'iogc') filters.push({ name: 'IOGC Audit Files', extensions: ['iogc'] });
+    else filters.push({ name: 'All Project Files', extensions: ['plog', 'dfr', 'spdfr', 'clog', 'iogc'] });
 
     filters.push({ name: 'All Files', extensions: ['*'] });
 
@@ -390,9 +407,10 @@ app.whenReady().then(() => {
       title: 'Import Photos from Files',
       properties: ['openFile', 'multiSelections'],
       filters: [
-        { name: 'All Project Files', extensions: ['plog', 'dfr', 'spdfr', 'json', 'clog'] },
+        { name: 'All Project Files', extensions: ['plog', 'dfr', 'spdfr', 'json', 'clog', 'iogc'] },
         { name: 'Photo Log Files', extensions: ['plog', 'clog'] },
         { name: 'DFR Files', extensions: ['dfr', 'spdfr'] },
+        { name: 'IOGC Files', extensions: ['iogc'] },
         { name: 'JSON files', extensions: ['json'] },
         { name: 'All Files', extensions: ['*'] }
       ]

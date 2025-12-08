@@ -1,28 +1,16 @@
+
 import React, { useState, useEffect } from 'react';
+import ReactDOM from 'react-dom/client';
 import LandingPage, { RecentProject } from './components/LandingPage';
 import PhotoLog from './components/PhotoLog';
 import DfrStandard from './components/DfrStandard';
 import DfrSaskpower from './components/DfrSaskpower';
+// import IogcLeaseAudit from './components/IogcLeaseAudit'; // Hidden for now
 import { retrieveProject } from './components/db';
 import CombinedLog from './components/CombinedLog';
 import SettingsModal from './components/SettingsModal';
 
-export type AppType = 'photoLog' | 'dfrSaskpower' | 'dfrStandard' | 'combinedLog';
-
-const PlaceholderApp: React.FC<{ title: string, onBack: () => void }> = ({ title, onBack }) => (
-    <div className="bg-gray-100 min-h-screen flex flex-col justify-center items-center p-4">
-        <div className="text-center bg-white p-12 rounded-lg shadow-lg">
-            <h1 className="text-3xl font-bold text-gray-800 mb-4">{title}</h1>
-            <p className="text-gray-600 mb-8">This feature is currently under construction.</p>
-            <button
-                onClick={onBack}
-                className="bg-[#007D8C] hover:bg-[#006b7a] text-white font-bold py-2 px-4 rounded-lg transition duration-200"
-            >
-                Back to Home
-            </button>
-        </div>
-    </div>
-);
+export type AppType = 'photoLog' | 'dfrSaskpower' | 'dfrStandard' | 'combinedLog' | 'iogcLeaseAudit';
 
 const App: React.FC = () => {
     const [selectedApp, setSelectedApp] = useState<AppType | null>(null);
@@ -32,6 +20,10 @@ const App: React.FC = () => {
 
     const loadProjectFromFileContent = (content: string, path: string) => {
         try {
+            if (content.trim().startsWith('%PDF')) {
+                alert("You are trying to open a PDF file. Please open the editable project file (e.g., .plog, .dfr, .spdfr).");
+                return;
+            }
             const projectData = JSON.parse(content);
             const ext = path.split('.').pop();
             let type: AppType | null = null;
@@ -40,6 +32,7 @@ const App: React.FC = () => {
             else if (ext === 'dfr') type = 'dfrStandard';
             else if (ext === 'spdfr') type = 'dfrSaskpower';
             else if (ext === 'clog') type = 'combinedLog';
+            else if (ext === 'iogc') type = 'iogcLeaseAudit';
 
             if (type) {
                 setProjectToOpen(projectData);
@@ -49,7 +42,7 @@ const App: React.FC = () => {
             }
         } catch (e) {
             console.error("Failed to parse project data:", e);
-            alert("Could not open the project. The file may be corrupt.");
+            alert("Could not open the project. The file may be corrupt or not a valid project file.");
         }
     };
 
@@ -139,6 +132,8 @@ const App: React.FC = () => {
                             return <DfrStandard onBack={handleBackToHome} initialData={projectToOpen} />;
                         case 'combinedLog':
                             return <CombinedLog onBack={handleBackToHome} initialData={projectToOpen} />;
+                        // case 'iogcLeaseAudit':
+                        //     return <IogcLeaseAudit onBack={handleBackToHome} initialData={projectToOpen} />;
                         default:
                             return <LandingPage onSelectApp={handleSelectApp} onOpenProject={handleOpenProject} isUpdateAvailable={isUpdateAvailable}/>;
                     }
