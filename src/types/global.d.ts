@@ -26,8 +26,13 @@ declare global {
             getAssetPath: (filename: string) => Promise<string>;
         };
     }
+}
+
 declare module "*.css";
 declare module "*.scss";
 declare module "*.sass";
 
+declare module "*?url" {
+  const src: string;
+  export default src;
 }
