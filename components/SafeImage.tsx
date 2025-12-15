@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect } from 'react';
 
 interface SafeImageProps extends React.ImgHTMLAttributes<HTMLImageElement> {
@@ -19,7 +20,7 @@ const SafeImage: React.FC<SafeImageProps> = ({ fileName, ...props }) => {
                     if (isMounted) setSrc(path);
                 } catch (e) {
                     console.error("Failed to resolve asset path:", e);
-                    if (isMounted) setSrc(`./assets/${fileName}`); 
+                    if (isMounted) console.error("Asset not resolved:", fileName); 
                 }
             } else {
                 if (isMounted) setSrc(`./assets/${fileName}`);
