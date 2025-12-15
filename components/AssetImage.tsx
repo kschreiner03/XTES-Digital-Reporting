@@ -35,14 +35,3 @@ const AssetImage: React.FC<AssetImageProps> = ({ fileName, ...props }) => {
 
     return <img src={src} {...props} />;
 };
-
-export const getAssetUrl = async (fileName: string): Promise<string> => {
-    // @ts-ignore
-    if (window.electronAPI?.getAssetPath) {
-        // @ts-ignore
-        return await window.electronAPI.getAssetPath(fileName);
-    }
-    return `./assets/${fileName}`;
-};
-
-export default AssetImage;

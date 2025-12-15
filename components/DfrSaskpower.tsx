@@ -795,105 +795,160 @@ const DfrSaskpower = ({ onBack, initialData }: DfrSaskpowerProps): ReactElement 
             return yPos + 4;
         };
         
-        const renderTextSection = async (docInstance: any, currentY: number, title: string, content: string, options: { spaceBefore?: number, box?: boolean } = {}) => {
-            let y = currentY;
-            const { spaceBefore = 4, box = false } = options;
         
-            if (!content || !content.trim()) return y;
-            
-            const startBoxY = y + spaceBefore;
-            if (sectionStartYOnPage === -1) {
-                sectionStartYOnPage = startBoxY;
-            }
-        
-            docInstance.setFontSize(13); docInstance.setFont('times', 'bold');
-            const titleDims = docInstance.getTextDimensions(title);
-            const titleHeight = titleDims.h;
-            
-            let contentHeight = 0;
-            docInstance.setFontSize(12); docInstance.setFont('times', 'normal');
-            const contentLines = content.split('\n'); // Keep empty lines
-            contentLines.forEach(line => {
-                if (line.trim() === '') {
-                    contentHeight += 3;
-                    return;
-                }
-                const indentationMatch = line.match(/^\s*/);
-                const indentation = indentationMatch ? indentationMatch[0].length : 0;
-                const indentLevel = Math.floor(indentation / 2);
-                const indentWidth = indentLevel * 5;
+const renderTextSection = async (
+    doc: any,
+    currentY: number,
+    title: string,
+    content: string,
+    options: { spaceBefore?: number; box?: boolean; forceNewPage?: boolean } = {}
+) => {
+    const { spaceBefore = 4, box = false, forceNewPage = false } = options;
 
-                const trimmedLine = line.trim();
-                const isBulleted = trimmedLine.startsWith('-');
-                const textToRender = isBulleted ? trimmedLine.substring(1).trim() : trimmedLine;
+    if (!content || !content.trim()) return currentY;
 
-                if (!textToRender) return;
+    let y = currentY + spaceBefore;
 
-                const textMaxWidth = contentWidth - (isBulleted ? 5 : 0) - indentWidth - (box ? 4 : 0);
-                const splitText = docInstance.splitTextToSize(textToRender, textMaxWidth);
-                contentHeight += docInstance.getTextDimensions(splitText).h + 2;
-            });
-        
-            const sectionHeight = titleHeight + 2 + contentHeight + (box ? 8 : 0);
-        
-            if (y + spaceBefore + sectionHeight > maxYPos) {
-                flushDrawBuffer(docInstance, y);
-                drawPageBorder(docInstance); docInstance.addPage(); pageNum++; y = await drawDfrHeader(docInstance);
-                sectionStartYOnPage = y;
-            } else {
-                y += spaceBefore;
-            }
-        
-            const titleY = y + (box ? 4 : 0);
-            bufferedDraws.push((doc) => {
-                if (box) {
-                    doc.setDrawColor(128, 128, 128); doc.setLineWidth(0.25);
-                    doc.rect(contentMargin, y, contentWidth, sectionHeight);
-                }
-                doc.setFontSize(13); doc.setFont('times', 'bold'); doc.text(title, contentMargin + (box ? 2 : 0), titleY);
-            });
-            y = titleY + titleHeight + 2;
-        
-            for (const line of contentLines) {
-                if (line.trim() === '') {
-                    y += 3;
-                    continue;
-                }
+    // -------------------------------------------------------------------
+    // OPTION 2 — FORCE ENTIRE SECTION TO START ON A NEW PAGE
+    // -------------------------------------------------------------------
+    if (forceNewPage) {
+        flushDrawBuffer(doc, y);
+        drawPageBorder(doc);
+        doc.addPage();
+        pageNum++;
+        y = await drawDfrHeader(doc);
+    }
 
-                const indentationMatch = line.match(/^\s*/);
-                const indentation = indentationMatch ? indentationMatch[0].length : 0;
-                const indentLevel = Math.floor(indentation / 2);
-                const indentWidth = indentLevel * 5;
+    // -------------------------------------------------------------------
+    // 1. BEFORE PRINTING THE HEADER, CHECK IF THERE IS ROOM FOR HEADER + BODY
+    // -------------------------------------------------------------------
+    const headerHeight = doc.getTextDimensions(title).h + 6;
+    const minimumBodyHeight = 12; // space for one body line
 
-                const trimmedLine = line.trim();
-                const isBulleted = trimmedLine.startsWith('-');
-                const textToRender = isBulleted ? trimmedLine.substring(1).trim() : trimmedLine;
+    if (y + headerHeight + minimumBodyHeight > maxYPos) {
+        flushDrawBuffer(doc, y);
+        drawPageBorder(doc);
+        doc.addPage();
+        pageNum++;
 
-                if (!textToRender) continue;
+        // Redraw PDF header
+        y = await drawDfrHeader(doc);
+    }
 
-                const textMaxWidth = contentWidth - (isBulleted ? 5 : 0) - indentWidth - (box ? 4 : 0);
-                const splitText = docInstance.splitTextToSize(textToRender, textMaxWidth);
-                const textHeight = docInstance.getTextDimensions(splitText).h + 2;
+    // -------------------------------------------------------------------
+    // 2. PRINT SECTION TITLE (ONLY ONCE)
+    // -------------------------------------------------------------------
+    doc.setFont("times", "bold");
+    doc.setFontSize(13);
 
-                if (y + textHeight > maxYPos) {
-                    flushDrawBuffer(docInstance, y);
-                    drawPageBorder(docInstance); docInstance.addPage(); pageNum++; y = await drawDfrHeader(docInstance);
-                    sectionStartYOnPage = y;
-                }
-                const lineY = y;
-                bufferedDraws.push((doc) => {
-                    doc.setFontSize(12); doc.setFont('times', 'normal');
-                    const textX = contentMargin + (isBulleted ? 5 : 0) + indentWidth + (box ? 2 : 0);
-                    if (isBulleted) {
-                        const bulletX = contentMargin + 2 + indentWidth + (box ? 2 : 0);
-                        doc.text('-', bulletX, lineY); 
-                    }
-                    doc.text(splitText, textX, lineY);
-                });
-                y += textHeight;
-            }
-            return y + (box ? 4 : 0);
-        };
+    const titleHeight = doc.getTextDimensions(title).h;
+    const titleY = y + (box ? 4 : 0);
+
+    doc.text(title, contentMargin + (box ? 2 : 0), titleY);
+
+    // Move down below header
+    y = titleY + titleHeight + 2;
+
+    // Track box boundaries
+    let boxStartY = titleY - (box ? 4 : 0);
+    let boxEndY = y;
+
+    // -------------------------------------------------------------------
+    // 3. BODY TEXT STYLING
+    // -------------------------------------------------------------------
+    doc.setFont("times", "normal");
+    doc.setFontSize(12);
+
+    const lines = content.split("\n");
+
+    // -------------------------------------------------------------------
+    // 4. RENDER BODY LINES WITH CORRECT PAGE BREAK LOGIC
+    // -------------------------------------------------------------------
+    for (const line of lines) {
+        // Blank line → small spacing
+        if (line.trim() === "") {
+            y += 4;
+            boxEndY = y;
+            continue;
+        }
+
+        // Determine indent from leading spaces
+        const match = line.match(/^\s*/);
+        const indentSpaces = match ? match[0].length : 0;
+        const indentLevel = Math.floor(indentSpaces / 2);
+        const indentWidth = indentLevel * 5;
+
+        const trimmed = line.trim();
+        const isBullet = trimmed.startsWith("-");
+        const textContent = isBullet ? trimmed.slice(1).trim() : trimmed;
+
+        const maxWidth =
+            contentWidth -
+            indentWidth -
+            (isBullet ? 5 : 0) -
+            (box ? 4 : 0);
+
+        const split = doc.splitTextToSize(textContent, maxWidth);
+        const textHeight = doc.getTextDimensions(split).h + 2;
+
+        // -------------------------------------------------------------------
+        // PAGE BREAK HANDLING — CONTINUATION TEXT MUST LOOK NORMAL
+        // -------------------------------------------------------------------
+        if (y + textHeight > maxYPos) {
+            flushDrawBuffer(doc, y);
+            drawPageBorder(doc);
+            doc.addPage();
+            pageNum++;
+
+            // Reset to top of new page content area
+            y = await drawDfrHeader(doc);
+
+            // RESET FONT STATE (fixes bold bleed)
+            doc.setFont("times", "normal");
+            doc.setFontSize(12);
+
+            // Reset box boundary for continuation
+            boxStartY = y;
+        }
+
+        // Render bullet or text
+        const renderY = y;
+
+        let textX =
+            contentMargin +
+            indentWidth +
+            (box ? 2 : 0) +
+            (isBullet ? 5 : 0);
+
+        if (isBullet) {
+            const bulletX = contentMargin + indentWidth + (box ? 2 : 0);
+            doc.text("-", bulletX, renderY);
+        }
+
+        doc.text(split, textX, renderY);
+
+        y += textHeight;
+        boxEndY = y;
+    }
+
+    // -------------------------------------------------------------------
+    // 5. DRAW BOX AROUND ENTIRE SECTION (IF USED)
+    // -------------------------------------------------------------------
+    if (box) {
+        const h = boxEndY - boxStartY + 4;
+        doc.setDrawColor(128, 128, 128);
+        doc.setLineWidth(0.25);
+        doc.rect(contentMargin, boxStartY, contentWidth, h);
+    }
+
+    return box ? y + 4 : y;
+};
+
+
+
+
+
         
         let yPos = await drawDfrHeader(doc);
         
@@ -1454,13 +1509,18 @@ Description: ${photo.description || 'N/A'}
                                     onDataChange={(field, value) => handlePhotoDataChange(photo.id, field, value)}
                                     onImageChange={(file) => handleImageChange(photo.id, file)}
                                     onRemove={() => removePhoto(photo.id)}
-                                    onMoveUp={() => movePhoto(photo.id, 'up')}
-                                    onMoveDown={() => movePhoto(photo.id, 'down')}
+                                    onMoveUp={() => movePhoto(photo.id, "up")}
+                                    onMoveDown={() => movePhoto(photo.id, "down")}
                                     isFirst={index === 0}
                                     isLast={index === photosData.length - 1}
                                     onImageClick={setEnlargedImageUrl}
                                     errors={getPhotoErrors(photo.id)}
                                     showDirectionField={!photo.isMap}
+
+                                    // NEW FIELDS
+                                    headerDate={data.date}
+                                    headerLocation={data.location}
+                                    onAutoFill={(f, val) => handlePhotoDataChange(photo.id, f, val)}
                                 />
                                 {index < photosData.length - 1 && (
                                      <div className="relative my-6 flex items-center justify-center">
@@ -1494,7 +1554,7 @@ Description: ${photo.description || 'N/A'}
                 </div>
                 {photosData.length > 0 && <div className="border-t-4 border-[#007D8C] my-8" />}
                 <footer className="text-center text-gray-500 dark:text-gray-400 text-sm py-4">
-                    X-TES Digital Reporting v1.1.1
+                    X-TES Digital Reporting v1.1.2-beta
                 </footer>
             </div>
             {/* Modals */}
@@ -1536,4 +1596,3 @@ Description: ${photo.description || 'N/A'}
 };
 
 export default DfrSaskpower;
-

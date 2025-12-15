@@ -6,3 +6,4 @@ export default defineConfig({
   // build.rollupOptions.input is automatically set by @electron-forge/plugin-vite
 });
 
+

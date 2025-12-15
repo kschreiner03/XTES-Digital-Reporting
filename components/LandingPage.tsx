@@ -1,7 +1,7 @@
 
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { DocumentTextIcon, CameraIcon, ClipboardDocumentListIcon, SearchIcon, FolderOpenIcon, EllipsisVerticalIcon, DocumentDuplicateIcon } from './icons';
+import { StandardDfrIcon, CameraIcon, SaskPowerIcon, SearchIcon, FolderOpenIcon, EllipsisVerticalIcon, DocumentDuplicateIcon } from './icons';
 import { AppType } from '../App';
 import { deleteImage, deleteProject, retrieveProject } from './db';
 import SafeImage from './SafeImage';
@@ -189,13 +189,13 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSelectApp, onOpenProject, i
                         <AppSelectionCard 
                             title="Daily Field Report"
                             description="Standard DFR for project documentation."
-                            icon={<DocumentTextIcon className="h-12 w-12" />}
+                            icon={<StandardDfrIcon className="h-12 w-12" />}
                             onClick={() => onSelectApp('dfrStandard')}
                         />
                         <AppSelectionCard 
                             title="SaskPower DFR"
                             description="DFR tailored for SaskPower projects."
-                            icon={<ClipboardDocumentListIcon className="h-12 w-12" />}
+                            icon={<SaskPowerIcon className="h-12 w-12" />}
                             onClick={() => onSelectApp('dfrSaskpower')}
                         />
                          <AppSelectionCard 
@@ -319,7 +319,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSelectApp, onOpenProject, i
                 </div>
             </main>
             <footer className="text-center text-gray-500 dark:text-gray-400 text-sm py-4">
-                X-TES Digital Reporting v1.1.1
+                X-TES Digital Reporting v1.1.2-beta
             </footer>
         </div>
     );

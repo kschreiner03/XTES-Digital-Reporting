@@ -1,4 +1,3 @@
-
 import { openDB } from 'idb';
 
 let dbPromise: Promise<any> | null = null;

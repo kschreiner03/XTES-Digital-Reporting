@@ -12,6 +12,7 @@ interface HeaderProps {
     isPhotologHeader?: boolean;
 }
 
+
 const XterraLogo: React.FC<{ isPrintable?: boolean }> = ({ isPrintable = false }) => (
     <div className="flex items-center">
         <SafeImage

@@ -22,12 +22,19 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     useEffect(() => {
         const root = window.document.documentElement;
+        const theme = isDarkMode ? 'dark' : 'light';
+        
         if (isDarkMode) {
             root.classList.add('dark');
             localStorage.setItem('xtec_theme', 'dark');
         } else {
             root.classList.remove('dark');
             localStorage.setItem('xtec_theme', 'light');
+        }
+
+        // Update Electron native theme if available
+        if (window.electronAPI?.setThemeSource) {
+            window.electronAPI.setThemeSource(theme);
         }
     }, [isDarkMode]);
 

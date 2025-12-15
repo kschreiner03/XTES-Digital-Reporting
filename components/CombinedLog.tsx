@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Header from './Header';
 import PhotoEntry from './PhotoEntry';
@@ -1301,13 +1302,18 @@ Description: ${photo.description || 'N/A'}
                                     onDataChange={(field, value) => handlePhotoDataChange(photo.id, field, value)}
                                     onImageChange={(file) => handleImageChange(photo.id, file)}
                                     onRemove={() => removePhoto(photo.id)}
-                                    onMoveUp={() => movePhoto(photo.id, 'up')}
-                                    onMoveDown={() => movePhoto(photo.id, 'down')}
+                                    onMoveUp={() => movePhoto(photo.id, "up")}
+                                    onMoveDown={() => movePhoto(photo.id, "down")}
                                     isFirst={index === 0}
                                     isLast={index === photosData.length - 1}
                                     onImageClick={setEnlargedImageUrl}
                                     errors={getPhotoErrors(photo.id)}
-                                    showDirectionField={true}
+                                    showDirectionField={!photo.isMap}
+
+                                    // NEW FIELDS
+                                    headerDate={headerData.date}
+                                    headerLocation={headerData.location}
+                                    onAutoFill={(f, val) => handlePhotoDataChange(photo.id, f, val)}
                                 />
                                 {index < photosData.length - 1 && (
                                      <div className="relative my-10 flex items-center justify-center">
@@ -1341,7 +1347,7 @@ Description: ${photo.description || 'N/A'}
                 </div>
                 {photosData.length > 0 && <div className="border-t-4 border-[#007D8C] my-8" />}
                 <footer className="text-center text-gray-500 dark:text-gray-400 text-sm py-4">
-                    X-TES Digital Reporting v1.1.1
+                    X-TES Digital Reporting v1.1.2-beta
                 </footer>
             </div>
             {showUnsupportedFileModal && (

@@ -1,22 +1,52 @@
+const { contextBridge, ipcRenderer } = require("electron");
 
-const { contextBridge, ipcRenderer } = require('electron');
+/* ============================================================
+   THEME API — CONNECTS RENDERER → MAIN
+============================================================ */
+contextBridge.exposeInMainWorld("themeAPI", {
+  // Set theme: "light", "dark", "system"
+  setTheme: (mode) => ipcRenderer.invoke("set-theme-source", mode),
 
-// Expose protected methods that allow the renderer process to use
-// the ipcRenderer without exposing the entire object
-contextBridge.exposeInMainWorld('electronAPI', {
-  saveProject: (data, defaultPath) => ipcRenderer.invoke('save-project', data, defaultPath),
-  loadProject: (fileType) => ipcRenderer.invoke('load-project', fileType),
-  loadMultipleProjects: () => ipcRenderer.invoke('load-multiple-projects'),
-  savePdf: (data, defaultPath) => ipcRenderer.invoke('save-pdf', data, defaultPath),
-  readFile: (filePath) => ipcRenderer.invoke('read-file', filePath),
-  onOpenFile: (callback) => ipcRenderer.on('open-file-path', (_event, value) => callback(value)),
-  onDownloadPhotos: (callback) => ipcRenderer.on('download-photos', callback),
-  removeDownloadPhotosListener: (callback) => ipcRenderer.removeListener('download-photos', callback),
-  removeAllDownloadPhotosListeners: () => ipcRenderer.removeAllListeners('download-photos'),
-  saveZipFile: (data, defaultPath) => ipcRenderer.invoke('save-zip-file', data, defaultPath),
-  onUpdateAvailable: (callback) => ipcRenderer.on('update-available', () => callback()),
-  removeUpdateAvailableListener: () => ipcRenderer.removeAllListeners('update-available'),
-  onOpenSettings: (callback) => ipcRenderer.on('open-settings', callback),
-  removeOpenSettingsListener: () => ipcRenderer.removeAllListeners('open-settings'),
-  getAssetPath: (filename) => ipcRenderer.invoke('get-asset-path', filename),
+  // Returns: "light" or "dark"
+  getTheme: () => ipcRenderer.invoke("get-current-theme"),
+
+  // Listen when OS theme changes
+  onThemeUpdated: (callback) => {
+    ipcRenderer.on("theme-updated", (_event, theme) => callback(theme));
+  }
+});
+
+/* ============================================================
+   GENERAL IPC BRIDGE FOR YOUR APP
+============================================================ */
+contextBridge.exposeInMainWorld("electronAPI", {
+  openPDF: (filename) => ipcRenderer.invoke("open-pdf", filename),
+
+  saveProject: (data, defaultPath) =>
+    ipcRenderer.invoke("save-project", data, defaultPath),
+
+  loadProject: (type) => ipcRenderer.invoke("load-project", type),
+
+  savePDF: (data, defaultPath) =>
+    ipcRenderer.invoke("save-pdf", data, defaultPath),
+
+  saveZip: (data, defaultPath) =>
+    ipcRenderer.invoke("save-zip-file", data, defaultPath),
+
+  readFile: (filePath) => ipcRenderer.invoke("read-file", filePath),
+
+  importMultipleProjects: () =>
+    ipcRenderer.invoke("load-multiple-projects"),
+
+  onOpenFilePath: (callback) =>
+    ipcRenderer.on("open-file-path", (_event, path) => callback(path)),
+
+  onUpdateAvailable: (callback) =>
+    ipcRenderer.on("update-available", callback),
+
+  /* ========================================================
+     🌟 MISSING SETTINGS API — THIS FIXES YOUR SETTINGS TAB
+     ======================================================== */
+  onOpenSettings: (callback) =>
+    ipcRenderer.on("open-settings", () => callback())
 });

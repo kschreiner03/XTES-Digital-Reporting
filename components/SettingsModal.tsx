@@ -141,7 +141,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
                                                 type="text" 
                                                 value={defaults.defaultProponent}
                                                 onChange={(e) => handleDefaultChange('defaultProponent', e.target.value)}
-                                                className="w-full p-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md focus:ring-2 focus:ring-[#007D8C] focus:border-[#007D8C] transition"
+                                                className="w-full p-2 border border-gray-300 bg-white text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md focus:ring-2 focus:ring-[#007D8C] focus:border-[#007D8C] transition"
                                                 placeholder="e.g., Cenovus, CNRL"
                                             />
                                             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Used in Photo Logs and Standard DFRs.</p>
@@ -153,7 +153,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
                                                 type="text" 
                                                 value={defaults.defaultMonitor}
                                                 onChange={(e) => handleDefaultChange('defaultMonitor', e.target.value)}
-                                                className="w-full p-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md focus:ring-2 focus:ring-[#007D8C] focus:border-[#007D8C] transition"
+                                                className="w-full p-2 border border-gray-300 bg-white text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md focus:ring-2 focus:ring-[#007D8C] focus:border-[#007D8C] transition"
                                                 placeholder="e.g., John Doe"
                                             />
                                              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Used in DFRs.</p>

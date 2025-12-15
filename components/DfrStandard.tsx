@@ -1,4 +1,3 @@
-
 import React, { useState, ReactElement, useEffect, useRef, useCallback } from 'react';
 import { DfrHeader } from './DfrHeader';
 import PhotoEntry from './PhotoEntry';
@@ -1203,51 +1202,83 @@ Description: ${photo.description || 'N/A'}
         
         let yPos = await drawDfrHeader(doc);
         
-        const renderTextWithBullets = async (text: string, startY: number) => {
-            let y = startY;
-            doc.setFontSize(12);
-            doc.setFont('times', 'normal');
-            if (!text) return y;
-            const contentParagraphs = text.split('\n');
+       const renderTextWithBullets = async (text: string, startY: number) => {
+    let y = startY;
+    doc.setFontSize(12);
+    doc.setFont("times", "normal");
 
-            for (const paragraph of contentParagraphs) {
-                if (paragraph.trim() === '') {
-                    if (y + 3 <= maxYPos) { y += 3; }
-                    continue;
-                }
-                
-                const indentationMatch = paragraph.match(/^\s*/);
-                const indentation = indentationMatch ? indentationMatch[0].length : 0;
-                const indentLevel = Math.floor(indentation / 2);
-                const indentWidth = indentLevel * 5;
+    if (!text || !text.trim()) return y;
 
-                const trimmedPara = paragraph.trim();
-                const isBulleted = trimmedPara.startsWith('-');
-                const textToRender = isBulleted ? trimmedPara.substring(1).trim() : trimmedPara;
+    const lines = text.split("\n");
 
-                if (!textToRender) continue;
+    for (const line of lines) {
 
-                const textMaxWidth = contentWidth - (isBulleted ? 5 : 0) - indentWidth;
-                const splitText = doc.splitTextToSize(textToRender, textMaxWidth);
-                const textHeight = doc.getTextDimensions(splitText).h;
-
-                if (y + textHeight > maxYPos) {
-                    drawPageBorder(doc); doc.addPage(); pageNum++; y = await drawDfrHeader(doc);
-                    doc.setFontSize(12); doc.setFont('times', 'normal');
-                }
-                
-                const textX = contentMargin + (isBulleted ? 5 : 0) + indentWidth;
-
-                if (isBulleted) {
-                    const bulletX = contentMargin + 2 + indentWidth;
-                    doc.text('-', bulletX, y);
-                }
-                doc.text(splitText, textX, y);
-
-                y += textHeight + 2;
-            }
-            return y;
+        // Preserve blank lines
+        if (line.trim() === "") {
+            if (y + 4 <= maxYPos) y += 4;
+            continue;
         }
+
+        // Determine indent
+        const leadingSpaces = line.match(/^\s*/)?.[0].length ?? 0;
+        const indentLevel = Math.floor(leadingSpaces / 2);
+        const indentWidth = indentLevel * 5;
+
+        const trimmed = line.trim();
+        const isBullet = trimmed.startsWith("-");
+        const textContent = isBullet ? trimmed.slice(1).trim() : trimmed;
+
+        if (!textContent) continue;
+
+        const maxWidth =
+            contentWidth -
+            indentWidth -
+            (isBullet ? 5 : 0);
+
+        const split = doc.splitTextToSize(textContent, maxWidth);
+        const textHeight = doc.getTextDimensions(split).h + 2;
+
+        // -------------------------------------------------------------
+        // PAGE BREAK HANDLING — identical to the fixed renderTextSection
+        // -------------------------------------------------------------
+        if (y + textHeight > maxYPos) {
+            // Finish buffered drawings
+            drawPageBorder(doc);
+            doc.addPage();
+            pageNum++;
+
+            y = await drawDfrHeader(doc);
+
+            doc.setFontSize(12);
+            doc.setFont("times", "normal");
+        }
+
+        // Render
+        const lineY = y;
+
+        // compute X
+        let textX =
+            contentMargin +
+            indentWidth +
+            (isBullet ? 5 : 0);
+
+        if (isBullet) {
+            const bulletX =
+                contentMargin +
+                indentWidth +
+                2;
+
+            doc.text("-", bulletX, lineY);
+        }
+
+        doc.text(split, textX, lineY);
+
+        y += textHeight;
+    }
+
+    return y;
+};
+
 
         // Render Activity Blocks
         if (bodyData.generalActivity || bodyData.locationActivities.length > 0) {
@@ -1749,18 +1780,23 @@ Description: ${photo.description || 'N/A'}
                         {photosData.map((photo, index) => (
                            <div key={photo.id}>
                                 <PhotoEntry
-                                    data={photo}
-                                    onDataChange={(field, value) => handlePhotoDataChange(photo.id, field, value)}
-                                    onImageChange={(file) => handleImageChange(photo.id, file)}
-                                    onRemove={() => removePhoto(photo.id)}
-                                    onMoveUp={() => movePhoto(photo.id, 'up')}
-                                    onMoveDown={() => movePhoto(photo.id, 'down')}
-                                    isFirst={index === 0}
-                                    isLast={index === photosData.length - 1}
-                                    onImageClick={setEnlargedImageUrl}
-                                    errors={getPhotoErrors(photo.id)}
-                                    showDirectionField={!photo.isMap}
-                                />
+                                data={photo}
+                                onDataChange={(field, value) => handlePhotoDataChange(photo.id, field, value)}
+                                onImageChange={(file) => handleImageChange(photo.id, file)}
+                                onRemove={() => removePhoto(photo.id)}
+                                onMoveUp={() => movePhoto(photo.id, "up")}
+                                onMoveDown={() => movePhoto(photo.id, "down")}
+                                isFirst={index === 0}
+                                isLast={index === photosData.length - 1}
+                                onImageClick={setEnlargedImageUrl}
+                                errors={getPhotoErrors(photo.id)}
+                                showDirectionField={!photo.isMap}
+
+                                // NEW FIELDS
+                                headerDate={headerData.date}
+                                headerLocation={headerData.location}
+                                onAutoFill={(f, val) => handlePhotoDataChange(photo.id, f, val)}
+                            />
                                 {index < photosData.length - 1 && (
                                      <div className="relative my-6 flex items-center justify-center">
                                         <div className="absolute inset-0 flex items-center" aria-hidden="true">
@@ -1800,7 +1836,7 @@ Description: ${photo.description || 'N/A'}
                 </div>
                 {photosData.length > 0 && <div className="border-t-4 border-[#007D8C] my-8" />}
                 <footer className="text-center text-gray-500 dark:text-gray-400 text-sm py-4">
-                    X-TES Digital Reporting v1.1.1
+                    X-TES Digital Reporting v1.1.2-beta
                 </footer>
             </div>
             {showUnsupportedFileModal && (

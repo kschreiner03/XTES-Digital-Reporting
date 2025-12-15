@@ -1,4 +1,3 @@
-
 import React, { useRef, useLayoutEffect } from 'react';
 import type { HeaderData } from '../types';
 import SafeImage from './SafeImage';
@@ -126,3 +125,4 @@ const Header: React.FC<HeaderProps> = ({ data, onDataChange, isPrintable = false
 };
 
 export default Header;
+

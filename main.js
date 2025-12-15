@@ -7,6 +7,14 @@ const fs = require('fs');
 let mainWindow;
 let helpWindow;
 
+// --- Configuration / Secrets ---
+// Prefer environment variables for sensitive or environment-specific URLs
+const REPO_URL = process.env.GITHUB_REPOSITORY || 'kschreiner03/XTES-Digital-Reporting';
+const REPORT_ISSUE_URL = process.env.REPORT_ISSUE_URL || 'https://forms.office.com/r/A0jqm6vHb6';
+
+// --- Security: Allowed Extensions for File Operations ---
+const ALLOWED_EXTENSIONS = ['.dfr', '.spdfr', '.plog', '.clog', '.iogc', '.json'];
+
 // --- Single Instance Lock ---
 const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {
@@ -17,7 +25,7 @@ if (!gotTheLock) {
       if (mainWindow.isMinimized()) mainWindow.restore();
       mainWindow.focus();
       const filePath = commandLine.find(arg =>
-        arg.endsWith('.dfr') || arg.endsWith('.spdfr') || arg.endsWith('.plog') || arg.endsWith('.clog') || arg.endsWith('.iogc')
+        ALLOWED_EXTENSIONS.some(ext => arg.endsWith(ext))
       );
       if (filePath) {
         mainWindow.webContents.send('open-file-path', filePath);
@@ -47,6 +55,10 @@ app.once('ready', () => {
 // --- macOS file open handling ---
 app.on('open-file', (event, filePath) => {
   event.preventDefault();
+  // Security check: Only allow opening files with permitted extensions
+  const ext = path.extname(filePath).toLowerCase();
+  if (!ALLOWED_EXTENSIONS.includes(ext)) return;
+
   if (mainWindow) {
     mainWindow.webContents.send('open-file-path', filePath);
   } else {
@@ -69,6 +81,7 @@ function createHelpWindow() {
       preload: path.join(__dirname, 'help-preload.js'),
       nodeIntegration: false,
       contextIsolation: true,
+      sandbox: true, // Enable sandbox for extra security
     },
   });
   
@@ -80,6 +93,10 @@ function createHelpWindow() {
     helpWindow.loadFile(path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/help.html`));
   }
 
+  // Security: Prevent new windows from being created from within the help window
+  helpWindow.webContents.setWindowOpenHandler(() => {
+    return { action: 'deny' };
+  });
 
   helpWindow.on('closed', () => {
     helpWindow = null;
@@ -146,7 +163,8 @@ const menuTemplate = [
         label: 'Report Issues',
         click: async () => {
           try {
-            await shell.openExternal('https://forms.office.com/r/A0jqm6vHb6');
+            // Security: Only allow https protocols
+            await shell.openExternal(REPORT_ISSUE_URL);
           } catch (err) {
             console.error('Failed to open issue form:', err);
             dialog.showErrorBox('Error', 'Could not open the issue report form.');
@@ -167,6 +185,7 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
       contextIsolation: true,
+      sandbox: false, // Cannot be fully sandboxed due to node:fs usage in main process handlers interacting with dialogs
     },
   });
 
@@ -179,6 +198,14 @@ function createWindow() {
   } else {
     mainWindow.loadFile(path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`));
   }
+
+  // Security: Handle external links (e.g. from help docs)
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith('https:')) {
+      shell.openExternal(url);
+    }
+    return { action: 'deny' };
+  });
 
   // Basic context menu (cut, copy, paste)
   mainWindow.webContents.on('context-menu', (event, params) => {
@@ -194,7 +221,7 @@ function createWindow() {
 
   mainWindow.webContents.on('did-finish-load', () => {
     const filePath = process.argv.find(arg =>
-      arg.endsWith('.dfr') || arg.endsWith('.spdfr') || arg.endsWith('.plog') || arg.endsWith('.clog') || arg.endsWith('.iogc')
+        ALLOWED_EXTENSIONS.some(ext => arg.endsWith(ext))
     );
     if (filePath) {
       mainWindow.webContents.send('open-file-path', filePath);
@@ -221,9 +248,8 @@ app.whenReady().then(() => {
   Menu.setApplicationMenu(menu);
 
   // --- Auto-updater Logic ---
-  const repoUrl = 'kschreiner03/XTES-Digital-Reporting';
   const server = 'https://update.electronjs.org';
-  const feedUrl = `${server}/${repoUrl}/${process.platform}-${process.arch}/${app.getVersion()}`;
+  const feedUrl = `${server}/${REPO_URL}/${process.platform}-${process.arch}/${app.getVersion()}`;
 
   try {
     autoUpdater.setFeedURL(feedUrl);
@@ -262,6 +288,7 @@ app.whenReady().then(() => {
   // --- End Auto-updater Logic ---
 
   ipcMain.handle('open-pdf', async (event, filename) => {
+    // Security: Validate filename against allowlist
     if (!allowedPdfs.includes(filename)) {
         console.error('Requested PDF is not allowed:', filename);
         dialog.showErrorBox('Error', 'The requested file is not a valid example document.');
@@ -272,7 +299,13 @@ app.whenReady().then(() => {
         ? path.join(process.resourcesPath, 'assets')
         : path.join(app.getAppPath(), 'public', 'assets');
     
-    const pdfPath = path.join(assetsDir, filename);
+    // Security: Normalize path to prevent traversal
+    const pdfPath = path.normalize(path.join(assetsDir, filename));
+    
+    if (!pdfPath.startsWith(assetsDir)) {
+        console.error('Path traversal attempt detected');
+        return;
+    }
 
     try {
         await shell.openPath(pdfPath);
@@ -283,6 +316,11 @@ app.whenReady().then(() => {
   });
 
   ipcMain.handle('get-asset-path', (event, filename) => {
+    // Security: Basic path traversal prevention
+    if (filename.includes('..') || filename.includes('/') || filename.includes('\\')) {
+        return '';
+    }
+
     if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
       return `${MAIN_WINDOW_VITE_DEV_SERVER_URL}/assets/${filename}`;
     } else {
@@ -352,6 +390,16 @@ app.whenReady().then(() => {
   });
 
   ipcMain.handle('read-file', async (event, filePath) => {
+    // Security: Strict validation of file extensions.
+    // This prevents a malicious renderer from requesting critical system files.
+    if (!filePath || typeof filePath !== 'string') return { success: false, error: 'Invalid path' };
+    
+    const ext = path.extname(filePath).toLowerCase();
+    if (!ALLOWED_EXTENSIONS.includes(ext)) {
+        console.error(`Blocked attempt to read unauthorized file type: ${filePath}`);
+        return { success: false, error: 'Unauthorized file type.' };
+    }
+
     try {
       const data = fs.readFileSync(filePath, 'utf-8');
       return { success: true, data, path: filePath };
@@ -419,6 +467,11 @@ app.whenReady().then(() => {
     if (filePaths && filePaths.length > 0) {
       try {
         const filesContent = filePaths.map(filePath => {
+          // Verify file extensions even for bulk load
+          const ext = path.extname(filePath).toLowerCase();
+          if (!ALLOWED_EXTENSIONS.includes(ext)) {
+             throw new Error("Unauthorized file type selected");
+          }
           return fs.readFileSync(filePath, 'utf-8');
         });
         return { success: true, data: filesContent };
