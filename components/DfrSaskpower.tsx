@@ -1,4 +1,3 @@
-
 import React, { useState, ReactElement, useEffect, useRef, useCallback } from 'react';
 import type { DfrSaskpowerData, ChecklistOption, PhotoData, LocationActivity, ActivityBlock } from '../types';
 import { DownloadIcon, SaveIcon, FolderOpenIcon, ArrowLeftIcon, PlusIcon, TrashIcon, ArrowUpIcon, ArrowDownIcon, CloseIcon, FolderArrowDownIcon, ChatBubbleLeftIcon } from './icons';
