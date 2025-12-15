@@ -10,8 +10,10 @@
       "DOM.Iterable"
     ],
     "skipLibCheck": true,
+     "esModuleInterop": true,
     "types": [
-      "node"
+      "node",
+      "vite/client"
     ],
     "moduleResolution": "bundler",
     "isolatedModules": true,
@@ -25,5 +27,6 @@
     },
     "allowImportingTsExtensions": true,
     "noEmit": true
-  }
+  },
+  "include": ["src", "index.tsx"]
 }

@@ -186,6 +186,7 @@ function createWindow() {
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: false, // Cannot be fully sandboxed due to node:fs usage in main process handlers interacting with dialogs
+      plugins: true, // Enable PDF viewer plugin
     },
   });
 

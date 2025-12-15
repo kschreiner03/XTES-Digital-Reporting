@@ -120,7 +120,7 @@ export const DocumentDuplicateIcon = (p: any) => (
 );
 
 export const ChatBubbleLeftIcon = (p: any) => (
-  <MessageSquare strokeWidth={1.25} color="#eeff00ff" {...p} />
+  <MessageSquare strokeWidth={1.25} {...p} />
 );
 
 /* ============================================================

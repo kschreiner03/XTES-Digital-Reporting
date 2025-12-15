@@ -393,7 +393,7 @@ const LocationBlockEntry: React.FC<{
                         title="Toggle comment"
                         className={`p-1 rounded-full ${isCommentOpen ? 'bg-yellow-200 text-yellow-800' : 'text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300'}`}
                     >
-                        <ChatBubbleLeftIcon className="h-5 w-5" />
+                        <ChatBubbleLeftIcon className="h-5 w-5 text-black dark:text-yellow-400" />
                     </button>
                 </div>
                 <div className="flex items-center space-x-2">
@@ -1677,7 +1677,7 @@ Description: ${photo.description || 'N/A'}
                             <div className="flex items-center justify-between mb-1">
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">General Activity</label>
                                 <button onClick={() => toggleComment('generalActivity')} title="Toggle comment" className={`p-1 rounded-full ${openComments.has('generalActivity') ? 'bg-yellow-200 text-yellow-800' : 'text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300'}`}>
-                                    <ChatBubbleLeftIcon className="h-5 w-5" />
+                                    <ChatBubbleLeftIcon className="h-5 w-5 text-black dark:text-yellow-400" />
                                 </button>
                             </div>
                             {openComments.has('generalActivity') && (
@@ -1711,7 +1711,7 @@ Description: ${photo.description || 'N/A'}
                             <div className="flex items-center justify-between mb-1">
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Communication</label>
                                 <button onClick={() => toggleComment('communication')} title="Toggle comment" className={`p-1 rounded-full ${openComments.has('communication') ? 'bg-yellow-200 text-yellow-800' : 'text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300'}`}>
-                                    <ChatBubbleLeftIcon className="h-5 w-5" />
+                                    <ChatBubbleLeftIcon className="h-5 w-5 text-black dark:text-yellow-400" />
                                 </button>
                             </div>
                             {openComments.has('communication') && (
@@ -1723,7 +1723,7 @@ Description: ${photo.description || 'N/A'}
                              <div className="flex items-center justify-between mb-1">
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Weather and Ground Conditions</label>
                                 <button onClick={() => toggleComment('weatherAndGroundConditions')} title="Toggle comment" className={`p-1 rounded-full ${openComments.has('weatherAndGroundConditions') ? 'bg-yellow-200 text-yellow-800' : 'text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300'}`}>
-                                    <ChatBubbleLeftIcon className="h-5 w-5" />
+                                    <ChatBubbleLeftIcon className="h-5 w-5 text-black dark:text-yellow-400" />
                                 </button>
                             </div>
                             {openComments.has('weatherAndGroundConditions') && (
@@ -1738,7 +1738,7 @@ Description: ${photo.description || 'N/A'}
                             <div className="flex items-center justify-between mb-1">
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Environmental Protection Measures & Mitigation</label>
                                 <button onClick={() => toggleComment('environmentalProtection')} title="Toggle comment" className={`p-1 rounded-full ${openComments.has('environmentalProtection') ? 'bg-yellow-200 text-yellow-800' : 'text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300'}`}>
-                                    <ChatBubbleLeftIcon className="h-5 w-5" />
+                                    <ChatBubbleLeftIcon className="h-5 w-5 text-black dark:text-yellow-400" />
                                 </button>
                             </div>
                             {openComments.has('environmentalProtection') && (
@@ -1750,7 +1750,7 @@ Description: ${photo.description || 'N/A'}
                             <div className="flex items-center justify-between mb-1">
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Wildlife Observations</label>
                                 <button onClick={() => toggleComment('wildlifeObservations')} title="Toggle comment" className={`p-1 rounded-full ${openComments.has('wildlifeObservations') ? 'bg-yellow-200 text-yellow-800' : 'text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300'}`}>
-                                    <ChatBubbleLeftIcon className="h-5 w-5" />
+                                    <ChatBubbleLeftIcon className="h-5 w-5 text-black dark:text-yellow-400" />
                                 </button>
                             </div>
                             {openComments.has('wildlifeObservations') && (
@@ -1762,7 +1762,7 @@ Description: ${photo.description || 'N/A'}
                             <div className="flex items-center justify-between mb-1">
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Further Restoration or Monitoring Required</label>
                                 <button onClick={() => toggleComment('furtherRestoration')} title="Toggle comment" className={`p-1 rounded-full ${openComments.has('furtherRestoration') ? 'bg-yellow-200 text-yellow-800' : 'text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300'}`}>
-                                    <ChatBubbleLeftIcon className="h-5 w-5" />
+                                    <ChatBubbleLeftIcon className="h-5 w-5 text-black dark:text-yellow-400" />
                                 </button>
                             </div>
                             {openComments.has('furtherRestoration') && (
@@ -1836,7 +1836,7 @@ Description: ${photo.description || 'N/A'}
                 </div>
                 {photosData.length > 0 && <div className="border-t-4 border-[#007D8C] my-8" />}
                 <footer className="text-center text-gray-500 dark:text-gray-400 text-sm py-4">
-                    X-TES Digital Reporting v1.1.2-beta
+                    X-TES Digital Reporting v1.1.2
                 </footer>
             </div>
             {showUnsupportedFileModal && (

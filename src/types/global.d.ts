@@ -1,4 +1,3 @@
-
 export interface IElectronAPI {
     saveProject: (data: string, defaultPath: string) => Promise<{ success: boolean; path?: string; error?: string }>;
     loadProject: (fileType: 'plog' | 'dfr' | 'spdfr' | 'clog' | 'iogc') => Promise<string | null>;
@@ -26,4 +25,15 @@ declare global {
             getAssetPath: (filename: string) => Promise<string>;
         };
     }
+}
+
+
+declare module "*.css";
+declare module "*.scss";
+declare module "*.sass";
+declare module "*.less";
+
+declare module "*?url" {
+  const src: string;
+  export default src;
 }

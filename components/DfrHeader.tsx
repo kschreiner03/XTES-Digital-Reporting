@@ -12,22 +12,14 @@ interface HeaderProps {
     isPhotologHeader?: boolean;
 }
 
+
 const XterraLogo: React.FC<{ isPrintable?: boolean }> = ({ isPrintable = false }) => (
     <div className="flex items-center">
-        <div className={!isPrintable ? "dark:hidden" : ""}>
-            <SafeImage
-                fileName="xterra-logo.jpg"
-                alt="X-TERRA Logo"
-                className={isPrintable ? "h-10 w-auto" : "h-14 w-auto mix-blend-multiply"}
-            />
-        </div>
-        {!isPrintable && (
-            <img
-                src="https://ik.imagekit.io/fzpijprte/XTerraLogo2019_Horizontal.jpg?updatedAt=1758827714962"
-                alt="X-TERRA Logo"
-                className="hidden dark:block h-14 w-auto rounded-sm"
-            />
-        )}
+        <SafeImage
+            fileName="xterra-logo.jpg"
+            alt="X-TERRA Logo"
+            className={isPrintable ? "h-10 w-auto" : "h-14 w-auto mix-blend-multiply dark:mix-blend-normal dark:bg-white dark:p-1 dark:rounded-sm"}
+        />
     </div>
 );
 

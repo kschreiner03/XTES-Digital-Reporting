@@ -1,25 +1,10 @@
+const path = require("path");
 const { contextBridge, ipcRenderer } = require("electron");
 
-/* ============================================================
-   THEME API — CONNECTS RENDERER → MAIN
-============================================================ */
-contextBridge.exposeInMainWorld("themeAPI", {
-  // Set theme: "light", "dark", "system"
-  setTheme: (mode) => ipcRenderer.invoke("set-theme-source", mode),
-
-  // Returns: "light" or "dark"
-  getTheme: () => ipcRenderer.invoke("get-current-theme"),
-
-  // Listen when OS theme changes
-  onThemeUpdated: (callback) => {
-    ipcRenderer.on("theme-updated", (_event, theme) => callback(theme));
-  }
-});
-
-/* ============================================================
-   GENERAL IPC BRIDGE FOR YOUR APP
-============================================================ */
 contextBridge.exposeInMainWorld("electronAPI", {
+  /* =========================
+     EXISTING METHODS
+     ========================= */
   openPDF: (filename) => ipcRenderer.invoke("open-pdf", filename),
 
   saveProject: (data, defaultPath) =>
@@ -44,11 +29,22 @@ contextBridge.exposeInMainWorld("electronAPI", {
   onUpdateAvailable: (callback) =>
     ipcRenderer.on("update-available", callback),
 
-  /* ========================================================
-     🌟 MISSING SETTINGS API — THIS FIXES YOUR SETTINGS TAB
-     ======================================================== */
   onOpenSettings: (callback) =>
-    ipcRenderer.on("open-settings", () => callback())
+    ipcRenderer.on("open-settings", () => callback()),
+
+  /* =========================
+     ✅ ADD THIS
+     ========================= */
+  getAssetPath: (fileName) => {
+    const assetPath = path.join(
+      process.resourcesPath,
+      "assets",
+      fileName
+    );
+
+    return `file://${assetPath.replace(/\\/g, "/")}`;
+  }
 });
+
 
 
