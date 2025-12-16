@@ -1,52 +1,95 @@
+"use strict";
+
 const { contextBridge, ipcRenderer } = require("electron");
+const path = require("path");
 
-/* ============================================================
-   THEME API — CONNECTS RENDERER → MAIN
-============================================================ */
-contextBridge.exposeInMainWorld("themeAPI", {
-  // Set theme: "light", "dark", "system"
-  setTheme: (mode) => ipcRenderer.invoke("set-theme-source", mode),
-
-  // Returns: "light" or "dark"
-  getTheme: () => ipcRenderer.invoke("get-current-theme"),
-
-  // Listen when OS theme changes
-  onThemeUpdated: (callback) => {
-    ipcRenderer.on("theme-updated", (_event, theme) => callback(theme));
-  }
-});
-
-/* ============================================================
-   GENERAL IPC BRIDGE FOR YOUR APP
-============================================================ */
 contextBridge.exposeInMainWorld("electronAPI", {
-  openPDF: (filename) => ipcRenderer.invoke("open-pdf", filename),
+  /* -----------------------------
+     FILE / PROJECT OPERATIONS
+  ----------------------------- */
 
   saveProject: (data, defaultPath) =>
     ipcRenderer.invoke("save-project", data, defaultPath),
 
-  loadProject: (type) => ipcRenderer.invoke("load-project", type),
+  loadProject: (fileType) =>
+    ipcRenderer.invoke("load-project", fileType),
 
-  savePDF: (data, defaultPath) =>
-    ipcRenderer.invoke("save-pdf", data, defaultPath),
-
-  saveZip: (data, defaultPath) =>
-    ipcRenderer.invoke("save-zip-file", data, defaultPath),
-
-  readFile: (filePath) => ipcRenderer.invoke("read-file", filePath),
-
-  importMultipleProjects: () =>
+  loadMultipleProjects: () =>
     ipcRenderer.invoke("load-multiple-projects"),
 
-  onOpenFilePath: (callback) =>
-    ipcRenderer.on("open-file-path", (_event, path) => callback(path)),
+  savePdf: (data, defaultPath) =>
+    ipcRenderer.invoke("save-pdf", data, defaultPath),
 
-  onUpdateAvailable: (callback) =>
-    ipcRenderer.on("update-available", callback),
+  saveZipFile: (data, defaultPath) =>
+    ipcRenderer.invoke("save-zip-file", data, defaultPath),
 
-  /* ========================================================
-     🌟 MISSING SETTINGS API — THIS FIXES YOUR SETTINGS TAB
-     ======================================================== */
-  onOpenSettings: (callback) =>
-    ipcRenderer.on("open-settings", () => callback())
+  readFile: (filePath) =>
+    ipcRenderer.invoke("read-file", filePath),
+
+  /* -----------------------------
+     MENU EVENTS (MAIN → RENDERER)
+  ----------------------------- */
+
+  onOpenFile: (callback) => {
+    ipcRenderer.on("open-file-path", (_event, filePath) => callback(filePath));
+  },
+
+  onOpenSettings: (callback) => {
+    ipcRenderer.on("open-settings", () => callback());
+  },
+
+  onDownloadPhotos: (callback) => {
+    ipcRenderer.on("download-photos", () => callback());
+  },
+
+  onUpdateAvailable: (callback) => {
+    ipcRenderer.on("update-available", () => callback());
+  },
+
+  /* -----------------------------
+     LISTENER CLEANUP
+  ----------------------------- */
+
+  removeDownloadPhotosListener: (callback) => {
+    ipcRenderer.removeListener("download-photos", callback);
+  },
+
+  removeAllDownloadPhotosListeners: () => {
+    ipcRenderer.removeAllListeners("download-photos");
+  },
+
+  removeOpenSettingsListener: () => {
+    ipcRenderer.removeAllListeners("open-settings");
+  },
+
+  removeUpdateAvailableListener: () => {
+    ipcRenderer.removeAllListeners("update-available");
+  },
+
+  /* -----------------------------
+     ASSETS
+  ----------------------------- */
+
+  getAssetPath: (filename) =>
+    ipcRenderer.invoke("get-asset-path", filename),
+
+  /* -----------------------------
+     THEME CONTROL (FIXED)
+  ----------------------------- */
+
+  setThemeSource: (theme) =>
+    ipcRenderer.invoke("set-theme-source", theme),
 });
+
+/* --------------------------------
+   HELP WINDOW API (SEPARATE)
+--------------------------------- */
+
+contextBridge.exposeInMainWorld("helpAPI", {
+  openPdf: (filename) =>
+    ipcRenderer.invoke("open-pdf", filename),
+
+  getAssetPath: (filename) =>
+    ipcRenderer.invoke("get-asset-path", filename),
+});
+

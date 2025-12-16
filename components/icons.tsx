@@ -105,7 +105,7 @@ export const EllipsisVerticalIcon = (p: any) => (
 );
 
 export const ArrowsPointingOutIcon = (p: any) => (
-  <Maximize strokeWidth={1.25} color="#007D8C" {...p} />
+  <Maximize strokeWidth={1.25} {...p} />
 );
 
 export const EyeIcon = (p: any) => (
@@ -121,7 +121,7 @@ export const DocumentDuplicateIcon = (p: any) => (
 );
 
 export const ChatBubbleLeftIcon = (p: any) => (
-  <MessageSquare strokeWidth={1.25} color="#eeff00ff" {...p} />
+  <MessageSquare strokeWidth={1.25} {...p} />
 );
 
 /* ============================================================

@@ -1,4 +1,3 @@
-
 import React, { useRef, useLayoutEffect, useEffect } from 'react';
 import type { DfrHeaderData } from '../types';
 import SafeImage from './SafeImage';

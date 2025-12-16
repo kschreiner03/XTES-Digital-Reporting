@@ -1,7 +1,7 @@
 
-
 # X-TES Digital Reporting
 
+![X-TES Logo](public/assets/xterra-logo.jpg)
 
 **X-TES Digital Reporting** is a specialized desktop application designed for X-Terra Environmental Services. It streamlines the creation, management, and export of environmental monitoring reports, including Daily Field Reports (DFRs) and Photographic Logs.
 
@@ -21,6 +21,7 @@ Built with **Electron**, **React**, and **TypeScript**, this application replace
 *   **Smart Image Handling:**
     *   Automatic image cropping to 4:3 aspect ratio.
     *   Drag-and-drop support.
+    *   Integrated photo resizing to ensure manageable PDF file sizes.
     *   Export all photos + metadata to a ZIP file.
 *   **PDF Generation:** Client-side PDF generation using `jspdf`. No server required.
 *   **Custom File Formats:** Saves editable project files (`.dfr`, `.plog`, `.spdfr`, `.clog`) for future revisions.
@@ -89,8 +90,7 @@ The app uses `jspdf` to generate PDFs entirely on the client side (no server inv
 *   **Persistence:** [IndexedDB](https://developer.mozilla.org/en-US/docs/Web/API/IndexedDB_API) (via `idb`)
 *   **PDF Generation:** [jsPDF](https://github.com/parallax/jsPDF)
 *   **Packaging:** [Electron Forge](https://www.electronforge.io/)
-*   **File zipping** [JSZip](https://www.npmjs.com/package/jszip)
-*   
+
 ---
 
 ## 💻 Development Setup

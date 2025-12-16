@@ -125,4 +125,3 @@ const Header: React.FC<HeaderProps> = ({ data, onDataChange, isPrintable = false
 };
 
 export default Header;
-

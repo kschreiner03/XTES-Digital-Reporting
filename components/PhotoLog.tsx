@@ -1215,4 +1215,3 @@ Description: ${photo.description || 'N/A'}
 };
 
 export default PhotoLog;
-

@@ -1,0 +1,30 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug Renderer (Chrome)",
+      "type": "chrome",
+      "request": "launch",
+      "url": "http://localhost:5173",
+      "webRoot": "${workspaceFolder}"
+    },
+    {
+      "name": "Debug Main Process",
+      "type": "node",
+      "request": "launch",
+      "cwd": "${workspaceFolder}",
+      "runtimeExecutable": "${workspaceFolder}/node_modules/.bin/electron-forge",
+      "windows": {
+        "runtimeExecutable": "${workspaceFolder}/node_modules/.bin/electron-forge.cmd"
+      },
+      "args": [
+        "start"
+      ],
+      "console": "integratedTerminal",
+      "env": {
+        "ELECTRON_ENABLE_LOGGING": "true"
+      },
+      "autoAttachChildProcesses": true
+    }
+  ]
+}

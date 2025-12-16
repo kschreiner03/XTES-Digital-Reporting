@@ -1,4 +1,3 @@
-
 export interface HeaderData {
   proponent: string;
   projectName: string;
@@ -64,6 +63,7 @@ export interface PhotoData {
   location: string;
   description: string;
   imageUrl: string | null;
+  imageFile?: File;
   imageId?: string;
   direction?: string;
   isMap?: boolean;

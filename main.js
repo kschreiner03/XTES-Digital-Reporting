@@ -1,5 +1,5 @@
 
-const { app, BrowserWindow, ipcMain, dialog, Menu, shell, autoUpdater } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Menu, shell, autoUpdater, nativeTheme } = require('electron');
 const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
@@ -186,6 +186,7 @@ function createWindow() {
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: false, // Cannot be fully sandboxed due to node:fs usage in main process handlers interacting with dialogs
+      plugins: true, // Enable PDF viewer plugin
     },
   });
 
@@ -481,6 +482,10 @@ app.whenReady().then(() => {
       }
     }
     return { success: false, data: [] };
+  });
+
+  ipcMain.handle('set-theme-source', (event, theme) => {
+    nativeTheme.themeSource = theme;
   });
 
   createWindow();
