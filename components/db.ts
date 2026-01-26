@@ -95,3 +95,4 @@ export const clearDatabase = async (): Promise<void> => {
         tx.done
     ]);
 };
+

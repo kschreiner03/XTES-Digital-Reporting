@@ -28,58 +28,65 @@ const getRecentProjects = (): RecentProjectMetadata[] => {
         const projects = localStorage.getItem(RECENT_PROJECTS_KEY);
         return projects ? JSON.parse(projects) : [];
     } catch (e) {
-        console.error("Failed to parse recent projects from localStorage", e);
+        console.error('Failed to parse recent projects from localStorage', e);
         return [];
     }
 };
 
-const addRecentProject = async (projectData: any, projectInfo: { type: AppType; name: string; projectNumber: string; }): Promise<number> => {
+const addRecentProject = async (
+    projectData: any,
+    projectInfo: { type: AppType; name: string; projectNumber: string }
+): Promise<number> => {
     const timestamp = Date.now();
-    
+
     try {
         await storeProject(timestamp, projectData);
     } catch (e) {
-        console.error("Failed to save project to IndexedDB:", e);
+        console.error('Failed to save project to IndexedDB:', e);
         return timestamp;
     }
-    
+
     const recentProjects = getRecentProjects();
     const identifier = `${projectInfo.type}-${projectInfo.name}-${projectInfo.projectNumber}`;
 
-    const existingProject = recentProjects.find(p => `${p.type}-${p.name}-${p.projectNumber}` === identifier);
-    const filteredProjects = recentProjects.filter(p => `${p.type}-${p.name}-${p.projectNumber}` !== identifier);
+    const existingProject = recentProjects.find(
+        p => `${p.type}-${p.name}-${p.projectNumber}` === identifier
+    );
 
+    const filteredProjects = recentProjects.filter(
+        p => `${p.type}-${p.name}-${p.projectNumber}` !== identifier
+    );
+
+    // 🔑 Remove project record ONLY — never delete images
     if (existingProject) {
         try {
-            const oldProjectData = await retrieveProject(existingProject.timestamp);
-            if (oldProjectData?.photosData) {
-                for (const photo of oldProjectData.photosData) {
-                    if (photo.imageId) await deleteImage(photo.imageId);
-                }
-            }
             await deleteProject(existingProject.timestamp);
         } catch (e) {
-            console.error(`Failed to clean up old project version (${existingProject.timestamp}):`, e);
+            console.error(
+                `Failed to clean up old project version (${existingProject.timestamp}):`,
+                e
+            );
         }
     }
-    
-    const newProjectMetadata: RecentProjectMetadata = { ...projectInfo, timestamp };
+
+    const newProjectMetadata: RecentProjectMetadata = {
+        ...projectInfo,
+        timestamp
+    };
+
     let updatedProjects = [newProjectMetadata, ...filteredProjects];
-    
+
     const MAX_RECENT_PROJECTS_IN_LIST = 50;
     if (updatedProjects.length > MAX_RECENT_PROJECTS_IN_LIST) {
         const projectsToDelete = updatedProjects.splice(MAX_RECENT_PROJECTS_IN_LIST);
         for (const proj of projectsToDelete) {
-             try {
-                const projectDataToDelete = await retrieveProject(proj.timestamp);
-                if (projectDataToDelete?.photosData) {
-                    for (const photo of projectDataToDelete.photosData) {
-                        if (photo.imageId) await deleteImage(photo.imageId);
-                    }
-                }
+            try {
                 await deleteProject(proj.timestamp);
             } catch (e) {
-                console.error(`Failed to cleanup old project from list (${proj.timestamp}):`, e);
+                console.error(
+                    `Failed to cleanup old project from list (${proj.timestamp}):`,
+                    e
+                );
             }
         }
     }
@@ -87,14 +94,13 @@ const addRecentProject = async (projectData: any, projectInfo: { type: AppType; 
     try {
         localStorage.setItem(RECENT_PROJECTS_KEY, JSON.stringify(updatedProjects));
     } catch (e) {
-        console.error("Failed to save recent projects to localStorage:", e);
+        console.error('Failed to save recent projects to localStorage:', e);
     }
+
     return timestamp;
 };
 
-// --- End Utility ---
-
-// Helper function to get image dimensions asynchronously
+// Helper function to get image dimensions asynchronously (Mirroring PhotoLog)
 const getImageDimensions = (url: string): Promise<{ width: number; height: number }> => {
     return new Promise((resolve, reject) => {
         const img = new Image();
@@ -123,6 +129,26 @@ const formatDateForRecentProject = (dateString: string): string => {
         return `${formattedYear}/${formattedMonth}/${formattedDay}`;
     } catch (e) {
         return dateString;
+    }
+};
+
+const formatDateForFilename = (dateString: string): string => {
+    if (!dateString) return 'NoDate';
+    try {
+        const tempDate = new Date(dateString);
+        if (isNaN(tempDate.getTime())) {
+            return dateString.replace(/[^a-z0-9]/gi, '');
+        }
+        const year = tempDate.getFullYear();
+        const month = tempDate.getMonth();
+        const day = tempDate.getDate();
+        const utcDate = new Date(Date.UTC(year, month, day));
+        const formattedMonth = String(utcDate.getUTCMonth() + 1).padStart(2, '0');
+        const formattedDay = String(utcDate.getUTCDate()).padStart(2, '0');
+        const formattedYear = utcDate.getUTCFullYear();
+        return `${formattedMonth}-${formattedDay}-${formattedYear}`;
+    } catch (e) {
+        return dateString.replace(/[^a-z0-9]/gi, '');
     }
 };
 
@@ -334,17 +360,31 @@ const CombinedLog: React.FC<CombinedLogProps> = ({ onBack, initialData }) => {
     const importFileInputRef = useRef<HTMLInputElement>(null);
     const isDownloadingRef = useRef(false);
 
-    // Define this helper function first as it is used in parseAndLoadProject
-    const prepareStateForRecentProjectStorage = async (headerData: HeaderData, photosData: PhotoData[]) => {
-        const photosForStorage = await Promise.all(
-            photosData.map(async (photo) => {
-                if (photo.imageUrl) {
-                    const imageId = photo.imageId || `${headerData.projectNumber || 'proj'}-${photo.id}-${Date.now()}`;
+    const prepareStateForRecentProjectStorage = async (
+    headerData: HeaderData,
+    photosData: PhotoData[]
+) => {
+    const photosForStorage = await Promise.all(
+        photosData.map(async (photo) => {
+            if (photo.imageUrl) {
+                const imageId =
+                    photo.imageId ||
+                    `${headerData.projectNumber || 'proj'}-${photo.id}-${Date.now()}`;
+
+                try {
                     await storeImage(imageId, photo.imageUrl);
-                    const { imageUrl, ...rest } = photo;
-                    return { ...rest, imageId };
+                } catch (e) {
+                    console.warn('Failed to cache image in IndexedDB', e);
                 }
-                return photo;
+
+                return {
+                    ...photo,
+                    imageId,
+                    imageUrl: photo.imageUrl
+                };
+            }
+
+            return photo;
             })
         );
         return { headerData, photosData: photosForStorage };
@@ -414,7 +454,6 @@ const CombinedLog: React.FC<CombinedLogProps> = ({ onBack, initialData }) => {
                     setProjectTimestamp(initialData.timestamp);
                 }
             } else {
-                // Load defaults for new projects
                 try {
                     const settings = JSON.parse(localStorage.getItem('xtec_general_settings') || '{}');
                     if (settings.defaultProponent) {
@@ -565,8 +604,8 @@ const CombinedLog: React.FC<CombinedLogProps> = ({ onBack, initialData }) => {
                         if (imageUrl) {
                              newPhotos.push({
                                 ...p,
-                                id: 0, // temp ID, will be reassigned
-                                imageId: undefined, // Clear old image ID so a new one is generated on save
+                                id: 0, 
+                                imageId: undefined, 
                                 imageUrl: imageUrl
                             });
                         }
@@ -592,7 +631,6 @@ const CombinedLog: React.FC<CombinedLogProps> = ({ onBack, initialData }) => {
         }
     };
 
-    // New Function to handle file import from filesystem
     const handleImportFromFiles = async () => {
         // @ts-ignore
         if (window.electronAPI && window.electronAPI.loadMultipleProjects) {
@@ -637,7 +675,6 @@ const CombinedLog: React.FC<CombinedLogProps> = ({ onBack, initialData }) => {
                          for (const p of photos) {
                             let imageUrl = p.imageUrl;
                             if (!imageUrl && p.imageId) {
-                                // Try to retrieve from DB if it exists there (might happen if imported from local file corresponding to recent project)
                                 const storedImg = await retrieveImage(p.imageId);
                                 if (storedImg) imageUrl = storedImg;
                             }
@@ -645,7 +682,7 @@ const CombinedLog: React.FC<CombinedLogProps> = ({ onBack, initialData }) => {
                             if (imageUrl) {
                                  newPhotos.push({
                                     ...p,
-                                    id: 0, // temp
+                                    id: 0, 
                                     imageId: undefined, 
                                     imageUrl: imageUrl
                                 });
@@ -774,286 +811,271 @@ const CombinedLog: React.FC<CombinedLogProps> = ({ onBack, initialData }) => {
             projectNumber: headerData.projectNumber,
         });
 
-        // Reusing PDF generation logic from PhotoLog (since content is the same structure)
+        // 🟢 EXACT PARITY WITH PHOTOLOG PDF GENERATION LOGIC
         const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'letter' });
         const pageWidth = doc.internal.pageSize.getWidth();
         const pageHeight = doc.internal.pageSize.getHeight();
-        const margin = 10;
-        const contentWidth = pageWidth - margin * 2;
+        
+        const borderMargin = 12.7;
+        const contentPadding = 4;
+        const contentMargin = borderMargin + contentPadding;
+        const contentWidth = pageWidth - contentMargin * 2;
+        
+        const maxYPos = pageHeight - contentMargin;
+        let pageNum = 1;
 
-        const drawHeader = async (docInstance: any) => {
-            const headerStartY = margin;
-            await addSafeLogo(docInstance, margin, headerStartY, 40, 10);
+        const drawPageBorder = (docInstance: any) => {
+            docInstance.setDrawColor(0, 125, 140); // Teal
+            docInstance.setLineWidth(0.5);
+            const startX = borderMargin;
+            const endX = pageWidth - borderMargin;
+            const bottomY = pageHeight - borderMargin;
+            const BOTTOM_LINE_NUDGE_UP = 3; 
+
+            docInstance.line(startX, bottomY - BOTTOM_LINE_NUDGE_UP, endX, bottomY - BOTTOM_LINE_NUDGE_UP);
+        };
+
+        const drawProjectInfoBlock = (docInstance: any, startY: number, options: { drawTopLine?: boolean, drawBottomLine?: boolean } = {}) => {
+            const { drawTopLine = true, drawBottomLine = true } = options;
+            const blockPaddingTop = 4;
+            const blockPaddingBottom = 0; 
+            let yPos = startY + blockPaddingTop;
+
+            const drawField = (label: string, value: string, x: number, y: number, maxWidth: number): number => {
+                const labelText = (label || '').toUpperCase() + ':';
+                docInstance.setFontSize(12);
+                docInstance.setFont('times', 'bold');
+                const labelWidth = docInstance.getTextWidth(labelText);
+                docInstance.text(labelText, x, y);
+                docInstance.setFontSize(11);
+                docInstance.setFont('times', 'normal');
+                const valueMaxWidth = maxWidth - labelWidth - 2;
+                const valueLines = docInstance.splitTextToSize(value || ' ', valueMaxWidth);
+                docInstance.text(valueLines, x + labelWidth + 2, y);
+                return docInstance.getTextDimensions(valueLines).h;
+            };
+
+            const col1Fields = [
+                {label: 'Proponent', value: headerData.proponent},
+                {label: 'Location', value: headerData.location},
+            ];
+            const col2Fields = [
+                {label: 'Date', value: headerData.date},
+                {label: 'Project', value: headerData.projectNumber},
+            ];
+            const fullWidthFields = [
+                {label: 'Project Name', value: headerData.projectName},
+            ];
+        
+            const col1X = contentMargin;
+            const col1MaxWidth = contentWidth * 0.55;
+            const col2X = contentMargin + contentWidth * 0.60;
+            const col2MaxWidth = contentWidth * 0.40;
             
+            let yPos1 = yPos;
+            let yPos2 = yPos;
+        
+            col1Fields.forEach(field => {
+                const height = drawField(field.label, field.value, col1X, yPos1, col1MaxWidth);
+                yPos1 += height + 1.5;
+            });
+            col2Fields.forEach(field => {
+                const height = drawField(field.label, field.value, col2X, yPos2, col2MaxWidth);
+                yPos2 += height + 1.5;
+            });
+            yPos = Math.max(yPos1, yPos2);
+            fullWidthFields.forEach(field => {
+                const height = drawField(field.label, field.value, contentMargin, yPos, contentWidth);
+                yPos += height + 1.5;
+            });
+
+            const fieldsEndY = yPos;
+            const blockBottomY = fieldsEndY - 1.5 + blockPaddingBottom;
+            
+            docInstance.setDrawColor(0, 125, 140); 
+            docInstance.setLineWidth(0.5);
+            if (drawTopLine) docInstance.line(borderMargin, startY, pageWidth - borderMargin, startY);
+            if (drawBottomLine) docInstance.line(borderMargin, blockBottomY, pageWidth - borderMargin, blockBottomY);
+
+            return blockBottomY;
+        };
+        
+        const drawPhotoPageHeader = async (docInstance: any) => {
+            const headerContentStartY = contentMargin;
+            await addSafeLogo(docInstance, contentMargin, headerContentStartY, 40, 10);
             docInstance.setFontSize(18);
             docInstance.setFont('times', 'bold');
             docInstance.setTextColor(0, 125, 140);
-            docInstance.text('PHOTOGRAPHIC LOG', pageWidth / 2, headerStartY + 7, { align: 'center' });
-            
+            docInstance.text('PHOTOGRAPHIC LOG', pageWidth / 2, headerContentStartY + 7, { align: 'center' });
             docInstance.setTextColor(0, 0, 0);
-            
-            const firstLineY = headerStartY + 18;
-            docInstance.setLineWidth(0.5);
+            let yPos = headerContentStartY + 15;
             docInstance.setDrawColor(0, 125, 140);
-            docInstance.line(margin, firstLineY, pageWidth - margin, firstLineY);
-
-            const col1X = margin;
-            const col2X = pageWidth * 0.55;
-            const col1MaxWidth = col2X - col1X - 5;
-            const col2MaxWidth = pageWidth - margin - col2X;
-            const fieldGap = 2;
-
-            const drawFieldAndGetHeight = (label: string, value: string, x: number, y: number, maxWidth: number): number => {
-                const valueOrDefault = value || ' '; 
-                const labelText = `${label}:`;
-                docInstance.setFontSize(13);
-                docInstance.setFont('times', 'bold');
-                const labelWidth = docInstance.getTextWidth(labelText);
-                const labelHeight = docInstance.getTextDimensions(labelText).h;
-                docInstance.text(labelText, x, y);
-                
-                docInstance.setFontSize(12);
-                docInstance.setFont('times', 'normal');
-                const valueX = x + labelWidth + 1;
-                const valueMaxWidth = maxWidth - labelWidth - 1;
-                const valueLines = docInstance.splitTextToSize(valueOrDefault, valueMaxWidth);
-                const valueHeight = docInstance.getTextDimensions(valueLines).h;
-                docInstance.text(valueLines, valueX, y);
-                
-                return Math.max(labelHeight, valueHeight);
-            };
-            
-            const topPadding = 5;
-            let yPos = firstLineY + topPadding;
-
-            const proponentHeight = drawFieldAndGetHeight('Proponent', headerData.proponent, col1X, yPos, col1MaxWidth);
-            const dateHeight = drawFieldAndGetHeight('Date', headerData.date, col2X, yPos, col2MaxWidth);
-            yPos += Math.max(proponentHeight, dateHeight) + fieldGap;
-
-            const locationHeight = drawFieldAndGetHeight('Location', headerData.location, col1X, yPos, col1MaxWidth);
-            const projectNumHeight = drawFieldAndGetHeight('Project', headerData.projectNumber, col2X, yPos, col2MaxWidth);
-            yPos += Math.max(locationHeight, projectNumHeight) + fieldGap;
-
-            const projectNameHeight = drawFieldAndGetHeight('Project Name', headerData.projectName, col1X, yPos, contentWidth);
-            yPos += projectNameHeight;
-
-            const contentEndY = yPos;
-            const bottomPadding = 2;
-            const secondLineY = contentEndY + bottomPadding;
-
             docInstance.setLineWidth(0.5);
-            docInstance.setDrawColor(0, 125, 140);
-            docInstance.line(margin, secondLineY, pageWidth - margin, secondLineY);
-
-            return secondLineY; 
+            const TOP_LINE_NUDGE_UP = 1; 
+            docInstance.line(borderMargin, yPos - TOP_LINE_NUDGE_UP, pageWidth - borderMargin, yPos - TOP_LINE_NUDGE_UP);
+            const yAfterBlock = drawProjectInfoBlock(docInstance, yPos, { drawTopLine: false });
+            return yAfterBlock + 1;
         };
 
-        const footerHeight = 15;
-        const maxYPos = pageHeight - footerHeight;
+        const PHOTO_WIDTH_RATIO = 0.72; 
+        const PHOTO_ASPECT_RATIO = 3 / 4; 
+        const PHOTO_X_NUDGE = -5;
 
-        const drawFooterLine = (docInstance: any) => {
-             const lineY = pageHeight - 12;
-             docInstance.setLineWidth(0.5);
-             docInstance.setDrawColor(0, 125, 140);
-             docInstance.line(margin, lineY, pageWidth - margin, lineY);
-        };
-
-        const calculateEntryHeight = async (docInstance: any, photo: PhotoData) => {
-            const tempDoc = new jsPDF({ format: 'letter', unit: 'mm' });
+        const calculatePhotoEntryHeight = async (docInstance: any, photo: PhotoData): Promise<number> => {
             const gap = 5;
             const availableWidth = contentWidth - gap;
-            const textBlockWidth = availableWidth * 0.40;
-            const imageBlockWidth = availableWidth * 0.60;
+            const textBlockWidth = availableWidth * 0.33;
+            const imageBlockWidth = availableWidth * PHOTO_WIDTH_RATIO;
+            const imageBlockHeight = imageBlockWidth * PHOTO_ASPECT_RATIO;
             
-            let totalTextHeight = 0;
-
-            const measureFieldHeight = (label: string, value: string, isDesc = false) => {
-                if (isDesc) {
-                     tempDoc.setFontSize(13);
-                     let height = tempDoc.getTextDimensions(label + ':', { maxWidth: textBlockWidth }).h + 2;
-                     tempDoc.setFontSize(12);
-                     const valueLines = tempDoc.splitTextToSize(value || ' ', textBlockWidth);
-                     height += tempDoc.getTextDimensions(valueLines).h;
-                     return height;
-                }
+            docInstance.setFontSize(12);
+            let textHeight = 0;
+            const measureField = (label: string, value: string) => {
                 const labelText = `${label}:`;
-                tempDoc.setFontSize(13);
-                const labelWidth = tempDoc.getTextWidth(labelText);
-                const labelHeight = tempDoc.getTextDimensions(labelText).h;
-                
-                tempDoc.setFontSize(12);
-                const valueMaxWidth = textBlockWidth - labelWidth - 1;
-                const valueLines = tempDoc.splitTextToSize(value || ' ', valueMaxWidth);
-                const valueHeight = tempDoc.getTextDimensions(valueLines).h;
-                
-                return Math.max(labelHeight, valueHeight) + 2;
+                docInstance.setFont('times', 'bold');
+                const labelWidth = docInstance.getTextWidth(labelText);
+                docInstance.setFont('times', 'normal');
+                const valueMaxWidth = textBlockWidth - labelWidth - 2;
+                const valueLines = docInstance.splitTextToSize(value || ' ', valueMaxWidth);
+                return docInstance.getTextDimensions(valueLines).h + 1.5;
             };
 
-            totalTextHeight += measureFieldHeight('Photo', photo.photoNumber);
-            totalTextHeight += measureFieldHeight('Direction', photo.direction || 'N/A');
-            totalTextHeight += measureFieldHeight('Date', photo.date);
-            totalTextHeight += measureFieldHeight('Location', photo.location);
-            totalTextHeight += measureFieldHeight('Description', photo.description, true);
+            textHeight += measureField(photo.isMap ? "Map" : "Photo", photo.photoNumber);
+            if (!photo.isMap) textHeight += measureField("Direction", photo.direction || 'N/A');
+            textHeight += measureField("Date", photo.date);
+            textHeight += measureField("Location", photo.location);
+            textHeight += 5;
+            const descLines = docInstance.splitTextToSize(photo.description || ' ', textBlockWidth);
+            textHeight += docInstance.getTextDimensions(descLines).h;
 
-            let scaledHeight = 0;
-            if (photo.imageUrl) {
-                try {
-                    const { width, height } = await getImageDimensions(photo.imageUrl);
-                    scaledHeight = height * (imageBlockWidth / width);
-                } catch (e) {
-                    console.error("Could not load image for height calculation", e);
-                }
-            }
-            return Math.max(totalTextHeight, scaledHeight);
+            return Math.max(textHeight, imageBlockHeight);
         };
+        
+        const drawPhotoEntryText = (docInstance: any, photo: PhotoData, xStart: number, yStart: number, textBlockWidth: number) => {
+            docInstance.setFontSize(12);
+            docInstance.setFont('times', 'normal');
+            const textMetrics = docInstance.getTextDimensions('Photo');
+            const ascent = textMetrics.h * 0.75;
+            let textY = yStart + ascent;
 
+            const drawTextField = (label: string, value: string) => {
+                docInstance.setFont('times', 'bold');
+                const labelText = `${label}:`;
+                docInstance.text(labelText, xStart, textY);
+                docInstance.setFont('times', 'normal');
+                const labelWidth = docInstance.getTextWidth(labelText);
+                const valueMaxWidth = textBlockWidth - labelWidth - 2;
+                const valueLines = docInstance.splitTextToSize(value || ' ', valueMaxWidth);
+                docInstance.text(valueLines, xStart + labelWidth + 2, textY);
+                textY += docInstance.getTextDimensions(valueLines).h + 1.5;
+            };
+
+            drawTextField(photo.isMap ? "Map" : "Photo", photo.photoNumber);
+            if (!photo.isMap) drawTextField("Direction", photo.direction || 'N/A');
+            drawTextField("Date", photo.date);
+            drawTextField("Location", photo.location);
+            docInstance.setFont('times', 'bold');
+            docInstance.text(`Description:`, xStart, textY);
+            textY += 5;
+            docInstance.setFont('times', 'normal');
+            const descLines = docInstance.splitTextToSize(photo.description || ' ', textBlockWidth);
+            docInstance.text(descLines, xStart, textY);
+        };
+        
         const drawPhotoEntry = async (docInstance: any, photo: PhotoData, yStart: number) => {
             const gap = 5;
             const availableWidth = contentWidth - gap;
-            const textBlockWidth = availableWidth * 0.40;
-            const imageBlockWidth = availableWidth * 0.60;
-            
-            const imageX = margin + textBlockWidth + gap;
-            let textY = yStart;
+            const textBlockWidth = availableWidth * 0.33;
+            const imageBlockWidth = availableWidth * PHOTO_WIDTH_RATIO;
+            const imageBlockHeight = imageBlockWidth * PHOTO_ASPECT_RATIO;
+            const imageX = contentMargin + textBlockWidth + gap + PHOTO_X_NUDGE;
 
-            const drawTextField = (label: string, value: string, isDesc = false) => {
-                const valueOrDefault = value || ' ';
-                
-                if (isDesc) {
-                    docInstance.setFontSize(13);
-                    docInstance.setFont('times', 'bold');
-                    docInstance.text(`${label}:`, margin, textY);
-                    textY += docInstance.getTextDimensions(`${label}:`, { maxWidth: textBlockWidth }).h + 2;
-                    
-                    docInstance.setFontSize(12);
-                    docInstance.setFont('times', 'normal');
-                    const dims = docInstance.getTextDimensions(valueOrDefault, { maxWidth: textBlockWidth });
-                    docInstance.text(valueOrDefault, margin, textY, { maxWidth: textBlockWidth });
-                    textY += dims.h;
-                    return;
-                }
-
-                const labelText = `${label}:`;
-                docInstance.setFontSize(13);
-                docInstance.setFont('times', 'bold');
-                const labelWidth = docInstance.getTextWidth(labelText);
-                const labelHeight = docInstance.getTextDimensions(labelText).h;
-                docInstance.text(labelText, margin, textY);
-                
-                docInstance.setFontSize(12);
-                docInstance.setFont('times', 'normal');
-                const valueX = margin + labelWidth + 1;
-                const valueMaxWidth = textBlockWidth - labelWidth - 1;
-                const valueLines = docInstance.splitTextToSize(valueOrDefault, valueMaxWidth);
-                const valueHeight = docInstance.getTextDimensions(valueLines).h;
-                docInstance.text(valueLines, valueX, textY);
-                
-                textY += Math.max(labelHeight, valueHeight) + 2;
-            };
-
-            drawTextField('Photo', photo.photoNumber);
-            drawTextField('Direction', photo.direction || 'N/A');
-            drawTextField('Date', photo.date);
-            drawTextField('Location', photo.location);
-            drawTextField('Description', photo.description, true);
-
-            const textBottom = textY;
-            let scaledHeight = 0;
-            let imageBottom = yStart;
+            drawPhotoEntryText(docInstance, photo, contentMargin, yStart, textBlockWidth);
 
             if (photo.imageUrl) {
-                const { width, height } = await getImageDimensions(photo.imageUrl);
-                scaledHeight = height * (imageBlockWidth / width);
-                docInstance.addImage(photo.imageUrl, 'JPEG', imageX, yStart, imageBlockWidth, scaledHeight);
-                imageBottom = yStart + scaledHeight;
+                docInstance.addImage(photo.imageUrl, 'JPEG', imageX, yStart, imageBlockWidth, imageBlockHeight);
             }
-            return Math.max(textBottom, imageBottom);
         };
-        
-        const entryHeights = await Promise.all(photosData.map(photo => calculateEntryHeight(doc, photo)));
-        const pages: number[][] = [];
-        
-        if (photosData.length > 0) {
-            const tempDoc = new jsPDF();
-            const yAfterHeader = await drawHeader(tempDoc);
+
+        const sitePhotos = photosData.filter(p => p.imageUrl);
+        if (sitePhotos.length > 0) {
+            const entryHeights = await Promise.all(sitePhotos.map(p => calculatePhotoEntryHeight(doc, p)));
+            const dummyDoc = new jsPDF({ format: 'letter', unit: 'mm' });
+            const yAfterHeader = await drawPhotoPageHeader(dummyDoc);
             const pageContentHeight = maxYPos - yAfterHeader;
-            const separatorHeight = 10;
             
+            const pages: number[][] = [];
             let currentPageGroup: number[] = [];
             let currentHeight = 0;
 
-            photosData.forEach((_, i) => {
+            sitePhotos.forEach((_, i) => {
                 const photoHeight = entryHeights[i];
-                const spaceForSeparator = currentPageGroup.length > 0 ? separatorHeight : 0;
-                const spaceNeeded = photoHeight + spaceForSeparator;
-
-                if (currentPageGroup.length < 2 && currentHeight + spaceNeeded <= pageContentHeight) {
+                if (currentPageGroup.length === 0) {
                     currentPageGroup.push(i);
-                    currentHeight += spaceNeeded;
-                } else {
-                    pages.push(currentPageGroup);
-                    currentPageGroup = [i];
                     currentHeight = photoHeight;
-                }
-            });
-            pages.push(currentPageGroup);
-        }
-        
-        for (let i = 0; i < pages.length; i++) {
-            const group = pages[i];
-            if (i > 0) {
-                doc.addPage();
-            }
-            let yPos = await drawHeader(doc);
-            
-            const photosOnPage = group.map(i => photosData[i]);
-            const heightsOnPage = group.map(i => entryHeights[i]);
-            const numPhotosOnPage = photosOnPage.length;
-
-            if (numPhotosOnPage > 0) {
-                const availableHeight = maxYPos - yPos;
-                
-                if (numPhotosOnPage === 1) {
-                    const photoHeight = heightsOnPage[0];
-                    const virtualTotalContentHeight = photoHeight * 2;
-                    const totalGapsHeight = availableHeight - virtualTotalContentHeight;
-                    const numGaps = 4;
-                    const gap = totalGapsHeight > 0 ? totalGapsHeight / numGaps : 2;
-
-                    yPos += gap;
-                    await drawPhotoEntry(doc, photosOnPage[0], yPos);
-                    yPos += photoHeight;
-                    
-                    yPos += gap;
-                    doc.setLineWidth(0.5);
-                    doc.setDrawColor(0, 125, 140);
-                    doc.line(margin, yPos, pageWidth - margin, yPos);
-                } else {
-                    const totalContentHeight = heightsOnPage.reduce((sum, h) => sum + h, 0);
-                    const totalGapsHeight = availableHeight - totalContentHeight;
-                    const numGaps = numPhotosOnPage * 2;
-                    const gap = totalGapsHeight > 0 ? totalGapsHeight / numGaps : 2;
-                    
-                    yPos += gap; 
-                    for (let i = 0; i < numPhotosOnPage; i++) {
-                        const photo = photosOnPage[i];
-                        const photoHeight = heightsOnPage[i];
-                        
-                        await drawPhotoEntry(doc, photo, yPos);
-                        yPos += photoHeight;
-
-                        if (i < numPhotosOnPage - 1) {
-                            yPos += gap;
-                            doc.setLineWidth(0.5);
-                            doc.setDrawColor(0, 125, 140);
-                            doc.line(margin, yPos, pageWidth - margin, yPos);
-                            yPos += gap;
-                        }
+                } else if (currentPageGroup.length === 1) {
+                    if (currentHeight + photoHeight + 10 <= pageContentHeight) { 
+                        currentPageGroup.push(i);
+                    } else {
+                        pages.push(currentPageGroup);
+                        currentPageGroup = [i];
+                        currentHeight = photoHeight;
                     }
                 }
+                
+                if (currentPageGroup.length === 2) {
+                    pages.push(currentPageGroup);
+                    currentPageGroup = [];
+                    currentHeight = 0;
+                }
+            });
+
+            if (currentPageGroup.length > 0) pages.push(currentPageGroup);
+
+            for (let i = 0; i < pages.length; i++) {
+                const group = pages[i];
+                if (i > 0) {
+                    doc.addPage();
+                    pageNum++;
+                }
+                
+                let yPos = await drawPhotoPageHeader(doc);
+                const photosOnPage = group.map(i => sitePhotos[i]);
+                const heightsOnPage = group.map(i => entryHeights[i]);
+                const availableHeight = maxYPos - yPos;
+
+                if (photosOnPage.length === 1) {
+                    await drawPhotoEntry(doc, photosOnPage[0], yPos);
+                } else {
+                    const totalContentHeight = heightsOnPage.reduce((sum, h) => sum + h, 0);
+                    const tightGap = 4; 
+                    const totalRemainingSpace = availableHeight - totalContentHeight - (tightGap * 2);
+                    const largeGap = totalRemainingSpace > 0 ? totalRemainingSpace / 2 : 2;
+
+                    yPos += tightGap;
+                    await drawPhotoEntry(doc, photosOnPage[0], yPos);
+                    yPos += heightsOnPage[0];
+
+                    yPos += largeGap;
+                    doc.setDrawColor(0, 125, 140);
+                    doc.setLineWidth(0.5);
+                    const TEAL_LINE_NUDGE_UP = 1; 
+                    doc.line(borderMargin, yPos - TEAL_LINE_NUDGE_UP, pageWidth - borderMargin, yPos - TEAL_LINE_NUDGE_UP);
+
+                    yPos += tightGap;
+                    await drawPhotoEntry(doc, photosOnPage[1], yPos);
+                }
+                drawPageBorder(doc);
             }
-            drawFooterLine(doc);
-        }
+        } else {
+             await drawPhotoPageHeader(doc);
+             drawPageBorder(doc);
+        }  
+
+        const sanitize = (name: string) => name.replace(/[^a-z0-9_]/gi, '-').toLowerCase();
+        const formattedFilenameDate = formatDateForFilename(headerData.date);
+        const sanitizedProjectName = sanitize(headerData.projectName);
+        const filename = `${sanitizedProjectName || 'project'}_${formattedFilenameDate}.pdf`;
         
         const totalPages = (doc.internal as any).getNumberOfPages();
         for (let i = 1; i <= totalPages; i++) {
@@ -1061,12 +1083,13 @@ const CombinedLog: React.FC<CombinedLogProps> = ({ onBack, initialData }) => {
             doc.setFontSize(10);
             doc.setFont('times', 'normal');
             doc.setTextColor(0, 0, 0);
-            doc.text(`Page ${i} of ${totalPages}`, pageWidth - margin, pageHeight - 7, { align: 'right' });
+            const footerTextY = pageHeight - borderMargin + 4;
+            doc.text(`Page ${i} of ${totalPages}`, pageWidth - borderMargin, footerTextY, { align: 'right' });
         }
         
         const pdfBlob = doc.output('blob');
         const pdfUrl = URL.createObjectURL(pdfBlob);
-        setPdfPreview({ url: pdfUrl, filename: 'combinedlog.pdf', blob: pdfBlob });
+        setPdfPreview({ url: pdfUrl, filename, blob: pdfBlob });
     };
 
     const handleDownloadPhotos = useCallback(async () => {
@@ -1307,8 +1330,6 @@ Description: ${photo.description || 'N/A'}
                                     onImageClick={setEnlargedImageUrl}
                                     errors={getPhotoErrors(photo.id)}
                                     showDirectionField={!photo.isMap}
-
-                                    // NEW FIELDS
                                     headerDate={headerData.date}
                                     headerLocation={headerData.location}
                                     onAutoFill={(f, val) => handlePhotoDataChange(photo.id, f, val)}
@@ -1345,7 +1366,7 @@ Description: ${photo.description || 'N/A'}
                 </div>
                 {photosData.length > 0 && <div className="border-t-4 border-[#007D8C] my-8" />}
                 <footer className="text-center text-gray-500 dark:text-gray-400 text-sm py-4">
-                    X-TES Digital Reporting v1.1.2
+                    X-TES Digital Reporting v1.1.3
                 </footer>
             </div>
             {showUnsupportedFileModal && (

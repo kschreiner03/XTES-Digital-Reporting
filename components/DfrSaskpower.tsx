@@ -22,64 +22,91 @@ interface RecentProjectMetadata {
     timestamp: number;
 }
 
+// --------------------
+// Recent Projects List
+// --------------------
+
 const getRecentProjects = (): RecentProjectMetadata[] => {
     try {
         const projects = localStorage.getItem(RECENT_PROJECTS_KEY);
         return projects ? JSON.parse(projects) : [];
     } catch (e) {
-        console.error("Failed to parse recent projects from localStorage", e);
+        console.error('Failed to parse recent projects from localStorage', e);
         return [];
     }
 };
 
-const addRecentProject = async (projectData: any, projectInfo: { type: AppType; name: string; projectNumber: string; }) => {
+// --------------------
+// Add / Update Recent Project
+// --------------------
+
+const addRecentProject = async (
+    projectData: any,
+    projectInfo: { type: AppType; name: string; projectNumber: string }
+) => {
     const timestamp = Date.now();
-    
+
+    /**
+     * IMPORTANT:
+     * Project data MUST be self-contained.
+     * photosData must retain imageUrl (base64).
+     * IndexedDB is optional and NOT required for correctness.
+     */
+
     try {
         await storeProject(timestamp, projectData);
     } catch (e) {
-        console.error("Failed to save project to IndexedDB:", e);
-        // alert("Could not save the project to the local database.");
+        console.error('Failed to save project to IndexedDB:', e);
         return;
     }
-    
+
     const recentProjects = getRecentProjects();
     const identifier = `${projectInfo.type}-${projectInfo.name}-${projectInfo.projectNumber}`;
 
-    const existingProject = recentProjects.find(p => `${p.type}-${p.name}-${p.projectNumber}` === identifier);
-    const filteredProjects = recentProjects.filter(p => `${p.type}-${p.name}-${p.projectNumber}` !== identifier);
+    const existingProject = recentProjects.find(
+        p => `${p.type}-${p.name}-${p.projectNumber}` === identifier
+    );
 
+    const filteredProjects = recentProjects.filter(
+        p => `${p.type}-${p.name}-${p.projectNumber}` !== identifier
+    );
+
+    /**
+     * Remove old project metadata + project record
+     * NOTE: We do NOT delete images from IndexedDB.
+     * Images are embedded in projectData and IndexedDB is treated as cache.
+     */
     if (existingProject) {
         try {
-            const oldProjectData = await retrieveProject(existingProject.timestamp);
-            if (oldProjectData?.photosData) {
-                for (const photo of oldProjectData.photosData) {
-                    if (photo.imageId) await deleteImage(photo.imageId);
-                }
-            }
             await deleteProject(existingProject.timestamp);
         } catch (e) {
-            console.error(`Failed to clean up old project version (${existingProject.timestamp}):`, e);
+            console.error(
+                `Failed to clean up old project version (${existingProject.timestamp}):`,
+                e
+            );
         }
     }
-    
-    const newProjectMetadata: RecentProjectMetadata = { ...projectInfo, timestamp };
+
+    const newProjectMetadata: RecentProjectMetadata = {
+        ...projectInfo,
+        timestamp
+    };
+
     let updatedProjects = [newProjectMetadata, ...filteredProjects];
-    
+
     const MAX_RECENT_PROJECTS_IN_LIST = 50;
+
     if (updatedProjects.length > MAX_RECENT_PROJECTS_IN_LIST) {
         const projectsToDelete = updatedProjects.splice(MAX_RECENT_PROJECTS_IN_LIST);
+
         for (const proj of projectsToDelete) {
-             try {
-                const projectDataToDelete = await retrieveProject(proj.timestamp);
-                if (projectDataToDelete?.photosData) {
-                    for (const photo of projectDataToDelete.photosData) {
-                        if (photo.imageId) await deleteImage(photo.imageId);
-                    }
-                }
+            try {
                 await deleteProject(proj.timestamp);
             } catch (e) {
-                console.error(`Failed to cleanup old project from list (${proj.timestamp}):`, e);
+                console.error(
+                    `Failed to cleanup old project from list (${proj.timestamp}):`,
+                    e
+                );
             }
         }
     }
@@ -87,25 +114,34 @@ const addRecentProject = async (projectData: any, projectInfo: { type: AppType; 
     try {
         localStorage.setItem(RECENT_PROJECTS_KEY, JSON.stringify(updatedProjects));
     } catch (e) {
-        console.error("Failed to save recent projects to localStorage:", e);
-        // alert("Could not update recent projects list. Your browser's local storage may be full.");
+        console.error('Failed to save recent projects to localStorage:', e);
     }
 };
+
+// --------------------
+// Date Formatter (unchanged)
+// --------------------
 
 const formatDateForRecentProject = (dateString: string): string => {
     if (!dateString) return '';
     try {
         const tempDate = new Date(dateString);
         if (isNaN(tempDate.getTime())) return dateString;
+
         const year = tempDate.getFullYear();
         const month = tempDate.getMonth();
         const day = tempDate.getDate();
+
         const utcDate = new Date(Date.UTC(year, month, day));
+
         const formattedYear = utcDate.getUTCFullYear();
         const formattedMonth = String(utcDate.getUTCMonth() + 1).padStart(2, '0');
         const formattedDay = String(utcDate.getUTCDate()).padStart(2, '0');
+
         return `${formattedYear}/${formattedMonth}/${formattedDay}`;
-    } catch (e) { return dateString; }
+    } catch {
+        return dateString;
+    }
 };
 // --- End Utility ---
 
@@ -608,16 +644,30 @@ const DfrSaskpower = ({ onBack, initialData }: DfrSaskpowerProps): ReactElement 
         setPhotosData(renumberPhotos(newPhotos));
     };
 
-    const prepareStateForRecentProjectStorage = async (dataToStore: DfrSaskpowerData) => {
-        const photosForStorage = await Promise.all(
-            photosData.map(async (photo) => {
-                if (photo.imageUrl) {
-                    const imageId = photo.imageId || `${dataToStore.projectNumber || 'proj'}-${photo.id}-${Date.now()}`;
+   const prepareStateForRecentProjectStorage = async (dataToStore: DfrSaskpowerData) => {
+    const photosForStorage = await Promise.all(
+        photosData.map(async (photo) => {
+            // Keep imageUrl embedded so Recent Projects work offline
+            if (photo.imageUrl) {
+                const imageId =
+                    photo.imageId ||
+                    `${dataToStore.projectNumber || 'proj'}-${photo.id}-${Date.now()}`;
+
+                // IndexedDB is optional cache
+                try {
                     await storeImage(imageId, photo.imageUrl);
-                    const { imageUrl, ...rest } = photo;
-                    return { ...rest, imageId };
+                } catch (e) {
+                    console.warn('Failed to cache image in IndexedDB', e);
                 }
-                return photo;
+
+                return {
+                    ...photo,
+                    imageId,     // keep imageId
+                    imageUrl: photo.imageUrl // KEEP imageUrl
+                };
+            }
+
+            return photo;
             })
         );
         return { ...dataToStore, photosData: photosForStorage };
@@ -722,7 +772,15 @@ const DfrSaskpower = ({ onBack, initialData }: DfrSaskpowerProps): ReactElement 
             const startX = borderMargin;
             const endX = pageWidth - borderMargin;
             const bottomY = pageHeight - borderMargin;
-            docInstance.line(startX, bottomY, endX, bottomY);
+      // Bottom line adjustments and spacing
+           const BOTTOM_LINE_NUDGE_UP = 4; // mm (use 0.5–2)
+
+            docInstance.line(
+            startX,
+            bottomY - BOTTOM_LINE_NUDGE_UP,
+            endX,
+            bottomY - BOTTOM_LINE_NUDGE_UP
+);
         };
         
         const drawProjectInfoBlock = (docInstance: any, startY: number, options: { drawTopLine?: boolean, drawBottomLine?: boolean } = {}) => {
@@ -1041,74 +1099,186 @@ const renderTextSection = async (
         const mapPhotosData = photosData.filter(p => p.isMap && p.imageUrl);
         
         const calculatePhotoEntryHeight = async (docInstance: any, photo: PhotoData): Promise<number> => {
-            const gap = 5; const availableWidth = contentWidth - gap; const textBlockWidth = availableWidth * 0.35;
-            const imageBlockWidth = availableWidth * 0.65; docInstance.setFontSize(12); let textHeight = 0;
-            const textMetrics = docInstance.getTextDimensions('Photo'); textHeight += textMetrics.h * 0.75;
-            const measureField = (label: string, value: string) => {
-                const labelText = `${label}:`; docInstance.setFont('times', 'bold');
-                const labelWidth = docInstance.getTextWidth(labelText); docInstance.setFont('times', 'normal');
-                const valueMaxWidth = textBlockWidth - labelWidth - 2;
-                const valueLines = docInstance.splitTextToSize(value || ' ', valueMaxWidth);
-                return docInstance.getTextDimensions(valueLines).h + 1.5;
-            };
-            textHeight += measureField(photo.isMap ? "Map" : "Photo", photo.photoNumber);
-            if (!photo.isMap) textHeight += measureField("Direction", photo.direction || 'N/A');
-            textHeight += measureField("Date", photo.date); textHeight += measureField("Location", photo.location);
-            textHeight += 5; const descLines = docInstance.splitTextToSize(photo.description || ' ', textBlockWidth);
-            textHeight += docInstance.getTextDimensions(descLines).h;
-            let imageH = 0;
-            if (photo.imageUrl) { try { const { width, height } = await getImageDimensions(photo.imageUrl); imageH = height * (imageBlockWidth / width); } catch (e) { console.error("Could not load image", e); }}
-            return Math.max(textHeight, imageH);
-        };
+                    const gap = 5;
+                    const availableWidth = contentWidth - gap;
+                    const textBlockWidth = availableWidth * 0.35;
+                    const imageBlockWidth = availableWidth * 0.65;
+                    
+                    docInstance.setFontSize(12);
+                    let textHeight = 0;
+                    const textMetrics = docInstance.getTextDimensions('Photo');
+                    textHeight += textMetrics.h * 0.75;
+                    
+                    const measureField = (label: string, value: string) => {
+                        const labelText = `${label}:`;
+                        docInstance.setFont('times', 'bold');
+                        const labelWidth = docInstance.getTextWidth(labelText);
+                        docInstance.setFont('times', 'normal');
+                        const valueMaxWidth = textBlockWidth - labelWidth - 2;
+                        const valueLines = docInstance.splitTextToSize(value || ' ', valueMaxWidth);
+                        return docInstance.getTextDimensions(valueLines).h + 1.5;
+                    };
         
-        const drawPhotoEntryText = (docInstance: any, photo: PhotoData, xStart: number, yStart: number, textBlockWidth: number) => {
-            docInstance.setFontSize(12); docInstance.setFont('times', 'normal');
-            const textMetrics = docInstance.getTextDimensions('Photo'); const ascent = textMetrics.h * 0.75; let textY = yStart + ascent;
-            const drawTextField = (label: string, value: string) => {
-                docInstance.setFont('times', 'bold'); const labelText = `${label}:`; docInstance.text(labelText, xStart, textY); docInstance.setFont('times', 'normal');
-                const labelWidth = docInstance.getTextWidth(labelText); const valueMaxWidth = textBlockWidth - labelWidth - 2;
-                const valueLines = docInstance.splitTextToSize(value || ' ', valueMaxWidth); docInstance.text(valueLines, xStart + labelWidth + 2, textY);
-                textY += docInstance.getTextDimensions(valueLines).h + 1.5;
-            };
-            drawTextField(photo.isMap ? "Map" : "Photo", photo.photoNumber); if (!photo.isMap) drawTextField("Direction", photo.direction || 'N/A');
-            drawTextField("Date", photo.date); drawTextField("Location", photo.location);
-            docInstance.setFont('times', 'bold'); docInstance.text(`Description:`, xStart, textY); textY += 5;
-            docInstance.setFont('times', 'normal'); const descLines = docInstance.splitTextToSize(photo.description || ' ', textBlockWidth); docInstance.text(descLines, xStart, textY);
-        };
+                    textHeight += measureField(photo.isMap ? "Map" : "Photo", photo.photoNumber);
+                    if (!photo.isMap) textHeight += measureField("Direction", photo.direction || 'N/A');
+                    textHeight += measureField("Date", photo.date);
+                    textHeight += measureField("Location", photo.location);
+                    textHeight += 5;
+                    const descLines = docInstance.splitTextToSize(photo.description || ' ', textBlockWidth);
+                    textHeight += docInstance.getTextDimensions(descLines).h;
         
-        const drawPhotoEntry = async (docInstance: any, photo: PhotoData, yStart: number) => {
-            const gap = 5; const availableWidth = contentWidth - gap; const textBlockWidth = availableWidth * 0.35; const imageBlockWidth = availableWidth * 0.65;
-            const imageX = contentMargin + textBlockWidth + gap; drawPhotoEntryText(docInstance, photo, contentMargin, yStart, textBlockWidth);
-            if (photo.imageUrl) { const { width, height } = await getImageDimensions(photo.imageUrl); const scaledHeight = height * (imageBlockWidth / width); docInstance.addImage(photo.imageUrl, 'JPEG', imageX, yStart, imageBlockWidth, scaledHeight); }
-        };
-
-        if (sitePhotos.length > 0) {
-            const entryHeights = await Promise.all(sitePhotos.map(p => calculatePhotoEntryHeight(doc, p)));
-            const dummyDoc = new jsPDF(); const yAfterHeader = await drawPhotoPageHeader(dummyDoc); const pageContentHeight = maxYPos - yAfterHeader;
-            const pages: number[][] = []; let currentPageGroup: number[] = []; let currentHeight = 0;
-            sitePhotos.forEach((_, i) => {
-                const photoHeight = entryHeights[i];
-                if (currentPageGroup.length === 0) { currentPageGroup.push(i); currentHeight = photoHeight; }
-                else if (currentPageGroup.length === 1) { if (currentHeight + photoHeight + 10 <= pageContentHeight) { currentPageGroup.push(i); } else { pages.push(currentPageGroup); currentPageGroup = [i]; currentHeight = photoHeight; } }
-                if (currentPageGroup.length === 2) { pages.push(currentPageGroup); currentPageGroup = []; currentHeight = 0; }
-            });
-            if (currentPageGroup.length > 0) pages.push(currentPageGroup);
-            for (const group of pages) {
-                doc.addPage(); pageNum++; let yPosPhoto = await drawPhotoPageHeader(doc);
-                const photosOnPage = group.map(i => sitePhotos[i]); const heightsOnPage = group.map(i => entryHeights[i]);
-                const availableHeight = maxYPos - yPosPhoto;
-                if (photosOnPage.length === 1) { await drawPhotoEntry(doc, photosOnPage[0], yPosPhoto); }
-                else {
-                    const totalContentHeight = heightsOnPage.reduce((sum, h) => sum + h, 0); const tightGap = 4;
-                    const totalRemainingSpace = availableHeight - totalContentHeight - (tightGap * 2); const largeGap = totalRemainingSpace > 0 ? totalRemainingSpace / 2 : 2;
-                    yPosPhoto += tightGap; await drawPhotoEntry(doc, photosOnPage[0], yPosPhoto); yPosPhoto += heightsOnPage[0];
-                    yPosPhoto += largeGap; doc.setDrawColor(0, 125, 140); doc.setLineWidth(0.5); doc.line(borderMargin, yPosPhoto, pageWidth - borderMargin, yPosPhoto);
-                    yPosPhoto += tightGap; await drawPhotoEntry(doc, photosOnPage[1], yPosPhoto);
+                    let imageH = 0;
+                    if (photo.imageUrl) {
+                        try {
+                            const { width, height } = await getImageDimensions(photo.imageUrl);
+                            imageH = height * (imageBlockWidth / width);
+                        } catch (e) {
+                            console.error("Could not load image for height calculation", e);
+                        }
+                    }
+                    return Math.max(textHeight, imageH);
+                };
+                
+                const drawPhotoEntryText = (docInstance: any, photo: PhotoData, xStart: number, yStart: number, textBlockWidth: number) => {
+                    docInstance.setFontSize(12);
+                    docInstance.setFont('times', 'normal');
+        
+                    const textMetrics = docInstance.getTextDimensions('Photo');
+                    const ascent = textMetrics.h * 0.75;
+                    let textY = yStart + ascent;
+        
+                    const drawTextField = (label: string, value: string) => {
+                        docInstance.setFont('times', 'bold');
+                        const labelText = `${label}:`;
+                        docInstance.text(labelText, xStart, textY);
+                        
+                        docInstance.setFont('times', 'normal');
+                        const labelWidth = docInstance.getTextWidth(labelText);
+                        const valueMaxWidth = textBlockWidth - labelWidth - 2;
+                        const valueLines = docInstance.splitTextToSize(value || ' ', valueMaxWidth);
+                        docInstance.text(valueLines, xStart + labelWidth + 2, textY);
+                        textY += docInstance.getTextDimensions(valueLines).h + 1.5;
+                    };
+        
+                    drawTextField(photo.isMap ? "Map" : "Photo", photo.photoNumber);
+                    if (!photo.isMap) drawTextField("Direction", photo.direction || 'N/A');
+                    drawTextField("Date", photo.date);
+                    drawTextField("Location", photo.location);
+        
+                    docInstance.setFont('times', 'bold');
+                    docInstance.text(`Description:`, xStart, textY);
+                    textY += 5;
+                    docInstance.setFont('times', 'normal');
+                    const descLines = docInstance.splitTextToSize(photo.description || ' ', textBlockWidth);
+                    docInstance.text(descLines, xStart, textY);
+                };
+                
+                 const drawPhotoEntry = async (
+                          docInstance: any,
+                          photo: PhotoData,
+                          yStart: number
+                        ) => {
+                          const gap = 5;
+                          const availableWidth = contentWidth - gap;
+                          const textBlockWidth = availableWidth * 0.33;
+                        
+                          // Bigger photo (fixed size)
+                          const imageBlockWidth = availableWidth * 0.73;      // wider
+                          const imageBlockHeight = imageBlockWidth * (3 / 4); // 4:3 ratio
+                        
+                          // Shift photo slightly to the right
+                          const PHOTO_X_NUDGE = -5; // mm
+                          const imageX =
+                            contentMargin +
+                            textBlockWidth +
+                            gap +
+                            PHOTO_X_NUDGE;
+                        
+                            drawPhotoEntryText(docInstance, photo, contentMargin, yStart, textBlockWidth);
+                
+                            if (photo.imageUrl) {
+                                const { width, height } = await getImageDimensions(photo.imageUrl);
+                                const scaledHeight = height * (imageBlockWidth / width);
+                                docInstance.addImage(photo.imageUrl, 'JPEG', imageX, yStart, imageBlockWidth, scaledHeight);
+                            }
+                        };
+        
+                if (sitePhotos.length > 0) {
+                    const entryHeights = await Promise.all(sitePhotos.map(p => calculatePhotoEntryHeight(doc, p)));
+                    const dummyDoc = new jsPDF();
+                    const yAfterHeader = await drawPhotoPageHeader(dummyDoc);
+                    const pageContentHeight = maxYPos - yAfterHeader;
+                    
+                    const pages: number[][] = [];
+                    let currentPageGroup: number[] = [];
+                    let currentHeight = 0;
+        
+                    sitePhotos.forEach((_, i) => {
+                        const photoHeight = entryHeights[i];
+                        if (currentPageGroup.length === 0) {
+                            currentPageGroup.push(i);
+                            currentHeight = photoHeight;
+                        } else if (currentPageGroup.length === 1) {
+                            if (currentHeight + photoHeight + 10 <= pageContentHeight) { 
+                                currentPageGroup.push(i);
+                            } else {
+                                pages.push(currentPageGroup);
+                                currentPageGroup = [i];
+                                currentHeight = photoHeight;
+                            }
+                        }
+                        
+                        if (currentPageGroup.length === 2) {
+                            pages.push(currentPageGroup);
+                            currentPageGroup = [];
+                            currentHeight = 0;
+                        }
+                    });
+        
+                    if (currentPageGroup.length > 0) pages.push(currentPageGroup);
+        
+                    let isFirstPhotoPage = true;
+                    for (const group of pages) {
+                        doc.addPage(); pageNum++;
+                        isFirstPhotoPage = false;
+                        
+                        let yPos = await drawPhotoPageHeader(doc);
+                        const photosOnPage = group.map(i => sitePhotos[i]);
+                        const heightsOnPage = group.map(i => entryHeights[i]);
+                        const availableHeight = maxYPos - yPos;
+        
+                        if (photosOnPage.length === 1) {
+                            await drawPhotoEntry(doc, photosOnPage[0], yPos);
+                        } else {
+                            const totalContentHeight = heightsOnPage.reduce((sum, h) => sum + h, 0);
+                            const tightGap = 4; // The smaller gap above photos
+                            
+                            const totalRemainingSpace = availableHeight - totalContentHeight - (tightGap * 2);
+                            const largeGap = totalRemainingSpace > 0 ? totalRemainingSpace / 2 : 2;
+        
+                            // Position first photo
+                            yPos += tightGap;
+                            await drawPhotoEntry(doc, photosOnPage[0], yPos);
+                            yPos += heightsOnPage[0];
+        
+                            // Position separator line
+                            yPos += largeGap;
+                            doc.setDrawColor(0, 125, 140); // Teal
+                            doc.setLineWidth(0.5);
+                            const MIDDLE_LINE_NUDGE = -2; // mm (negative = up, positive = down)
+                            doc.line(
+                                borderMargin,
+                                yPos + MIDDLE_LINE_NUDGE,
+                                pageWidth - borderMargin,
+                                yPos + MIDDLE_LINE_NUDGE
+                    );
+                            // Position second photo
+                            yPos += tightGap;
+                            await drawPhotoEntry(doc, photosOnPage[1], yPos);
+                        }
+                        drawPageBorder(doc);
+                    }
                 }
-                drawPageBorder(doc);
-            }
-        }
-        
         const calculateMapTextHeight = (docInstance: any, photo: PhotoData, textBlockWidth: number): number => {
             let height = 0; docInstance.setFontSize(12); docInstance.setFont('times', 'normal'); const textMetrics = docInstance.getTextDimensions('Photo'); height += textMetrics.h * 0.75;
             const measureField = (label: string, value: string) => {
@@ -1569,7 +1739,7 @@ Description: ${photo.description || 'N/A'}
                 </div>
                 {photosData.length > 0 && <div className="border-t-4 border-[#007D8C] my-8" />}
                 <footer className="text-center text-gray-500 dark:text-gray-400 text-sm py-4">
-                    X-TES Digital Reporting v1.1.2
+                    X-TES Digital Reporting v1.1.3
                 </footer>
             </div>
             {/* Modals */}

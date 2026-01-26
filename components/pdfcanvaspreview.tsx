@@ -53,4 +53,3 @@ export default function PdfCanvasPreview({ url }: { url: string }) {
     </div>
   );
 }
-

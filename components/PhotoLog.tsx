@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Header from './Header';
 import PhotoEntry from './PhotoEntry';
@@ -28,58 +27,73 @@ const getRecentProjects = (): RecentProjectMetadata[] => {
         const projects = localStorage.getItem(RECENT_PROJECTS_KEY);
         return projects ? JSON.parse(projects) : [];
     } catch (e) {
-        console.error("Failed to parse recent projects from localStorage", e);
+        console.error('Failed to parse recent projects from localStorage', e);
         return [];
     }
 };
 
-const addRecentProject = async (projectData: any, projectInfo: { type: AppType; name: string; projectNumber: string; }) => {
+const addRecentProject = async (
+    projectData: any,
+    projectInfo: { type: AppType; name: string; projectNumber: string }
+) => {
     const timestamp = Date.now();
-    
+
+    /**
+     * Recent Projects MUST be self-contained.
+     * Images are embedded in projectData.
+     * IndexedDB is optional cache only.
+     */
+
     try {
         await storeProject(timestamp, projectData);
     } catch (e) {
-        console.error("Failed to save project to IndexedDB:", e);
+        console.error('Failed to save project to IndexedDB:', e);
         return;
     }
-    
+
     const recentProjects = getRecentProjects();
     const identifier = `${projectInfo.type}-${projectInfo.name}-${projectInfo.projectNumber}`;
 
-    const existingProject = recentProjects.find(p => `${p.type}-${p.name}-${p.projectNumber}` === identifier);
-    const filteredProjects = recentProjects.filter(p => `${p.type}-${p.name}-${p.projectNumber}` !== identifier);
+    const existingProject = recentProjects.find(
+        p => `${p.type}-${p.name}-${p.projectNumber}` === identifier
+    );
 
+    const filteredProjects = recentProjects.filter(
+        p => `${p.type}-${p.name}-${p.projectNumber}` !== identifier
+    );
+
+    // Remove old project record ONLY (do not delete images)
     if (existingProject) {
         try {
-            const oldProjectData = await retrieveProject(existingProject.timestamp);
-            if (oldProjectData?.photosData) {
-                for (const photo of oldProjectData.photosData) {
-                    if (photo.imageId) await deleteImage(photo.imageId);
-                }
-            }
             await deleteProject(existingProject.timestamp);
         } catch (e) {
-            console.error(`Failed to clean up old project version (${existingProject.timestamp}):`, e);
+            console.error(
+                `Failed to clean up old project version (${existingProject.timestamp}):`,
+                e
+            );
         }
     }
-    
-    const newProjectMetadata: RecentProjectMetadata = { ...projectInfo, timestamp };
+
+    const newProjectMetadata: RecentProjectMetadata = {
+        ...projectInfo,
+        timestamp
+    };
+
     let updatedProjects = [newProjectMetadata, ...filteredProjects];
-    
+
     const MAX_RECENT_PROJECTS_IN_LIST = 50;
+
     if (updatedProjects.length > MAX_RECENT_PROJECTS_IN_LIST) {
         const projectsToDelete = updatedProjects.splice(MAX_RECENT_PROJECTS_IN_LIST);
+
         for (const proj of projectsToDelete) {
-             try {
-                const projectDataToDelete = await retrieveProject(proj.timestamp);
-                if (projectDataToDelete?.photosData) {
-                    for (const photo of projectDataToDelete.photosData) {
-                        if (photo.imageId) await deleteImage(photo.imageId);
-                    }
-                }
+            try {
                 await deleteProject(proj.timestamp);
             } catch (e) {
-                console.error(`Failed to cleanup old project from list (${proj.timestamp}):`, e);
+                console.error(
+                    `Failed to cleanup old project from list (${proj.timestamp}):`,
+                    e
+                );
             }
         }
     }
@@ -87,7 +101,7 @@ const addRecentProject = async (projectData: any, projectInfo: { type: AppType; 
     try {
         localStorage.setItem(RECENT_PROJECTS_KEY, JSON.stringify(updatedProjects));
     } catch (e) {
-        console.error("Failed to save recent projects to localStorage:", e);
+        console.error('Failed to save recent projects to localStorage:', e);
     }
 };
 
@@ -266,16 +280,32 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, initialData }) => {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const isDownloadingRef = useRef(false);
 
-    const prepareStateForRecentProjectStorage = async (header: HeaderData, photos: PhotoData[]) => {
-        const photosForStorage = await Promise.all(
-            photos.map(async (photo) => {
-                if (photo.imageUrl) {
-                    const imageId = photo.imageId || `${header.projectNumber || 'proj'}-${photo.id}-${Date.now()}`;
+    const prepareStateForRecentProjectStorage = async (
+    header: HeaderData,
+    photos: PhotoData[]
+) => {
+    const photosForStorage = await Promise.all(
+        photos.map(async (photo) => {
+            if (photo.imageUrl) {
+                const imageId =
+                    photo.imageId ||
+                    `${header.projectNumber || 'proj'}-${photo.id}-${Date.now()}`;
+
+                // IndexedDB = optional cache only
+                try {
                     await storeImage(imageId, photo.imageUrl);
-                    const { imageUrl, ...rest } = photo;
-                    return { ...rest, imageId };
+                } catch (e) {
+                    console.warn('Failed to cache image in IndexedDB', e);
                 }
-                return photo;
+
+                // ✅ KEEP imageUrl embedded
+                return {
+                    ...photo,
+                    imageId,
+                    imageUrl: photo.imageUrl
+                };
+            }
+            return photo;
             })
         );
         return { headerData: header, photosData: photosForStorage };
@@ -592,8 +622,15 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, initialData }) => {
             const endX = pageWidth - borderMargin;
             const bottomY = pageHeight - borderMargin;
 
-            // Bottom line only
-            docInstance.line(startX, bottomY, endX, bottomY);
+            // Bottom line adjustments and spacing
+           const BOTTOM_LINE_NUDGE_UP = 3; // mm (use 0.5–2)
+
+            docInstance.line(
+            startX,
+            bottomY - BOTTOM_LINE_NUDGE_UP,
+            endX,
+            bottomY - BOTTOM_LINE_NUDGE_UP
+);
         };
 
         const drawProjectInfoBlock = (docInstance: any, startY: number, options: { drawTopLine?: boolean, drawBottomLine?: boolean } = {}) => {
@@ -693,15 +730,21 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, initialData }) => {
             // Manually draw the top line since drawPageBorder no longer does it.
             docInstance.setDrawColor(0, 125, 140); // Teal
             docInstance.setLineWidth(0.5);
-            docInstance.line(borderMargin, yPos, pageWidth - borderMargin, yPos);
 
+            const TOP_LINE_NUDGE_UP = 1; // mm
+            docInstance.line(
+                borderMargin,
+                yPos - TOP_LINE_NUDGE_UP,
+                pageWidth - borderMargin,
+                yPos - TOP_LINE_NUDGE_UP
+            );
             const yAfterBlock = drawProjectInfoBlock(docInstance, yPos, { drawTopLine: false });
             return yAfterBlock + 1;
         };
 
         const sitePhotos = photosData.filter(p => !p.isMap && p.imageUrl);
         
-        const calculatePhotoEntryHeight = async (docInstance: any, photo: PhotoData): Promise<number> => {
+const calculatePhotoEntryHeight = async (docInstance: any, photo: PhotoData): Promise<number> => {
             const gap = 5;
             const availableWidth = contentWidth - gap;
             const textBlockWidth = availableWidth * 0.35;
@@ -776,21 +819,60 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, initialData }) => {
             docInstance.text(descLines, xStart, textY);
         };
         
-        const drawPhotoEntry = async (docInstance: any, photo: PhotoData, yStart: number) => {
-            const gap = 5;
-            const availableWidth = contentWidth - gap;
-            const textBlockWidth = availableWidth * 0.35;
-            const imageBlockWidth = availableWidth * 0.65;
-            const imageX = contentMargin + textBlockWidth + gap;
-            
-            drawPhotoEntryText(docInstance, photo, contentMargin, yStart, textBlockWidth);
+// ======================================================
+// PHOTO SIZE CONSTANTS (easy future edits)
+// ======================================================
+const PHOTO_WIDTH_RATIO = 0.72;   // width relative to available space
+const PHOTO_ASPECT_RATIO = 3 / 4; // 4:3 ratio
+const PHOTO_X_NUDGE = -5;         // mm (negative = left, positive = right)
 
-            if (photo.imageUrl) {
-                const { width, height } = await getImageDimensions(photo.imageUrl);
-                const scaledHeight = height * (imageBlockWidth / width);
-                docInstance.addImage(photo.imageUrl, 'JPEG', imageX, yStart, imageBlockWidth, scaledHeight);
-            }
-        };
+// ======================================================
+// DRAW PHOTO ENTRY
+// ======================================================
+const drawPhotoEntry = async (
+  docInstance: any,
+  photo: PhotoData,
+  yStart: number
+) => {
+  const gap = 5;
+  const availableWidth = contentWidth - gap;
+
+  // Text column
+  const textBlockWidth = availableWidth * 0.33;
+
+  // Photo size (fixed)
+  const imageBlockWidth = availableWidth * PHOTO_WIDTH_RATIO;
+  const imageBlockHeight = imageBlockWidth * PHOTO_ASPECT_RATIO;
+
+  // Photo X position
+  const imageX =
+    contentMargin +
+    textBlockWidth +
+    gap +
+    PHOTO_X_NUDGE;
+
+  // LEFT TEXT
+  drawPhotoEntryText(
+    docInstance,
+    photo,
+    contentMargin,
+    yStart,
+    textBlockWidth
+  );
+
+  // RIGHT PHOTO (top edge fixed)
+  if (photo.imageUrl) {
+    docInstance.addImage(
+      photo.imageUrl,
+      'JPEG',
+      imageX,
+      yStart,               // DO NOT CHANGE
+      imageBlockWidth,
+      imageBlockHeight
+    );
+  }
+};
+
 
         if (sitePhotos.length > 0) {
             const entryHeights = await Promise.all(sitePhotos.map(p => calculatePhotoEntryHeight(doc, p)));
@@ -858,8 +940,15 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, initialData }) => {
                     yPos += largeGap;
                     doc.setDrawColor(0, 125, 140); // Teal
                     doc.setLineWidth(0.5);
-                    doc.line(borderMargin, yPos, pageWidth - borderMargin, yPos);
-                    
+
+                    const TEAL_LINE_NUDGE_UP = 1; // mm
+
+                    doc.line(
+                    borderMargin,
+                     yPos - TEAL_LINE_NUDGE_UP,
+                    pageWidth - borderMargin,
+                    yPos - TEAL_LINE_NUDGE_UP
+            );
                     // Position second photo
                     yPos += tightGap;
                     await drawPhotoEntry(doc, photosOnPage[1], yPos);
@@ -870,8 +959,7 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, initialData }) => {
              // If no photos, just draw header on the single page
              await drawPhotoPageHeader(doc);
              drawPageBorder(doc);
-        }
-        
+        }  
         const sanitize = (name: string) => name.replace(/[^a-z0-9_]/gi, '-').toLowerCase();
         const formattedFilenameDate = formatDateForFilename(headerData.date);
         const sanitizedProjectName = sanitize(headerData.projectName);
@@ -1140,7 +1228,7 @@ Description: ${photo.description || 'N/A'}
                 </div>
                 {photosData.length > 0 && <div className="border-t-4 border-[#007D8C] my-8" />}
                 <footer className="text-center text-gray-500 dark:text-gray-400 text-sm py-4">
-                    X-TES Digital Reporting v1.1.2-beta
+                    X-TES Digital Reporting v1.1.3
                 </footer>
             </div>
             {showUnsupportedFileModal && (

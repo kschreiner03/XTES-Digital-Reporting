@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 
 interface AssetImageProps extends React.ImgHTMLAttributes<HTMLImageElement> {

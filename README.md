@@ -1,6 +1,8 @@
 
 # X-TES Digital Reporting
 
+![X-TES Logo](public/assets/xterra-logo.jpg)
+
 **X-TES Digital Reporting** is a specialized desktop application designed for X-Terra Environmental Services. It streamlines the creation, management, and export of environmental monitoring reports, including Daily Field Reports (DFRs) and Photographic Logs.
 
 Built with **Electron**, **React**, and **TypeScript**, this application replaces manual Word/Excel workflows with a structured, validated, and offline-capable digital interface.

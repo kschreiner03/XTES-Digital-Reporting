@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { CloseIcon, TrashIcon } from './icons';
 import { clearDatabase } from './db';

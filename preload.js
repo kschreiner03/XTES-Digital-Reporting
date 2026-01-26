@@ -92,4 +92,3 @@ contextBridge.exposeInMainWorld("helpAPI", {
   getAssetPath: (filename) =>
     ipcRenderer.invoke("get-asset-path", filename),
 });
-

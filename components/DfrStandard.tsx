@@ -63,60 +63,77 @@ const getRecentProjects = (): RecentProjectMetadata[] => {
         const projects = localStorage.getItem(RECENT_PROJECTS_KEY);
         return projects ? JSON.parse(projects) : [];
     } catch (e) {
-        console.error("Failed to parse recent projects from localStorage", e);
+        console.error('Failed to parse recent projects from localStorage', e);
         return [];
     }
 };
 
-const addRecentProject = async (projectData: any, projectInfo: { type: AppType; name: string; projectNumber: string; }) => {
+const addRecentProject = async (
+    projectData: any,
+    projectInfo: { type: AppType; name: string; projectNumber: string }
+) => {
     const timestamp = Date.now();
-    
+
+    /**
+     * IMPORTANT:
+     * Recent Projects MUST be self-contained.
+     * photosData must retain imageUrl (base64).
+     * IndexedDB is treated as OPTIONAL cache only.
+     */
+
     try {
         await storeProject(timestamp, projectData);
     } catch (e) {
-        console.error("Failed to save project to IndexedDB:", e);
-        // Suppress alert to allow process to continue
-        // alert("Could not save the project to the local database.");
+        console.error('Failed to save project to IndexedDB:', e);
         return;
     }
-    
+
     const recentProjects = getRecentProjects();
     const identifier = `${projectInfo.type}-${projectInfo.name}-${projectInfo.projectNumber}`;
 
-    const existingProject = recentProjects.find(p => `${p.type}-${p.name}-${p.projectNumber}` === identifier);
-    const filteredProjects = recentProjects.filter(p => `${p.type}-${p.name}-${p.projectNumber}` !== identifier);
+    const existingProject = recentProjects.find(
+        p => `${p.type}-${p.name}-${p.projectNumber}` === identifier
+    );
 
+    const filteredProjects = recentProjects.filter(
+        p => `${p.type}-${p.name}-${p.projectNumber}` !== identifier
+    );
+
+    /**
+     * Remove old project record ONLY.
+     * DO NOT delete images — images are embedded in projectData.
+     */
     if (existingProject) {
         try {
-            const oldProjectData = await retrieveProject(existingProject.timestamp);
-            if (oldProjectData?.photosData) {
-                for (const photo of oldProjectData.photosData) {
-                    if (photo.imageId) await deleteImage(photo.imageId);
-                }
-            }
             await deleteProject(existingProject.timestamp);
         } catch (e) {
-            console.error(`Failed to clean up old project version (${existingProject.timestamp}):`, e);
+            console.error(
+                `Failed to clean up old project version (${existingProject.timestamp}):`,
+                e
+            );
         }
     }
-    
-    const newProjectMetadata: RecentProjectMetadata = { ...projectInfo, timestamp };
+
+    const newProjectMetadata: RecentProjectMetadata = {
+        ...projectInfo,
+        timestamp
+    };
+
     let updatedProjects = [newProjectMetadata, ...filteredProjects];
-    
+
     const MAX_RECENT_PROJECTS_IN_LIST = 50;
+
     if (updatedProjects.length > MAX_RECENT_PROJECTS_IN_LIST) {
         const projectsToDelete = updatedProjects.splice(MAX_RECENT_PROJECTS_IN_LIST);
+
         for (const proj of projectsToDelete) {
-             try {
-                const projectDataToDelete = await retrieveProject(proj.timestamp);
-                if (projectDataToDelete?.photosData) {
-                    for (const photo of projectDataToDelete.photosData) {
-                        if (photo.imageId) await deleteImage(photo.imageId);
-                    }
-                }
+            try {
                 await deleteProject(proj.timestamp);
             } catch (e) {
-                console.error(`Failed to cleanup old project from list (${proj.timestamp}):`, e);
+                console.error(
+                    `Failed to cleanup old project from list (${proj.timestamp}):`,
+                    e
+                );
             }
         }
     }
@@ -124,10 +141,10 @@ const addRecentProject = async (projectData: any, projectInfo: { type: AppType; 
     try {
         localStorage.setItem(RECENT_PROJECTS_KEY, JSON.stringify(updatedProjects));
     } catch (e) {
-        console.error("Failed to save recent projects to localStorage:", e);
-        // alert("Could not update recent projects list. Your browser's local storage may be full.");
+        console.error('Failed to save recent projects to localStorage:', e);
     }
 };
+
 // --- End Utility ---
 
 // --- Helper function to get image dimensions asynchronously
@@ -780,15 +797,29 @@ const DfrStandard = ({ onBack, initialData }: DfrStandardProps): ReactElement =>
     };
     
     const prepareStateForRecentProjectStorage = async () => {
-        const photosForStorage = await Promise.all(
-            photosData.map(async (photo) => {
-                if (photo.imageUrl) {
-                    const imageId = photo.imageId || `${headerData.projectNumber || 'proj'}-${photo.id}-${Date.now()}`;
+    const photosForStorage = await Promise.all(
+        photosData.map(async (photo) => {
+            if (photo.imageUrl) {
+                const imageId =
+                    photo.imageId ||
+                    `${headerData.projectNumber || 'proj'}-${photo.id}-${Date.now()}`;
+
+                // IndexedDB is optional cache — failure should not break save
+                try {
                     await storeImage(imageId, photo.imageUrl);
-                    const { imageUrl, ...rest } = photo;
-                    return { ...rest, imageId };
+                } catch (e) {
+                    console.warn('Failed to cache image in IndexedDB', e);
                 }
-                return photo;
+
+                // KEEP imageUrl embedded for offline reliability
+                return {
+                    ...photo,
+                    imageId,
+                    imageUrl: photo.imageUrl
+                };
+            }
+
+            return photo;
             })
         );
         return { headerData, bodyData, photosData: photosForStorage };
@@ -1069,7 +1100,14 @@ Description: ${photo.description || 'N/A'}
             const bottomY = pageHeight - borderMargin;
 
             // Bottom line only
-            docInstance.line(startX, bottomY, endX, bottomY);
+            const BOTTOM_LINE_NUDGE_UP = 3; // mm (use 0.5–2)
+
+            docInstance.line(
+            startX,
+            bottomY - BOTTOM_LINE_NUDGE_UP,
+            endX,
+            bottomY - BOTTOM_LINE_NUDGE_UP
+);
         };
 
         const drawProjectInfoBlock = (docInstance: any, startY: number, options: { drawTopLine?: boolean, drawBottomLine?: boolean } = {}) => {
@@ -1142,9 +1180,17 @@ Description: ${photo.description || 'N/A'}
             
             docInstance.setDrawColor(0, 125, 140); // Teal
             docInstance.setLineWidth(0.5);
+            
+            const TEXT_PAGE_TOP_LINE_NUDGE_UP = 1; // mm (use 3–6)
+
             if (drawTopLine) {
-                docInstance.line(borderMargin, startY, pageWidth - borderMargin, startY);
-            }
+            docInstance.line(
+            borderMargin,
+            startY - TEXT_PAGE_TOP_LINE_NUDGE_UP,
+            pageWidth - borderMargin,
+            startY - TEXT_PAGE_TOP_LINE_NUDGE_UP
+        );
+    }
             if (drawBottomLine) {
                 docInstance.line(borderMargin, blockBottomY, pageWidth - borderMargin, blockBottomY);
             }
@@ -1188,13 +1234,18 @@ Description: ${photo.description || 'N/A'}
             
             docInstance.setTextColor(0, 0, 0);
             
-            let yPos = headerContentStartY + 15;
+            const TOP_LINE_OFFSET = 13; // was 15
+            let yPos = headerContentStartY + TOP_LINE_OFFSET;
             
             // Manually draw the top line since drawPageBorder no longer does it.
             docInstance.setDrawColor(0, 125, 140); // Teal
             docInstance.setLineWidth(0.5);
-            docInstance.line(borderMargin, yPos, pageWidth - borderMargin, yPos);
-
+            const TOP_LINE_NUDGE_UP = 1; // mm
+            docInstance.line(
+            borderMargin,
+            yPos - TOP_LINE_NUDGE_UP,
+            pageWidth - borderMargin,
+            yPos - TOP_LINE_NUDGE_UP);
             // The project info block is positioned at the top and should not draw its own top line
             const yAfterBlock = drawProjectInfoBlock(docInstance, yPos, { drawTopLine: false });
             return yAfterBlock + 1;
@@ -1297,14 +1348,29 @@ Description: ${photo.description || 'N/A'}
 
             for (const block of bodyData.locationActivities) {
                 if (!block.activities || !block.activities.trim()) continue;
-                doc.setFontSize(12); doc.setFont('times', 'bold');
                 const subTitle = `Location: ${block.location || 'N/A'}`;
+                
+                // Calculate dimensions in bold to get accurate height
+                doc.setFontSize(12);
+                doc.setFont('times', 'bold');
                 const subTitleHeight = doc.getTextDimensions(subTitle).h + 2;
+                
+                // Check if title fits on current page, if not start new page
                 if (yPos + subTitleHeight > maxYPos) {
-                    drawPageBorder(doc); doc.addPage(); pageNum++; yPos = await drawDfrHeader(doc);
+                    drawPageBorder(doc); 
+                    doc.addPage(); 
+                    pageNum++; 
+                    yPos = await drawDfrHeader(doc);
                 }
+                
+                // Ensure bold font is set before rendering the title
+                doc.setFontSize(12);
+                doc.setFont('times', 'bold');
                 doc.text(subTitle, contentMargin, yPos);
                 yPos += subTitleHeight;
+                
+                // Reset to normal font for activities content
+                doc.setFont('times', 'normal');
                 yPos = await renderTextWithBullets(block.activities, yPos);
                 yPos += 2;
             }
@@ -1415,13 +1481,27 @@ Description: ${photo.description || 'N/A'}
             docInstance.text(descLines, xStart, textY);
         };
         
-        const drawPhotoEntry = async (docInstance: any, photo: PhotoData, yStart: number) => {
-            const gap = 5;
-            const availableWidth = contentWidth - gap;
-            const textBlockWidth = availableWidth * 0.35;
-            const imageBlockWidth = availableWidth * 0.65;
-            const imageX = contentMargin + textBlockWidth + gap;
-            
+        const drawPhotoEntry = async (
+          docInstance: any,
+          photo: PhotoData,
+          yStart: number
+        ) => {
+          const gap = 5;
+          const availableWidth = contentWidth - gap;
+          const textBlockWidth = availableWidth * 0.33;
+        
+          // Bigger photo (fixed size)
+          const imageBlockWidth = availableWidth * 0.72;      // wider
+          const imageBlockHeight = imageBlockWidth * (3 / 4); // 4:3 ratio
+        
+          // Shift photo slightly to the right
+          const PHOTO_X_NUDGE = -5; // mm
+          const imageX =
+            contentMargin +
+            textBlockWidth +
+            gap +
+            PHOTO_X_NUDGE;
+        
             drawPhotoEntryText(docInstance, photo, contentMargin, yStart, textBlockWidth);
 
             if (photo.imageUrl) {
@@ -1489,11 +1569,18 @@ Description: ${photo.description || 'N/A'}
                     await drawPhotoEntry(doc, photosOnPage[0], yPos);
                     yPos += heightsOnPage[0];
 
-                    // Position separator line
+                    // Position separator line (middle)
                     yPos += largeGap;
                     doc.setDrawColor(0, 125, 140); // Teal
                     doc.setLineWidth(0.5);
-                    doc.line(borderMargin, yPos, pageWidth - borderMargin, yPos);
+                    const MIDDLE_LINE_NUDGE_UP = 0; // mm
+
+                    doc.line(
+                    borderMargin,
+                    yPos - MIDDLE_LINE_NUDGE_UP,
+                    pageWidth - borderMargin,
+                    yPos - MIDDLE_LINE_NUDGE_UP
+                );
                     
                     // Position second photo
                     yPos += tightGap;
@@ -1836,7 +1923,7 @@ Description: ${photo.description || 'N/A'}
                 </div>
                 {photosData.length > 0 && <div className="border-t-4 border-[#007D8C] my-8" />}
                 <footer className="text-center text-gray-500 dark:text-gray-400 text-sm py-4">
-                    X-TES Digital Reporting v1.1.2
+                    X-TES Digital Reporting v1.1.3
                 </footer>
             </div>
             {showUnsupportedFileModal && (
