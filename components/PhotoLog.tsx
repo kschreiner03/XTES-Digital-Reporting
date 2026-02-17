@@ -3,8 +3,11 @@ import Header from './Header';
 import PhotoEntry from './PhotoEntry';
 import type { HeaderData, PhotoData } from '../types';
 import { PlusIcon, DownloadIcon, SaveIcon, FolderOpenIcon, CloseIcon, ArrowLeftIcon, FolderArrowDownIcon } from './icons';
+import { DndContext, closestCenter, type DragEndEvent } from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
 import { AppType } from '../App';
-import { storeImage, retrieveImage, deleteImage, storeProject, deleteProject, retrieveProject } from './db';
+import { storeImage, retrieveImage, deleteImage, storeProject, deleteProject, deleteThumbnail, storeThumbnail, retrieveProject } from './db';
+import { generateProjectThumbnail } from './thumbnailUtils';
 import { SpecialCharacterPalette } from './SpecialCharacterPalette';
 import ImageModal from './ImageModal';
 import ActionStatusModal from './ActionStatusModal';
@@ -27,58 +30,89 @@ const getRecentProjects = (): RecentProjectMetadata[] => {
         const projects = localStorage.getItem(RECENT_PROJECTS_KEY);
         return projects ? JSON.parse(projects) : [];
     } catch (e) {
-        console.error("Failed to parse recent projects from localStorage", e);
+        console.error('Failed to parse recent projects from localStorage', e);
         return [];
     }
 };
 
-const addRecentProject = async (projectData: any, projectInfo: { type: AppType; name: string; projectNumber: string; }) => {
+const addRecentProject = async (
+    projectData: any,
+    projectInfo: { type: AppType; name: string; projectNumber: string }
+) => {
     const timestamp = Date.now();
-    
+
+    /**
+     * Recent Projects MUST be self-contained.
+     * Images are embedded in projectData.
+     * IndexedDB is optional cache only.
+     */
+
     try {
         await storeProject(timestamp, projectData);
     } catch (e) {
-        console.error("Failed to save project to IndexedDB:", e);
+        console.error('Failed to save project to IndexedDB:', e);
         return;
     }
-    
+
+    // Generate and store thumbnail
+    try {
+        const firstPhoto = projectData.photosData?.find(
+            (p: any) => p.imageUrl && !p.isMap
+        );
+        const thumbnail = await generateProjectThumbnail({
+            type: projectInfo.type,
+            projectName: projectInfo.name,
+            firstPhotoUrl: firstPhoto?.imageUrl || null,
+        });
+        await storeThumbnail(timestamp, thumbnail);
+    } catch (e) {
+        console.warn('Failed to generate/store thumbnail:', e);
+    }
+
     const recentProjects = getRecentProjects();
     const identifier = `${projectInfo.type}-${projectInfo.name}-${projectInfo.projectNumber}`;
 
-    const existingProject = recentProjects.find(p => `${p.type}-${p.name}-${p.projectNumber}` === identifier);
-    const filteredProjects = recentProjects.filter(p => `${p.type}-${p.name}-${p.projectNumber}` !== identifier);
+    const existingProject = recentProjects.find(
+        p => `${p.type}-${p.name}-${p.projectNumber}` === identifier
+    );
+
+    const filteredProjects = recentProjects.filter(
+        p => `${p.type}-${p.name}-${p.projectNumber}` !== identifier
+    );
 
     if (existingProject) {
         try {
-            const oldProjectData = await retrieveProject(existingProject.timestamp);
-            if (oldProjectData?.photosData) {
-                for (const photo of oldProjectData.photosData) {
-                    if (photo.imageId) await deleteImage(photo.imageId);
-                }
-            }
             await deleteProject(existingProject.timestamp);
+            await deleteThumbnail(existingProject.timestamp);
         } catch (e) {
-            console.error(`Failed to clean up old project version (${existingProject.timestamp}):`, e);
+            console.error(
+                `Failed to clean up old project version (${existingProject.timestamp}):`,
+                e
+            );
         }
     }
-    
-    const newProjectMetadata: RecentProjectMetadata = { ...projectInfo, timestamp };
+
+    const newProjectMetadata: RecentProjectMetadata = {
+        ...projectInfo,
+        timestamp
+    };
+
     let updatedProjects = [newProjectMetadata, ...filteredProjects];
-    
+
     const MAX_RECENT_PROJECTS_IN_LIST = 50;
+
     if (updatedProjects.length > MAX_RECENT_PROJECTS_IN_LIST) {
         const projectsToDelete = updatedProjects.splice(MAX_RECENT_PROJECTS_IN_LIST);
+
         for (const proj of projectsToDelete) {
-             try {
-                const projectDataToDelete = await retrieveProject(proj.timestamp);
-                if (projectDataToDelete?.photosData) {
-                    for (const photo of projectDataToDelete.photosData) {
-                        if (photo.imageId) await deleteImage(photo.imageId);
-                    }
-                }
+            try {
                 await deleteProject(proj.timestamp);
+                await deleteThumbnail(proj.timestamp);
             } catch (e) {
-                console.error(`Failed to cleanup old project from list (${proj.timestamp}):`, e);
+                console.error(
+                    `Failed to cleanup old project from list (${proj.timestamp}):`,
+                    e
+                );
             }
         }
     }
@@ -86,7 +120,7 @@ const addRecentProject = async (projectData: any, projectInfo: { type: AppType; 
     try {
         localStorage.setItem(RECENT_PROJECTS_KEY, JSON.stringify(updatedProjects));
     } catch (e) {
-        console.error("Failed to save recent projects to localStorage:", e);
+        console.error('Failed to save recent projects to localStorage:', e);
     }
 };
 
@@ -262,19 +296,37 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, initialData }) => {
     const [pdfPreview, setPdfPreview] = useState<{ url: string; filename: string; blob?: Blob } | null>(null);
     const [showStatusModal, setShowStatusModal] = useState(false);
     const [statusMessage, setStatusMessage] = useState('');
+    const [isDirty, setIsDirty] = useState(false);
+    const [showUnsavedModal, setShowUnsavedModal] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const isDownloadingRef = useRef(false);
 
-    const prepareStateForRecentProjectStorage = async (header: HeaderData, photos: PhotoData[]) => {
-        const photosForStorage = await Promise.all(
-            photos.map(async (photo) => {
-                if (photo.imageUrl) {
-                    const imageId = photo.imageId || `${header.projectNumber || 'proj'}-${photo.id}-${Date.now()}`;
+    const prepareStateForRecentProjectStorage = async (
+    header: HeaderData,
+    photos: PhotoData[]
+) => {
+    const photosForStorage = await Promise.all(
+        photos.map(async (photo) => {
+            if (photo.imageUrl) {
+                const imageId =
+                    photo.imageId ||
+                    `${header.projectNumber || 'proj'}-${photo.id}-${Date.now()}`;
+
+                // IndexedDB = optional cache only
+                try {
                     await storeImage(imageId, photo.imageUrl);
-                    const { imageUrl, ...rest } = photo;
-                    return { ...rest, imageId };
+                } catch (e) {
+                    console.warn('Failed to cache image in IndexedDB', e);
                 }
-                return photo;
+
+                // ✅ KEEP imageUrl embedded
+                return {
+                    ...photo,
+                    imageId,
+                    imageUrl: photo.imageUrl
+                };
+            }
+            return photo;
             })
         );
         return { headerData: header, photosData: photosForStorage };
@@ -351,12 +403,56 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, initialData }) => {
         loadInitialData();
     }, [initialData]);
 
+    const pendingCloseRef = useRef(false);
+
+    useEffect(() => {
+        const handler = (e: BeforeUnloadEvent) => {
+            if (isDirty) {
+                e.preventDefault();
+                e.returnValue = '';
+            }
+        };
+        window.addEventListener('beforeunload', handler);
+        return () => window.removeEventListener('beforeunload', handler);
+    }, [isDirty]);
+
+    useEffect(() => {
+        // @ts-ignore
+        const api = window.electronAPI;
+        if (api?.onCloseAttempted) {
+            api.removeCloseAttemptedListener?.();
+            api.onCloseAttempted(() => {
+                if (isDirty) {
+                    pendingCloseRef.current = true;
+                    setShowUnsavedModal(true);
+                } else {
+                    api.confirmClose();
+                }
+            });
+        }
+        return () => {
+            // @ts-ignore
+            window.electronAPI?.removeCloseAttemptedListener?.();
+        };
+    }, [isDirty]);
+
+    const handleBack = () => {
+        if (isDirty) {
+            pendingCloseRef.current = false;
+            setShowUnsavedModal(true);
+        } else {
+            onBack();
+        }
+    };
+
     const handleHeaderChange = (field: keyof HeaderData, value: string) => {
         setHeaderData(prev => ({ ...prev, [field]: value }));
+        setIsDirty(true);
     };
 
     const handlePhotoDataChange = (id: number, field: keyof Omit<PhotoData, 'id' | 'imageUrl' | 'imageId'>, value: string) => {
         setPhotosData(prev => prev.map(photo => photo.id === id ? { ...photo, [field]: value } : photo));
+        setIsDirty(true);
     };
     
     const autoCropImage = (imageUrl: string): Promise<string> => {
@@ -416,8 +512,15 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, initialData }) => {
             const dataUrl = e.target?.result as string;
             const img = new Image();
             img.onload = async () => {
-                 const finalImageUrl = await autoCropImage(dataUrl);
-                 setPhotosData(prev => prev.map(photo => photo.id === id ? { ...photo, imageUrl: finalImageUrl } : photo));
+                try {
+                    const finalImageUrl = await autoCropImage(dataUrl);
+                    setPhotosData(prev => prev.map(photo => photo.id === id ? { ...photo, imageUrl: finalImageUrl } : photo));
+                } catch (err) {
+                    console.error("Image crop failed", err);
+                    // Fall back to uncropped image
+                    setPhotosData(prev => prev.map(photo => photo.id === id ? { ...photo, imageUrl: dataUrl } : photo));
+                }
+                setIsDirty(true);
             };
             img.src = dataUrl;
         };
@@ -450,6 +553,7 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, initialData }) => {
             }
             return renumberPhotos(newPhotos);
         });
+        setIsDirty(true);
     };
 
     const removePhoto = (id: number) => {
@@ -460,19 +564,17 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, initialData }) => {
             }
             return renumberPhotos(prev.filter(photo => photo.id !== id));
         });
+        setIsDirty(true);
     };
 
-    const movePhoto = (id: number, direction: 'up' | 'down') => {
-        const index = photosData.findIndex(p => p.id === id);
-        if (index === -1) return;
-
-        const newIndex = direction === 'up' ? index - 1 : index + 1;
-        if (newIndex < 0 || newIndex >= photosData.length) return;
-
-        const newPhotos = [...photosData];
-        [newPhotos[index], newPhotos[newIndex]] = [newPhotos[newIndex], newPhotos[index]];
-        
-        setPhotosData(renumberPhotos(newPhotos));
+    const handlePhotoDragEnd = (event: DragEndEvent) => {
+        const { active, over } = event;
+        if (active.id !== over?.id) {
+            const oldIndex = photosData.findIndex(p => p.id === active.id);
+            const newIndex = photosData.findIndex(p => p.id === over!.id);
+            setPhotosData(renumberPhotos(arrayMove(photosData, oldIndex, newIndex)));
+            setIsDirty(true);
+        }
     };
 
     const validateForm = (): boolean => {
@@ -488,6 +590,7 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, initialData }) => {
             if (!photo.location) newErrors.add(`${prefix}location`);
             if (!photo.description) newErrors.add(`${prefix}description`);
             if (!photo.imageUrl) newErrors.add(`${prefix}imageUrl`);
+            if (!photo.isMap && !photo.direction) newErrors.add(`${prefix}direction`);
         });
 
         setErrors(newErrors);
@@ -531,6 +634,7 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, initialData }) => {
             document.body.removeChild(link);
             URL.revokeObjectURL(link.href);
         }
+        setIsDirty(false);
     };
 
     const addSafeLogo = async (docInstance: any, x: number, y: number, w: number, h: number) => {
@@ -591,8 +695,15 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, initialData }) => {
             const endX = pageWidth - borderMargin;
             const bottomY = pageHeight - borderMargin;
 
-            // Bottom line only
-            docInstance.line(startX, bottomY, endX, bottomY);
+            // Bottom line adjustments and spacing
+           const BOTTOM_LINE_NUDGE_UP = 3; // mm (use 0.5–2)
+
+            docInstance.line(
+            startX,
+            bottomY - BOTTOM_LINE_NUDGE_UP,
+            endX,
+            bottomY - BOTTOM_LINE_NUDGE_UP
+);
         };
 
         const drawProjectInfoBlock = (docInstance: any, startY: number, options: { drawTopLine?: boolean, drawBottomLine?: boolean } = {}) => {
@@ -692,15 +803,21 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, initialData }) => {
             // Manually draw the top line since drawPageBorder no longer does it.
             docInstance.setDrawColor(0, 125, 140); // Teal
             docInstance.setLineWidth(0.5);
-            docInstance.line(borderMargin, yPos, pageWidth - borderMargin, yPos);
 
+            const TOP_LINE_NUDGE_UP = 1; // mm
+            docInstance.line(
+                borderMargin,
+                yPos - TOP_LINE_NUDGE_UP,
+                pageWidth - borderMargin,
+                yPos - TOP_LINE_NUDGE_UP
+            );
             const yAfterBlock = drawProjectInfoBlock(docInstance, yPos, { drawTopLine: false });
             return yAfterBlock + 1;
         };
 
         const sitePhotos = photosData.filter(p => !p.isMap && p.imageUrl);
         
-        const calculatePhotoEntryHeight = async (docInstance: any, photo: PhotoData): Promise<number> => {
+const calculatePhotoEntryHeight = async (docInstance: any, photo: PhotoData): Promise<number> => {
             const gap = 5;
             const availableWidth = contentWidth - gap;
             const textBlockWidth = availableWidth * 0.35;
@@ -775,21 +892,60 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, initialData }) => {
             docInstance.text(descLines, xStart, textY);
         };
         
-        const drawPhotoEntry = async (docInstance: any, photo: PhotoData, yStart: number) => {
-            const gap = 5;
-            const availableWidth = contentWidth - gap;
-            const textBlockWidth = availableWidth * 0.35;
-            const imageBlockWidth = availableWidth * 0.65;
-            const imageX = contentMargin + textBlockWidth + gap;
-            
-            drawPhotoEntryText(docInstance, photo, contentMargin, yStart, textBlockWidth);
+// ======================================================
+// PHOTO SIZE CONSTANTS (easy future edits)
+// ======================================================
+const PHOTO_WIDTH_RATIO = 0.72;   // width relative to available space
+const PHOTO_ASPECT_RATIO = 3 / 4; // 4:3 ratio
+const PHOTO_X_NUDGE = -5;         // mm (negative = left, positive = right)
 
-            if (photo.imageUrl) {
-                const { width, height } = await getImageDimensions(photo.imageUrl);
-                const scaledHeight = height * (imageBlockWidth / width);
-                docInstance.addImage(photo.imageUrl, 'JPEG', imageX, yStart, imageBlockWidth, scaledHeight);
-            }
-        };
+// ======================================================
+// DRAW PHOTO ENTRY
+// ======================================================
+const drawPhotoEntry = async (
+  docInstance: any,
+  photo: PhotoData,
+  yStart: number
+) => {
+  const gap = 5;
+  const availableWidth = contentWidth - gap;
+
+  // Text column
+  const textBlockWidth = availableWidth * 0.33;
+
+  // Photo size (fixed)
+  const imageBlockWidth = availableWidth * PHOTO_WIDTH_RATIO;
+  const imageBlockHeight = imageBlockWidth * PHOTO_ASPECT_RATIO;
+
+  // Photo X position
+  const imageX =
+    contentMargin +
+    textBlockWidth +
+    gap +
+    PHOTO_X_NUDGE;
+
+  // LEFT TEXT
+  drawPhotoEntryText(
+    docInstance,
+    photo,
+    contentMargin,
+    yStart,
+    textBlockWidth
+  );
+
+  // RIGHT PHOTO (top edge fixed)
+  if (photo.imageUrl) {
+    docInstance.addImage(
+      photo.imageUrl,
+      'JPEG',
+      imageX,
+      yStart,               // DO NOT CHANGE
+      imageBlockWidth,
+      imageBlockHeight
+    );
+  }
+};
+
 
         if (sitePhotos.length > 0) {
             const entryHeights = await Promise.all(sitePhotos.map(p => calculatePhotoEntryHeight(doc, p)));
@@ -857,8 +1013,15 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, initialData }) => {
                     yPos += largeGap;
                     doc.setDrawColor(0, 125, 140); // Teal
                     doc.setLineWidth(0.5);
-                    doc.line(borderMargin, yPos, pageWidth - borderMargin, yPos);
-                    
+
+                    const TEAL_LINE_NUDGE_UP = 1; // mm
+
+                    doc.line(
+                    borderMargin,
+                     yPos - TEAL_LINE_NUDGE_UP,
+                    pageWidth - borderMargin,
+                    yPos - TEAL_LINE_NUDGE_UP
+            );
                     // Position second photo
                     yPos += tightGap;
                     await drawPhotoEntry(doc, photosOnPage[1], yPos);
@@ -869,8 +1032,7 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, initialData }) => {
              // If no photos, just draw header on the single page
              await drawPhotoPageHeader(doc);
              drawPageBorder(doc);
-        }
-        
+        }  
         const sanitize = (name: string) => name.replace(/[^a-z0-9_]/gi, '-').toLowerCase();
         const formattedFilenameDate = formatDateForFilename(headerData.date);
         const sanitizedProjectName = sanitize(headerData.projectName);
@@ -989,6 +1151,28 @@ Description: ${photo.description || 'N/A'}
         };
     }, [stableListener]);
 
+    // Keyboard shortcut listeners
+    useEffect(() => {
+        // @ts-ignore
+        const api = window.electronAPI;
+        if (api?.onSaveProjectShortcut) {
+            api.removeSaveProjectShortcutListener?.();
+            api.onSaveProjectShortcut(() => {
+                handleSaveProject();
+            });
+        }
+        if (api?.onExportPdfShortcut) {
+            api.removeExportPdfShortcutListener?.();
+            api.onExportPdfShortcut(() => {
+                handleSavePdf();
+            });
+        }
+        return () => {
+            api?.removeSaveProjectShortcutListener?.();
+            api?.removeExportPdfShortcutListener?.();
+        };
+    }, [headerData, photosData]);
+
     const handleFileSelected = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
         if (!file) return;
@@ -1053,7 +1237,7 @@ Description: ${photo.description || 'N/A'}
             
             <div className="max-w-7xl mx-auto p-4 md:p-8">
                 <div className="flex flex-wrap justify-between items-center gap-2 mb-4">
-                    <button onClick={onBack} className="bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-white text-gray-800 font-bold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
+                    <button onClick={handleBack} className="bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-white text-gray-800 font-bold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
                         <ArrowLeftIcon /> <span>Home</span>
                     </button>
                     <div className="flex flex-wrap justify-end gap-2">
@@ -1086,22 +1270,18 @@ Description: ${photo.description || 'N/A'}
                 <div className="main-content">
                     <Header data={headerData} onDataChange={handleHeaderChange} errors={getHeaderErrors()} />
                     <div className="mt-8">
-                        {photosData.map((photo, index) => (
-                           <div key={photo.id}>
+                      <DndContext collisionDetection={closestCenter} onDragEnd={handlePhotoDragEnd}>
+                        <SortableContext items={photosData.map(p => p.id)} strategy={verticalListSortingStrategy}>
+                          {photosData.map((photo, index) => (
+                             <div key={photo.id}>
                                 <PhotoEntry
                                     data={photo}
                                     onDataChange={(field, value) => handlePhotoDataChange(photo.id, field, value)}
                                     onImageChange={(file) => handleImageChange(photo.id, file)}
                                     onRemove={() => removePhoto(photo.id)}
-                                    onMoveUp={() => movePhoto(photo.id, "up")}
-                                    onMoveDown={() => movePhoto(photo.id, "down")}
-                                    isFirst={index === 0}
-                                    isLast={index === photosData.length - 1}
                                     onImageClick={setEnlargedImageUrl}
                                     errors={getPhotoErrors(photo.id)}
                                     showDirectionField={!photo.isMap}
-
-                                    // NEW FIELDS
                                     headerDate={headerData.date}
                                     headerLocation={headerData.location}
                                     onAutoFill={(f, val) => handlePhotoDataChange(photo.id, f, val)}
@@ -1124,7 +1304,9 @@ Description: ${photo.description || 'N/A'}
                                     </div>
                                 )}
                             </div>
-                        ))}
+                          ))}
+                        </SortableContext>
+                      </DndContext>
                     </div>
 
                     <div className="mt-8 flex justify-center">
@@ -1139,7 +1321,7 @@ Description: ${photo.description || 'N/A'}
                 </div>
                 {photosData.length > 0 && <div className="border-t-4 border-[#007D8C] my-8" />}
                 <footer className="text-center text-gray-500 dark:text-gray-400 text-sm py-4">
-                    X-TES Digital Reporting v1.1.2
+                    X-TES Digital Reporting v1.1.4
                 </footer>
             </div>
             {showUnsupportedFileModal && (
@@ -1209,9 +1391,41 @@ Description: ${photo.description || 'N/A'}
                     </div>
                 </div>
             )}
+
+            {showUnsavedModal && (
+                <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[200]">
+                    <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-2xl text-center relative max-w-md">
+                        <h3 className="text-xl font-bold mb-3 text-gray-800 dark:text-white">Unsaved Changes</h3>
+                        <p className="text-gray-600 dark:text-gray-300 mb-6">
+                            You have unsaved changes. Are you sure you want to leave? Your changes will be lost.
+                        </p>
+                        <div className="flex justify-center gap-3">
+                            <button
+                                onClick={() => setShowUnsavedModal(false)}
+                                className="px-5 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-white font-semibold rounded-lg transition"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={() => {
+                                    setShowUnsavedModal(false);
+                                    if (pendingCloseRef.current) {
+                                        // @ts-ignore
+                                        window.electronAPI?.confirmClose();
+                                    } else {
+                                        onBack();
+                                    }
+                                }}
+                                className="px-5 py-2 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg transition"
+                            >
+                                Leave Without Saving
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
 
 export default PhotoLog;
-

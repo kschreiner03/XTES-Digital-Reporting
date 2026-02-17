@@ -1,4 +1,3 @@
-import React from "react";
 import {
   Plus,
   Trash2,
@@ -20,20 +19,11 @@ import {
   Pencil,
   Copy,
   MessageSquare,
-  Zap
+  Zap,
+  ZoomIn,
+  ZoomOut,
+  GripVertical
 } from "lucide-react";
-
-/* ============================================================
-      THIN-STROKE WRAPPER FOR A CLEAN IOS FEEL
-   ============================================================ */
-const IconWrapper: React.FC<{
-  className?: string;
-  children: React.ReactNode;
-}> = ({ className = "h-6 w-6", children }) => (
-  <div className={className}>
-    {children}
-  </div>
-);
 
 /* ============================================================
                        ICON EXPORTS
@@ -44,7 +34,7 @@ export const PlusIcon = (p: any) => (
 );
 
 export const TrashIcon = (p: any) => (
-  <X strokeWidth={1.25} {...p} />   // your request: Trash = X
+  <X strokeWidth={1.25} {...p} />
 );
 
 export const CameraIcon = (p: any) => (
@@ -104,7 +94,7 @@ export const EllipsisVerticalIcon = (p: any) => (
 );
 
 export const ArrowsPointingOutIcon = (p: any) => (
-  <Maximize strokeWidth={1.25} color="#007D8C" {...p} />
+  <Maximize strokeWidth={1.25} {...p} />
 );
 
 export const EyeIcon = (p: any) => (
@@ -133,4 +123,16 @@ import { ClipboardCheck } from "lucide-react";
 
 export const StandardDfrIcon = (p: any) => (
   <ClipboardCheck strokeWidth={1.25} color="#007D8C" {...p} />
+);
+
+export const ZoomInIcon = (p: any) => (
+  <ZoomIn strokeWidth={1.25} {...p} />
+);
+
+export const ZoomOutIcon = (p: any) => (
+  <ZoomOut strokeWidth={1.25} {...p} />
+);
+
+export const GripVerticalIcon = (p: any) => (
+  <GripVertical strokeWidth={1.25} {...p} />
 );

@@ -1,16 +1,14 @@
 import React, { useRef, useState } from 'react';
 import type { PhotoData } from '../types';
-import { TrashIcon, CameraIcon, ArrowUpIcon, ArrowDownIcon, ArrowsPointingOutIcon } from './icons';
+import { TrashIcon, CameraIcon, ArrowsPointingOutIcon, GripVerticalIcon } from './icons';
+import { useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 interface PhotoEntryProps {
   data: PhotoData;
   onDataChange: (field: keyof Omit<PhotoData, 'id' | 'imageUrl' | 'imageId'>, value: string) => void;
   onImageChange: (file: File) => void;
   onRemove: () => void;
-  onMoveUp: () => void;
-  onMoveDown: () => void;
-  isFirst: boolean;
-  isLast: boolean;
   printable?: boolean;
   errors?: Set<keyof PhotoData>;
   showDirectionField?: boolean;
@@ -66,6 +64,7 @@ const EditableField: React.FC<{
             isInvalid ? "border-red-500" : "border-gray-300 dark:border-gray-600 focus:border-[#007D8C]"
           }`}
           placeholder={placeholder}
+          spellCheck={true}
         />
       </div>
     );
@@ -82,6 +81,7 @@ const EditableField: React.FC<{
           isInvalid ? "border-red-500" : "border-gray-300 dark:border-gray-600 focus:border-[#007D8C]"
         }`}
         placeholder={placeholder}
+        spellCheck={true}
       />
     </div>
   );
@@ -92,10 +92,6 @@ const PhotoEntry: React.FC<PhotoEntryProps> = ({
   onDataChange,
   onImageChange,
   onRemove,
-  onMoveUp,
-  onMoveDown,
-  isFirst,
-  isLast,
   printable = false,
   errors,
   showDirectionField = false,
@@ -104,6 +100,22 @@ const PhotoEntry: React.FC<PhotoEntryProps> = ({
   headerDate,
   headerLocation
 }) => {
+
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging: isSortDragging,
+  } = useSortable({ id: data.id, disabled: printable });
+
+  const sortableStyle: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isSortDragging ? 0.5 : 1,
+    zIndex: isSortDragging ? 50 : undefined,
+  };
 
   const [isDragging, setIsDragging] = useState(false);
 
@@ -118,7 +130,7 @@ const PhotoEntry: React.FC<PhotoEntryProps> = ({
     : "bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600";
 
   return (
-    <div className="bg-white dark:bg-gray-800 p-6 shadow-md rounded-lg break-inside-avoid">
+    <div ref={setNodeRef} style={sortableStyle} className="bg-white dark:bg-gray-800 p-6 shadow-md rounded-lg break-inside-avoid">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
 
         {/* LEFT COLUMN */}
@@ -126,22 +138,28 @@ const PhotoEntry: React.FC<PhotoEntryProps> = ({
 
           {/* Photo # + Controls */}
           <div className="flex justify-between items-center">
-            <EditableField
-              label={data.isMap ? "Map" : "Photo"}
-              value={data.photoNumber}
-              onChange={() => {}}
-              printable={printable}
-              readOnly
-            />
+            <div className="flex items-center gap-2">
+              {!printable && (
+                <button
+                  {...attributes}
+                  {...listeners}
+                  className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 cursor-grab active:cursor-grabbing touch-none"
+                  title="Drag to reorder"
+                >
+                  <GripVerticalIcon className="h-6 w-6" />
+                </button>
+              )}
+              <EditableField
+                label={data.isMap ? "Map" : "Photo"}
+                value={data.photoNumber}
+                onChange={() => {}}
+                printable={printable}
+                readOnly
+              />
+            </div>
 
             {!printable && (
               <div className="flex items-center space-x-2">
-                <button onClick={onMoveUp} disabled={isFirst} className="p-1 text-gray-500 hover:text-black disabled:opacity-30">
-                  <ArrowUpIcon className="h-7 w-7" />
-                </button>
-                <button onClick={onMoveDown} disabled={isLast} className="p-1 text-gray-500 hover:text-black disabled:opacity-30">
-                  <ArrowDownIcon className="h-7 w-7" />
-                </button>
                 <button onClick={onRemove} className="p-1 text-red-500 hover:text-red-700">
                   <TrashIcon className="h-7 w-7" />
                 </button>
@@ -156,6 +174,7 @@ const PhotoEntry: React.FC<PhotoEntryProps> = ({
               value={data.direction || ""}
               onChange={(v) => onDataChange("direction", v)}
               printable={printable}
+              isInvalid={errors?.has('direction')}
             />
           )}
 

@@ -1,13 +1,18 @@
-import React, { useState, ReactElement, useEffect, useRef, useCallback } from 'react';
-import type { DfrSaskpowerData, ChecklistOption, PhotoData, LocationActivity, ActivityBlock } from '../types';
-import { DownloadIcon, SaveIcon, FolderOpenIcon, ArrowLeftIcon, PlusIcon, TrashIcon, ArrowUpIcon, ArrowDownIcon, CloseIcon, FolderArrowDownIcon, ChatBubbleLeftIcon } from './icons';
+import React, { useState, ReactElement, useEffect, useRef, useCallback, useMemo } from 'react';
+import type { DfrSaskpowerData, ChecklistOption, PhotoData, LocationActivity, ActivityBlock, TextHighlight, TextComment } from '../types';
+import { DownloadIcon, SaveIcon, FolderOpenIcon, ArrowLeftIcon, PlusIcon, TrashIcon, CloseIcon, FolderArrowDownIcon, ChatBubbleLeftIcon, ZoomInIcon, ZoomOutIcon } from './icons';
+import { DndContext, closestCenter, type DragEndEvent } from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
 import { AppType } from '../App';
 import PhotoEntry from './PhotoEntry';
-import { storeImage, retrieveImage, deleteImage, storeProject, deleteProject, retrieveProject } from './db';
+import { storeImage, retrieveImage, deleteImage, storeProject, deleteProject, deleteThumbnail, storeThumbnail, retrieveProject } from './db';
+import { generateProjectThumbnail } from './thumbnailUtils';
 import { SpecialCharacterPalette } from './SpecialCharacterPalette';
 import BulletPointEditor from './BulletPointEditor';
 import ImageModal from './ImageModal';
 import ActionStatusModal from './ActionStatusModal';
+import CommentsRail, { FieldComment, CommentAnchor } from './CommentsRail';
+import { CommentAnchorPosition } from './BulletPointEditor';
 import { jsPDF } from 'jspdf';
 import JSZip from 'jszip';
 import SafeImage, { getAssetUrl } from './SafeImage';
@@ -22,64 +27,103 @@ interface RecentProjectMetadata {
     timestamp: number;
 }
 
+// --------------------
+// Recent Projects List
+// --------------------
+
 const getRecentProjects = (): RecentProjectMetadata[] => {
     try {
         const projects = localStorage.getItem(RECENT_PROJECTS_KEY);
         return projects ? JSON.parse(projects) : [];
     } catch (e) {
-        console.error("Failed to parse recent projects from localStorage", e);
+        console.error('Failed to parse recent projects from localStorage', e);
         return [];
     }
 };
 
-const addRecentProject = async (projectData: any, projectInfo: { type: AppType; name: string; projectNumber: string; }) => {
+// --------------------
+// Add / Update Recent Project
+// --------------------
+
+const addRecentProject = async (
+    projectData: any,
+    projectInfo: { type: AppType; name: string; projectNumber: string }
+) => {
     const timestamp = Date.now();
-    
+
+    /**
+     * IMPORTANT:
+     * Project data MUST be self-contained.
+     * photosData must retain imageUrl (base64).
+     * IndexedDB is optional and NOT required for correctness.
+     */
+
     try {
         await storeProject(timestamp, projectData);
     } catch (e) {
-        console.error("Failed to save project to IndexedDB:", e);
-        // alert("Could not save the project to the local database.");
+        console.error('Failed to save project to IndexedDB:', e);
         return;
     }
-    
+
+    // Generate and store thumbnail
+    try {
+        const firstPhoto = projectData.photosData?.find(
+            (p: any) => p.imageUrl && !p.isMap
+        );
+        const thumbnail = await generateProjectThumbnail({
+            type: projectInfo.type,
+            projectName: projectInfo.name,
+            firstPhotoUrl: firstPhoto?.imageUrl || null,
+        });
+        await storeThumbnail(timestamp, thumbnail);
+    } catch (e) {
+        console.warn('Failed to generate/store thumbnail:', e);
+    }
+
     const recentProjects = getRecentProjects();
     const identifier = `${projectInfo.type}-${projectInfo.name}-${projectInfo.projectNumber}`;
 
-    const existingProject = recentProjects.find(p => `${p.type}-${p.name}-${p.projectNumber}` === identifier);
-    const filteredProjects = recentProjects.filter(p => `${p.type}-${p.name}-${p.projectNumber}` !== identifier);
+    const existingProject = recentProjects.find(
+        p => `${p.type}-${p.name}-${p.projectNumber}` === identifier
+    );
+
+    const filteredProjects = recentProjects.filter(
+        p => `${p.type}-${p.name}-${p.projectNumber}` !== identifier
+    );
 
     if (existingProject) {
         try {
-            const oldProjectData = await retrieveProject(existingProject.timestamp);
-            if (oldProjectData?.photosData) {
-                for (const photo of oldProjectData.photosData) {
-                    if (photo.imageId) await deleteImage(photo.imageId);
-                }
-            }
             await deleteProject(existingProject.timestamp);
+            await deleteThumbnail(existingProject.timestamp);
         } catch (e) {
-            console.error(`Failed to clean up old project version (${existingProject.timestamp}):`, e);
+            console.error(
+                `Failed to clean up old project version (${existingProject.timestamp}):`,
+                e
+            );
         }
     }
-    
-    const newProjectMetadata: RecentProjectMetadata = { ...projectInfo, timestamp };
+
+    const newProjectMetadata: RecentProjectMetadata = {
+        ...projectInfo,
+        timestamp
+    };
+
     let updatedProjects = [newProjectMetadata, ...filteredProjects];
-    
+
     const MAX_RECENT_PROJECTS_IN_LIST = 50;
+
     if (updatedProjects.length > MAX_RECENT_PROJECTS_IN_LIST) {
         const projectsToDelete = updatedProjects.splice(MAX_RECENT_PROJECTS_IN_LIST);
+
         for (const proj of projectsToDelete) {
-             try {
-                const projectDataToDelete = await retrieveProject(proj.timestamp);
-                if (projectDataToDelete?.photosData) {
-                    for (const photo of projectDataToDelete.photosData) {
-                        if (photo.imageId) await deleteImage(photo.imageId);
-                    }
-                }
+            try {
                 await deleteProject(proj.timestamp);
+                await deleteThumbnail(proj.timestamp);
             } catch (e) {
-                console.error(`Failed to cleanup old project from list (${proj.timestamp}):`, e);
+                console.error(
+                    `Failed to cleanup old project from list (${proj.timestamp}):`,
+                    e
+                );
             }
         }
     }
@@ -87,25 +131,34 @@ const addRecentProject = async (projectData: any, projectInfo: { type: AppType; 
     try {
         localStorage.setItem(RECENT_PROJECTS_KEY, JSON.stringify(updatedProjects));
     } catch (e) {
-        console.error("Failed to save recent projects to localStorage:", e);
-        // alert("Could not update recent projects list. Your browser's local storage may be full.");
+        console.error('Failed to save recent projects to localStorage:', e);
     }
 };
+
+// --------------------
+// Date Formatter (unchanged)
+// --------------------
 
 const formatDateForRecentProject = (dateString: string): string => {
     if (!dateString) return '';
     try {
         const tempDate = new Date(dateString);
         if (isNaN(tempDate.getTime())) return dateString;
+
         const year = tempDate.getFullYear();
         const month = tempDate.getMonth();
         const day = tempDate.getDate();
+
         const utcDate = new Date(Date.UTC(year, month, day));
+
         const formattedYear = utcDate.getUTCFullYear();
         const formattedMonth = String(utcDate.getUTCMonth() + 1).padStart(2, '0');
         const formattedDay = String(utcDate.getUTCDate()).padStart(2, '0');
+
         return `${formattedYear}/${formattedMonth}/${formattedDay}`;
-    } catch (e) { return dateString; }
+    } catch {
+        return dateString;
+    }
 };
 // --- End Utility ---
 
@@ -232,7 +285,7 @@ const PdfPreviewModal: React.FC<{ url: string; filename: string; onClose: () => 
     };
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-75 flex flex-col items-center justify-center z-50 p-4" role="dialog" aria-modal="true">
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex flex-col items-center justify-center z-[100] p-4" role="dialog" aria-modal="true">
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl w-full h-full flex flex-col overflow-hidden">
                 <div className="flex justify-between items-center p-4 border-b bg-gray-50 dark:bg-gray-700 dark:border-gray-600">
                     <h3 className="text-xl font-bold text-gray-800 dark:text-white">PDF Preview</h3>
@@ -266,9 +319,9 @@ const PdfPreviewModal: React.FC<{ url: string; filename: string; onClose: () => 
 
 // --- UI Components ---
 const Section: React.FC<{ title: string; children: React.ReactNode; }> = ({ title, children }) => (
-    <div className="bg-white dark:bg-gray-800 p-6 shadow-md rounded-lg transition-colors duration-200">
+    <div className="bg-white dark:bg-gray-800 p-6 shadow-md rounded-lg transition-colors duration-200" style={{ overflow: 'visible' }}>
         <h2 className="text-xl font-bold text-gray-800 dark:text-gray-100 border-b-2 border-gray-200 dark:border-gray-700 pb-2 mb-4">{title}</h2>
-        <div className="space-y-4">{children}</div>
+        <div className="space-y-4" style={{ overflow: 'visible' }}>{children}</div>
     </div>
 );
 
@@ -304,9 +357,9 @@ const EditableField: React.FC<{ label: string; value: string; onChange: (value: 
     );
 };
 
-const ChecklistRow: React.FC<{ label: string; value: ChecklistOption; onChange: (value: ChecklistOption) => void; }> = ({ label, value, onChange }) => (
-    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between py-2 border-b border-gray-200 dark:border-gray-700 last:border-b-0">
-        <span className="text-gray-800 dark:text-gray-200 font-medium mb-2 sm:mb-0">{label}</span>
+const ChecklistRow: React.FC<{ label: string; value: ChecklistOption; onChange: (value: ChecklistOption) => void; isInvalid?: boolean; }> = ({ label, value, onChange, isInvalid = false }) => (
+    <div className={`flex flex-col sm:flex-row items-start sm:items-center justify-between py-2 border-b last:border-b-0 ${isInvalid ? 'border-red-500 bg-red-50 dark:bg-red-900/20 px-2 rounded' : 'border-gray-200 dark:border-gray-700'}`}>
+        <span className={`font-medium mb-2 sm:mb-0 ${isInvalid ? 'text-red-600 dark:text-red-400' : 'text-gray-800 dark:text-gray-200'}`}>{label}</span>
         <div className="flex items-center space-x-6">
             {(['Yes', 'No', 'NA'] as ChecklistOption[]).map(option => (
                 <label key={option} className="flex items-center space-x-2 cursor-pointer text-gray-600 dark:text-gray-300">
@@ -325,14 +378,30 @@ const ChecklistRow: React.FC<{ label: string; value: ChecklistOption; onChange: 
     </div>
 );
 
-const activityPlaceholder = `08:30 - Leave Estevan to project area.
+const saskPowerPlaceholders = {
+    generalActivity: `08:30 - Leave Estevan to project area.
 10:00 - Arrive near structure 285 on B1K. Complete X-Terra hazard assessment. Contact Davey crew and assess access options to get to structure 285.
 10:30 - Meet Davey crew and review permits and hazard assessments for Davey and X-Terra. Permit outlines 30m wetland buffer for all herbicide activities (including basal bark).
 10:45 - Finish spraying structure #285. Travel to structure #19.
 12:30 - Arrive at Structure #19 is located in same quarter section as EM sites 17-18, but structure #19 itself is not in an AHPP area and does not require an EM (confirmed this in person). Crew completed structure #19. Travel to structures 10 and 9.
 1:30 - Arrive at structures 10 and 9. Both are EM structures - crews completed herbicide application.
 2:00 - Finish structures 10 and 9. All EM sites completed on B1K. Head back to Estevan.
-2:30 - Arrive in Estevan. Complete DFR.`;
+2:30 - Arrive in Estevan. Complete DFR.`,
+    equipmentOnsite: `- None`,
+    weatherAndGroundConditions: `- Overcast conditions
+- Wind 10–20 km/hr
+- Temperatures 16–23°C
+- Dry and stable ground conditions`,
+    environmentalProtection: `- All applicable permit conditions were followed
+- Crews remained within approved project boundaries
+- Wetland buffers were identified and respected
+- No environmental incidents observed`,
+    wildlifeObservations: `- Red-Tailed Hawk
+- Killdeer
+- Western Meadowlark`,
+    futureMonitoring: `- Monitoring will continue the following day
+- Ongoing observation of vegetation management activities`
+};
 
 // --- Main Component ---
 interface DfrSaskpowerProps {
@@ -374,8 +443,188 @@ const DfrSaskpower = ({ onBack, initialData }: DfrSaskpowerProps): ReactElement 
     const [showStatusModal, setShowStatusModal] = useState(false);
     const [statusMessage, setStatusMessage] = useState('');
     const [openComments, setOpenComments] = useState<Set<string>>(new Set());
+    const [zoomLevel, setZoomLevel] = useState(100);
+    const [isDirty, setIsDirty] = useState(false);
+    const [showUnsavedModal, setShowUnsavedModal] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const isDownloadingRef = useRef(false);
+
+    const handleZoomIn = () => setZoomLevel(prev => Math.min(prev + 10, 150));
+    const handleZoomOut = () => setZoomLevel(prev => Math.max(prev - 10, 70));
+    const handleZoomReset = () => setZoomLevel(100);
+
+    // Comments panel state
+    const [commentsCollapsed, setCommentsCollapsed] = useState(false);
+    const [commentAnchors, setCommentAnchors] = useState<Map<string, CommentAnchor>>(new Map());
+    const [hoveredCommentId, setHoveredCommentId] = useState<string | null>(null);
+
+    // Handler to collect anchor positions from BulletPointEditor instances
+    const handleAnchorPositionsChange = useCallback((fieldId: string, anchors: CommentAnchorPosition[]) => {
+        setCommentAnchors(prev => {
+            const newMap = new Map(prev);
+            // Remove old anchors for this field
+            for (const key of newMap.keys()) {
+                if (key.startsWith(`${fieldId}:`)) {
+                    newMap.delete(key);
+                }
+            }
+            // Add new anchors
+            anchors.forEach(anchor => {
+                const key = `${anchor.fieldId}:${anchor.commentId}`;
+                newMap.set(key, {
+                    fieldId: anchor.fieldId,
+                    commentId: anchor.commentId,
+                    top: anchor.top,
+                    left: anchor.left,
+                    height: anchor.height,
+                });
+            });
+            return newMap;
+        });
+    }, []);
+
+    // Field labels for comments panel
+    const fieldLabels: Record<string, string> = {
+        generalActivity: 'General Activity',
+        equipmentOnsite: 'Equipment Onsite',
+        weatherAndGroundConditions: 'Weather & Ground',
+        environmentalProtection: 'Environmental Protection',
+        wildlifeObservations: 'Wildlife Observations',
+        futureMonitoring: 'Future Monitoring',
+    };
+
+    // Collect all comments from all fields into a single array
+    const allComments: FieldComment[] = React.useMemo(() => {
+        if (!data.inlineComments) return [];
+        const fields = ['generalActivity', 'equipmentOnsite', 'weatherAndGroundConditions', 'environmentalProtection', 'wildlifeObservations', 'futureMonitoring'] as const;
+        const comments: FieldComment[] = [];
+        fields.forEach(field => {
+            const fieldComments = data.inlineComments?.[field];
+            if (fieldComments && Array.isArray(fieldComments) && fieldComments.length > 0) {
+                fieldComments.forEach(comment => {
+                    // Skip null/undefined comments or those missing required fields
+                    if (!comment || !comment.id || typeof comment.start !== 'number' || typeof comment.end !== 'number') {
+                        return;
+                    }
+                    comments.push({
+                        ...comment,
+                        fieldId: field,
+                        fieldLabel: fieldLabels[field] || field,
+                    });
+                });
+            }
+        });
+        return comments;
+    }, [data.inlineComments]);
+
+    const hasAnyInlineComments = allComments.length > 0;
+
+    // Comment action handlers for CommentsRail
+    // Use prev callback pattern throughout to avoid stale closure bugs
+    const handleDeleteComment = (fieldId: string, commentId: string) => {
+        setData(prev => {
+            const fieldComments = (prev.inlineComments as any)?.[fieldId];
+            if (!fieldComments) return prev;
+            return {
+                ...prev,
+                inlineComments: {
+                    ...prev.inlineComments,
+                    [fieldId]: fieldComments.filter((c: TextComment) => c.id !== commentId),
+                },
+            };
+        });
+        setIsDirty(true);
+    };
+
+    const handleResolveComment = (fieldId: string, commentId: string) => {
+        setData(prev => {
+            const fieldComments = (prev.inlineComments as any)?.[fieldId];
+            if (!fieldComments) return prev;
+            return {
+                ...prev,
+                inlineComments: {
+                    ...prev.inlineComments,
+                    [fieldId]: fieldComments.map((c: TextComment) =>
+                        c.id === commentId ? { ...c, resolved: !c.resolved } : c
+                    ),
+                },
+            };
+        });
+        setIsDirty(true);
+    };
+
+    const handleUpdateComment = (fieldId: string, commentId: string, newText: string) => {
+        setData(prev => {
+            const fieldComments = (prev.inlineComments as any)?.[fieldId];
+            if (!fieldComments) return prev;
+            return {
+                ...prev,
+                inlineComments: {
+                    ...prev.inlineComments,
+                    [fieldId]: fieldComments.map((c: TextComment) =>
+                        c.id === commentId ? { ...c, text: newText } : c
+                    ),
+                },
+            };
+        });
+        setIsDirty(true);
+    };
+
+    // Reply handlers for CommentsRail
+    const handleAddReply = (fieldId: string, commentId: string, replyText: string) => {
+        setData(prev => {
+            const fieldComments = (prev.inlineComments as any)?.[fieldId];
+            if (!fieldComments) return prev;
+            return {
+                ...prev,
+                inlineComments: {
+                    ...prev.inlineComments,
+                    [fieldId]: fieldComments.map((c: TextComment) => {
+                        if (c.id === commentId) {
+                            const newReply = {
+                                id: `reply_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`,
+                                text: replyText,
+                                author: (window as any).electronAPI?.getUserInfo?.()?.username || 'User',
+                                timestamp: new Date(),
+                            };
+                            return { ...c, replies: [...(c.replies || []), newReply] };
+                        }
+                        return c;
+                    }),
+                },
+            };
+        });
+        setIsDirty(true);
+    };
+
+    const handleDeleteReply = (fieldId: string, commentId: string, replyId: string) => {
+        setData(prev => {
+            const fieldComments = (prev.inlineComments as any)?.[fieldId];
+            if (!fieldComments) return prev;
+            return {
+                ...prev,
+                inlineComments: {
+                    ...prev.inlineComments,
+                    [fieldId]: fieldComments.map((c: TextComment) => {
+                        if (c.id === commentId && c.replies) {
+                            return { ...c, replies: c.replies.filter(r => r.id !== replyId) };
+                        }
+                        return c;
+                    }),
+                },
+            };
+        });
+        setIsDirty(true);
+    };
+
+    // Focus handler - scrolls to comment in text and triggers glow
+    const handleFocusComment = (fieldId: string, commentId: string) => {
+        // Find the element with the comment underline
+        const element = document.querySelector(`[data-comment-id="${commentId}"]`);
+        if (element) {
+            element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+    };
 
     const processLoadedData = async (projectData: any) => {
         const { photosData: loadedPhotos, ...saskpowerData } = projectData;
@@ -482,10 +731,77 @@ const DfrSaskpower = ({ onBack, initialData }: DfrSaskpowerProps): ReactElement 
         loadInitialData();
     }, [initialData]);
 
-    const handleChange = (field: keyof Omit<DfrSaskpowerData, 'comments'>, value: string | ChecklistOption) => {
-        setData(prev => ({ ...prev, [field]: value }));
+    // Track whether the unsaved modal was triggered by window close vs Home button
+    const pendingCloseRef = useRef(false);
+
+    // Warn before closing browser window (non-Electron fallback)
+    useEffect(() => {
+        const handler = (e: BeforeUnloadEvent) => {
+            if (isDirty) {
+                e.preventDefault();
+                e.returnValue = '';
+            }
+        };
+        window.addEventListener('beforeunload', handler);
+        return () => window.removeEventListener('beforeunload', handler);
+    }, [isDirty]);
+
+    // Intercept Electron window close (X button)
+    useEffect(() => {
+        // @ts-ignore
+        const api = window.electronAPI;
+        if (api?.onCloseAttempted) {
+            api.removeCloseAttemptedListener?.();
+            api.onCloseAttempted(() => {
+                if (isDirty) {
+                    pendingCloseRef.current = true;
+                    setShowUnsavedModal(true);
+                } else {
+                    api.confirmClose();
+                }
+            });
+        }
+        return () => {
+            // @ts-ignore
+            window.electronAPI?.removeCloseAttemptedListener?.();
+        };
+    }, [isDirty]);
+
+    const handleBack = () => {
+        if (isDirty) {
+            pendingCloseRef.current = false;
+            setShowUnsavedModal(true);
+        } else {
+            onBack();
+        }
     };
 
+    const handleChange = (field: keyof Omit<DfrSaskpowerData, 'comments' | 'highlights'>, value: string | ChecklistOption | TextHighlight[]) => {
+        setData(prev => ({ ...prev, [field]: value }));
+        setIsDirty(true);
+    };
+
+    const handleHighlightsChange = (field: keyof Omit<DfrSaskpowerData, 'comments'>, highlights: TextHighlight[]) => {
+        setData(prev => ({
+            ...prev,
+            highlights: {
+                ...prev.highlights,
+                [field]: highlights
+            }
+        }));
+        setIsDirty(true);
+    };
+
+    const handleInlineCommentsChange = (field: keyof Omit<DfrSaskpowerData, 'comments'>, comments: TextComment[]) => {
+        setData(prev => ({
+            ...prev,
+            inlineComments: {
+                ...prev.inlineComments,
+                [field]: comments
+            }
+        }));
+        setIsDirty(true);
+    };
     const toggleComment = (field: string) => {
         setOpenComments(prev => {
             const newSet = new Set(prev);
@@ -506,11 +822,13 @@ const DfrSaskpower = ({ onBack, initialData }: DfrSaskpowerProps): ReactElement 
                 [field]: value
             }
         }));
+        setIsDirty(true);
     };
 
     // --- Photo Handlers ---
     const handlePhotoDataChange = (id: number, field: keyof Omit<PhotoData, 'id' | 'imageUrl' | 'imageId'>, value: string) => {
         setPhotosData(prev => prev.map(photo => photo.id === id ? { ...photo, [field]: value } : photo));
+        setIsDirty(true);
     };
     
     const handleImageChange = (id: number, file: File) => {
@@ -525,6 +843,7 @@ const DfrSaskpower = ({ onBack, initialData }: DfrSaskpowerProps): ReactElement 
              const dataUrl = e.target?.result as string;
              autoCropImage(dataUrl).then(croppedImageUrl => {
                 setPhotosData(prev => prev.map(photo => photo.id === id ? { ...photo, imageUrl: croppedImageUrl } : photo));
+                setIsDirty(true);
              });
         };
         reader.readAsDataURL(file);
@@ -567,6 +886,7 @@ const DfrSaskpower = ({ onBack, initialData }: DfrSaskpowerProps): ReactElement 
             }
             return renumberPhotos(newPhotos);
         });
+        setIsDirty(true);
     };
 
     const removePhoto = (id: number) => {
@@ -577,31 +897,43 @@ const DfrSaskpower = ({ onBack, initialData }: DfrSaskpowerProps): ReactElement 
             }
             return renumberPhotos(prev.filter(photo => photo.id !== id));
         });
+        setIsDirty(true);
     };
 
-    const movePhoto = (id: number, direction: 'up' | 'down') => {
-        const index = photosData.findIndex(p => p.id === id);
-        if (index === -1) return;
-
-        const newIndex = direction === 'up' ? index - 1 : index + 1;
-        if (newIndex < 0 || newIndex >= photosData.length) return;
-
-        const newPhotos = [...photosData];
-        [newPhotos[index], newPhotos[newIndex]] = [newPhotos[newIndex], newPhotos[index]];
-        
-        setPhotosData(renumberPhotos(newPhotos));
+    const handlePhotoDragEnd = (event: DragEndEvent) => {
+        const { active, over } = event;
+        if (active.id !== over?.id) {
+            const oldIndex = photosData.findIndex(p => p.id === active.id);
+            const newIndex = photosData.findIndex(p => p.id === over!.id);
+            setPhotosData(renumberPhotos(arrayMove(photosData, oldIndex, newIndex)));
+            setIsDirty(true);
+        }
     };
 
-    const prepareStateForRecentProjectStorage = async (dataToStore: DfrSaskpowerData) => {
-        const photosForStorage = await Promise.all(
-            photosData.map(async (photo) => {
-                if (photo.imageUrl) {
-                    const imageId = photo.imageId || `${dataToStore.projectNumber || 'proj'}-${photo.id}-${Date.now()}`;
+   const prepareStateForRecentProjectStorage = async (dataToStore: DfrSaskpowerData) => {
+    const photosForStorage = await Promise.all(
+        photosData.map(async (photo) => {
+            // Keep imageUrl embedded so Recent Projects work offline
+            if (photo.imageUrl) {
+                const imageId =
+                    photo.imageId ||
+                    `${dataToStore.projectNumber || 'proj'}-${photo.id}-${Date.now()}`;
+
+                // IndexedDB is optional cache
+                try {
                     await storeImage(imageId, photo.imageUrl);
-                    const { imageUrl, ...rest } = photo;
-                    return { ...rest, imageId };
+                } catch (e) {
+                    console.warn('Failed to cache image in IndexedDB', e);
                 }
-                return photo;
+
+                return {
+                    ...photo,
+                    imageId,     // keep imageId
+                    imageUrl: photo.imageUrl // KEEP imageUrl
+                };
+            }
+
+            return photo;
             })
         );
         return { ...dataToStore, photosData: photosForStorage };
@@ -643,8 +975,8 @@ const DfrSaskpower = ({ onBack, initialData }: DfrSaskpowerProps): ReactElement 
     };
 
     const addSafeLogo = async (docInstance: any, x: number, y: number, w: number, h: number) => {
-        const logoUrl = await getAssetUrl("xterra-logo.jpg");
         try {
+            const logoUrl = await getAssetUrl("xterra-logo.jpg");
             const response = await fetch(logoUrl);
             if (!response.ok) throw new Error('Logo fetch failed');
             const blob = await response.blob();
@@ -653,6 +985,10 @@ const DfrSaskpower = ({ onBack, initialData }: DfrSaskpowerProps): ReactElement 
                 reader.onloadend = () => {
                     const base64data = reader.result as string;
                     docInstance.addImage(base64data, 'JPEG', x, y, w, h);
+                    resolve();
+                };
+                reader.onerror = () => {
+                    console.error("FileReader failed to read logo");
                     resolve();
                 };
                 reader.readAsDataURL(blob);
@@ -670,6 +1006,14 @@ const DfrSaskpower = ({ onBack, initialData }: DfrSaskpowerProps): ReactElement 
         // Removed internet check to allow offline PDF generation
         if (!validateForm()) return;
 
+        // Show loading indicator
+        setStatusMessage('Generating PDF...');
+        setShowStatusModal(true);
+
+        // Allow UI to update before heavy processing
+        await new Promise(resolve => setTimeout(resolve, 50));
+
+        try {
         const stateForSaving = await prepareStateForRecentProjectStorage(data);
         const formattedDate = formatDateForRecentProject(data.date);
         const dateSuffix = formattedDate ? ` - ${formattedDate}` : '';
@@ -706,7 +1050,15 @@ const DfrSaskpower = ({ onBack, initialData }: DfrSaskpowerProps): ReactElement 
             const startX = borderMargin;
             const endX = pageWidth - borderMargin;
             const bottomY = pageHeight - borderMargin;
-            docInstance.line(startX, bottomY, endX, bottomY);
+      // Bottom line adjustments and spacing
+           const BOTTOM_LINE_NUDGE_UP = 4; // mm (use 0.5–2)
+
+            docInstance.line(
+            startX,
+            bottomY - BOTTOM_LINE_NUDGE_UP,
+            endX,
+            bottomY - BOTTOM_LINE_NUDGE_UP
+);
         };
         
         const drawProjectInfoBlock = (docInstance: any, startY: number, options: { drawTopLine?: boolean, drawBottomLine?: boolean } = {}) => {
@@ -1025,74 +1377,188 @@ const renderTextSection = async (
         const mapPhotosData = photosData.filter(p => p.isMap && p.imageUrl);
         
         const calculatePhotoEntryHeight = async (docInstance: any, photo: PhotoData): Promise<number> => {
-            const gap = 5; const availableWidth = contentWidth - gap; const textBlockWidth = availableWidth * 0.35;
-            const imageBlockWidth = availableWidth * 0.65; docInstance.setFontSize(12); let textHeight = 0;
-            const textMetrics = docInstance.getTextDimensions('Photo'); textHeight += textMetrics.h * 0.75;
-            const measureField = (label: string, value: string) => {
-                const labelText = `${label}:`; docInstance.setFont('times', 'bold');
-                const labelWidth = docInstance.getTextWidth(labelText); docInstance.setFont('times', 'normal');
-                const valueMaxWidth = textBlockWidth - labelWidth - 2;
-                const valueLines = docInstance.splitTextToSize(value || ' ', valueMaxWidth);
-                return docInstance.getTextDimensions(valueLines).h + 1.5;
-            };
-            textHeight += measureField(photo.isMap ? "Map" : "Photo", photo.photoNumber);
-            if (!photo.isMap) textHeight += measureField("Direction", photo.direction || 'N/A');
-            textHeight += measureField("Date", photo.date); textHeight += measureField("Location", photo.location);
-            textHeight += 5; const descLines = docInstance.splitTextToSize(photo.description || ' ', textBlockWidth);
-            textHeight += docInstance.getTextDimensions(descLines).h;
-            let imageH = 0;
-            if (photo.imageUrl) { try { const { width, height } = await getImageDimensions(photo.imageUrl); imageH = height * (imageBlockWidth / width); } catch (e) { console.error("Could not load image", e); }}
-            return Math.max(textHeight, imageH);
-        };
+                    const gap = 5;
+                    const availableWidth = contentWidth - gap;
+                    const textBlockWidth = availableWidth * 0.33;
+                    const imageBlockWidth = availableWidth * 0.73;
+                    
+                    docInstance.setFontSize(12);
+                    let textHeight = 0;
+                    const textMetrics = docInstance.getTextDimensions('Photo');
+                    textHeight += textMetrics.h * 0.75;
+                    
+                    const measureField = (label: string, value: string) => {
+                        const labelText = `${label}:`;
+                        docInstance.setFont('times', 'bold');
+                        const labelWidth = docInstance.getTextWidth(labelText);
+                        docInstance.setFont('times', 'normal');
+                        const valueMaxWidth = textBlockWidth - labelWidth - 2;
+                        const valueLines = docInstance.splitTextToSize(value || ' ', valueMaxWidth);
+                        return docInstance.getTextDimensions(valueLines).h + 1.5;
+                    };
         
-        const drawPhotoEntryText = (docInstance: any, photo: PhotoData, xStart: number, yStart: number, textBlockWidth: number) => {
-            docInstance.setFontSize(12); docInstance.setFont('times', 'normal');
-            const textMetrics = docInstance.getTextDimensions('Photo'); const ascent = textMetrics.h * 0.75; let textY = yStart + ascent;
-            const drawTextField = (label: string, value: string) => {
-                docInstance.setFont('times', 'bold'); const labelText = `${label}:`; docInstance.text(labelText, xStart, textY); docInstance.setFont('times', 'normal');
-                const labelWidth = docInstance.getTextWidth(labelText); const valueMaxWidth = textBlockWidth - labelWidth - 2;
-                const valueLines = docInstance.splitTextToSize(value || ' ', valueMaxWidth); docInstance.text(valueLines, xStart + labelWidth + 2, textY);
-                textY += docInstance.getTextDimensions(valueLines).h + 1.5;
-            };
-            drawTextField(photo.isMap ? "Map" : "Photo", photo.photoNumber); if (!photo.isMap) drawTextField("Direction", photo.direction || 'N/A');
-            drawTextField("Date", photo.date); drawTextField("Location", photo.location);
-            docInstance.setFont('times', 'bold'); docInstance.text(`Description:`, xStart, textY); textY += 5;
-            docInstance.setFont('times', 'normal'); const descLines = docInstance.splitTextToSize(photo.description || ' ', textBlockWidth); docInstance.text(descLines, xStart, textY);
-        };
+                    textHeight += measureField(photo.isMap ? "Map" : "Photo", photo.photoNumber);
+                    if (!photo.isMap) textHeight += measureField("Direction", photo.direction || 'N/A');
+                    textHeight += measureField("Date", photo.date);
+                    textHeight += measureField("Location", photo.location);
+                    textHeight += 5;
+                    const descLines = docInstance.splitTextToSize(photo.description || ' ', textBlockWidth);
+                    textHeight += docInstance.getTextDimensions(descLines).h;
         
-        const drawPhotoEntry = async (docInstance: any, photo: PhotoData, yStart: number) => {
-            const gap = 5; const availableWidth = contentWidth - gap; const textBlockWidth = availableWidth * 0.35; const imageBlockWidth = availableWidth * 0.65;
-            const imageX = contentMargin + textBlockWidth + gap; drawPhotoEntryText(docInstance, photo, contentMargin, yStart, textBlockWidth);
-            if (photo.imageUrl) { const { width, height } = await getImageDimensions(photo.imageUrl); const scaledHeight = height * (imageBlockWidth / width); docInstance.addImage(photo.imageUrl, 'JPEG', imageX, yStart, imageBlockWidth, scaledHeight); }
-        };
-
-        if (sitePhotos.length > 0) {
-            const entryHeights = await Promise.all(sitePhotos.map(p => calculatePhotoEntryHeight(doc, p)));
-            const dummyDoc = new jsPDF(); const yAfterHeader = await drawPhotoPageHeader(dummyDoc); const pageContentHeight = maxYPos - yAfterHeader;
-            const pages: number[][] = []; let currentPageGroup: number[] = []; let currentHeight = 0;
-            sitePhotos.forEach((_, i) => {
-                const photoHeight = entryHeights[i];
-                if (currentPageGroup.length === 0) { currentPageGroup.push(i); currentHeight = photoHeight; }
-                else if (currentPageGroup.length === 1) { if (currentHeight + photoHeight + 10 <= pageContentHeight) { currentPageGroup.push(i); } else { pages.push(currentPageGroup); currentPageGroup = [i]; currentHeight = photoHeight; } }
-                if (currentPageGroup.length === 2) { pages.push(currentPageGroup); currentPageGroup = []; currentHeight = 0; }
-            });
-            if (currentPageGroup.length > 0) pages.push(currentPageGroup);
-            for (const group of pages) {
-                doc.addPage(); pageNum++; let yPosPhoto = await drawPhotoPageHeader(doc);
-                const photosOnPage = group.map(i => sitePhotos[i]); const heightsOnPage = group.map(i => entryHeights[i]);
-                const availableHeight = maxYPos - yPosPhoto;
-                if (photosOnPage.length === 1) { await drawPhotoEntry(doc, photosOnPage[0], yPosPhoto); }
-                else {
-                    const totalContentHeight = heightsOnPage.reduce((sum, h) => sum + h, 0); const tightGap = 4;
-                    const totalRemainingSpace = availableHeight - totalContentHeight - (tightGap * 2); const largeGap = totalRemainingSpace > 0 ? totalRemainingSpace / 2 : 2;
-                    yPosPhoto += tightGap; await drawPhotoEntry(doc, photosOnPage[0], yPosPhoto); yPosPhoto += heightsOnPage[0];
-                    yPosPhoto += largeGap; doc.setDrawColor(0, 125, 140); doc.setLineWidth(0.5); doc.line(borderMargin, yPosPhoto, pageWidth - borderMargin, yPosPhoto);
-                    yPosPhoto += tightGap; await drawPhotoEntry(doc, photosOnPage[1], yPosPhoto);
+                    let imageH = 0;
+                    if (photo.imageUrl) {
+                        try {
+                            const { width, height } = await getImageDimensions(photo.imageUrl);
+                            imageH = height * (imageBlockWidth / width);
+                        } catch (e) {
+                            console.error("Could not load image for height calculation", e);
+                        }
+                    }
+                    return Math.max(textHeight, imageH);
+                };
+                
+                const drawPhotoEntryText = (docInstance: any, photo: PhotoData, xStart: number, yStart: number, textBlockWidth: number) => {
+                    docInstance.setFontSize(12);
+                    docInstance.setFont('times', 'normal');
+        
+                    const textMetrics = docInstance.getTextDimensions('Photo');
+                    const ascent = textMetrics.h * 0.75;
+                    let textY = yStart + ascent;
+        
+                    const drawTextField = (label: string, value: string) => {
+                        docInstance.setFont('times', 'bold');
+                        const labelText = `${label}:`;
+                        docInstance.text(labelText, xStart, textY);
+                        
+                        docInstance.setFont('times', 'normal');
+                        const labelWidth = docInstance.getTextWidth(labelText);
+                        const valueMaxWidth = textBlockWidth - labelWidth - 2;
+                        const valueLines = docInstance.splitTextToSize(value || ' ', valueMaxWidth);
+                        docInstance.text(valueLines, xStart + labelWidth + 2, textY);
+                        textY += docInstance.getTextDimensions(valueLines).h + 1.5;
+                    };
+        
+                    drawTextField(photo.isMap ? "Map" : "Photo", photo.photoNumber);
+                    if (!photo.isMap) drawTextField("Direction", photo.direction || 'N/A');
+                    drawTextField("Date", photo.date);
+                    drawTextField("Location", photo.location);
+        
+                    docInstance.setFont('times', 'bold');
+                    docInstance.text(`Description:`, xStart, textY);
+                    textY += 5;
+                    docInstance.setFont('times', 'normal');
+                    const descLines = docInstance.splitTextToSize(photo.description || ' ', textBlockWidth);
+                    docInstance.text(descLines, xStart, textY);
+                };
+                
+                 const drawPhotoEntry = async (
+                          docInstance: any,
+                          photo: PhotoData,
+                          yStart: number
+                        ) => {
+                          const gap = 5;
+                          const availableWidth = contentWidth - gap;
+                          const textBlockWidth = availableWidth * 0.33;
+                        
+                          // Bigger photo (fixed size)
+                          const imageBlockWidth = availableWidth * 0.73;      // wider
+                          const imageBlockHeight = imageBlockWidth * (3 / 4); // 4:3 ratio
+                        
+                          // Shift photo slightly to the right
+                          const PHOTO_X_NUDGE = -5; // mm
+                          const imageX =
+                            contentMargin +
+                            textBlockWidth +
+                            gap +
+                            PHOTO_X_NUDGE;
+                        
+                            drawPhotoEntryText(docInstance, photo, contentMargin, yStart, textBlockWidth);
+                
+                            if (photo.imageUrl) {
+                                const { width, height } = await getImageDimensions(photo.imageUrl);
+                                const scaledHeight = height * (imageBlockWidth / width);
+                                docInstance.addImage(photo.imageUrl, 'JPEG', imageX, yStart, imageBlockWidth, scaledHeight);
+                            }
+                        };
+        
+                if (sitePhotos.length > 0) {
+                    setStatusMessage(`Processing ${sitePhotos.length} photo(s)...`);
+                    await new Promise(resolve => setTimeout(resolve, 10));
+                    const entryHeights = await Promise.all(sitePhotos.map(p => calculatePhotoEntryHeight(doc, p)));
+                    const dummyDoc = new jsPDF();
+                    const yAfterHeader = await drawPhotoPageHeader(dummyDoc);
+                    const pageContentHeight = maxYPos - yAfterHeader;
+                    
+                    const pages: number[][] = [];
+                    let currentPageGroup: number[] = [];
+                    let currentHeight = 0;
+        
+                    sitePhotos.forEach((_, i) => {
+                        const photoHeight = entryHeights[i];
+                        if (currentPageGroup.length === 0) {
+                            currentPageGroup.push(i);
+                            currentHeight = photoHeight;
+                        } else if (currentPageGroup.length === 1) {
+                            if (currentHeight + photoHeight + 10 <= pageContentHeight) { 
+                                currentPageGroup.push(i);
+                            } else {
+                                pages.push(currentPageGroup);
+                                currentPageGroup = [i];
+                                currentHeight = photoHeight;
+                            }
+                        }
+                        
+                        if (currentPageGroup.length === 2) {
+                            pages.push(currentPageGroup);
+                            currentPageGroup = [];
+                            currentHeight = 0;
+                        }
+                    });
+        
+                    if (currentPageGroup.length > 0) pages.push(currentPageGroup);
+        
+                    let isFirstPhotoPage = true;
+                    for (const group of pages) {
+                        doc.addPage(); pageNum++;
+                        isFirstPhotoPage = false;
+                        
+                        let yPos = await drawPhotoPageHeader(doc);
+                        const photosOnPage = group.map(i => sitePhotos[i]);
+                        const heightsOnPage = group.map(i => entryHeights[i]);
+                        const availableHeight = maxYPos - yPos;
+        
+                        if (photosOnPage.length === 1) {
+                            await drawPhotoEntry(doc, photosOnPage[0], yPos);
+                        } else {
+                            const totalContentHeight = heightsOnPage.reduce((sum, h) => sum + h, 0);
+                            const tightGap = 4; // The smaller gap above photos
+                            
+                            const totalRemainingSpace = availableHeight - totalContentHeight - (tightGap * 2);
+                            const largeGap = totalRemainingSpace > 0 ? totalRemainingSpace / 2 : 2;
+        
+                            // Position first photo
+                            yPos += tightGap;
+                            await drawPhotoEntry(doc, photosOnPage[0], yPos);
+                            yPos += heightsOnPage[0];
+        
+                            // Position separator line
+                            yPos += largeGap;
+                            doc.setDrawColor(0, 125, 140); // Teal
+                            doc.setLineWidth(0.5);
+                            const MIDDLE_LINE_NUDGE = -2; // mm (negative = up, positive = down)
+                            doc.line(
+                                borderMargin,
+                                yPos + MIDDLE_LINE_NUDGE,
+                                pageWidth - borderMargin,
+                                yPos + MIDDLE_LINE_NUDGE
+                    );
+                            // Position second photo
+                            yPos += tightGap;
+                            await drawPhotoEntry(doc, photosOnPage[1], yPos);
+                        }
+                        drawPageBorder(doc);
+                    }
                 }
-                drawPageBorder(doc);
-            }
-        }
-        
         const calculateMapTextHeight = (docInstance: any, photo: PhotoData, textBlockWidth: number): number => {
             let height = 0; docInstance.setFontSize(12); docInstance.setFont('times', 'normal'); const textMetrics = docInstance.getTextDimensions('Photo'); height += textMetrics.h * 0.75;
             const measureField = (label: string, value: string) => {
@@ -1130,6 +1596,9 @@ const renderTextSection = async (
         const pdfBlob = doc.output('blob');
         const pdfUrl = URL.createObjectURL(pdfBlob);
         setPdfPreview({ url: pdfUrl, filename, blob: pdfBlob });
+        } finally {
+            setShowStatusModal(false);
+        }
     };
 
     const handleSaveProject = async () => {
@@ -1161,8 +1630,9 @@ const renderTextSection = async (
             document.body.removeChild(link);
             URL.revokeObjectURL(link.href);
         }
+        setIsDirty(false);
     };
-    
+
     const handleDownloadPhotos = useCallback(async () => {
         if (isDownloadingRef.current) return;
         isDownloadingRef.current = true;
@@ -1269,6 +1739,26 @@ Description: ${photo.description || 'N/A'}
         };
     }, [stableListener]); // stableListener is memoized, so this effect runs once on mount/unmount.
 
+    // Keyboard shortcut listeners
+    useEffect(() => {
+        const api = window.electronAPI;
+        if (api?.onSaveProjectShortcut) {
+            api.removeSaveProjectShortcutListener?.();
+            api.onSaveProjectShortcut(() => {
+                handleSaveProject();
+            });
+        }
+        if (api?.onExportPdfShortcut) {
+            api.removeExportPdfShortcutListener?.();
+            api.onExportPdfShortcut(() => {
+                handleSavePdf();
+            });
+        }
+        return () => {
+            api?.removeSaveProjectShortcutListener?.();
+            api?.removeExportPdfShortcutListener?.();
+        };
+    }, [data, photosData]);
 
     const handleOpenProject = async () => {
         // @ts-ignore
@@ -1320,7 +1810,11 @@ Description: ${photo.description || 'N/A'}
             )}
             {showStatusModal && <ActionStatusModal message={statusMessage} />}
             <SpecialCharacterPalette />
-            <div className="max-w-7xl mx-auto p-4 md:p-8">
+
+            {/* Flex container: content + comments side by side, scroll together */}
+            <div className="flex justify-center gap-2 lg:gap-4 p-2 sm:p-4 lg:p-6 xl:p-8">
+                {/* Main content column - scales down on laptops to fit comments */}
+                <div className="flex-1 min-w-0 max-w-[1400px]">
                 {showMigrationNotice && (
                     <div className="bg-blue-100 border-l-4 border-blue-500 text-blue-700 p-4 mb-6 rounded-md shadow-sm" role="alert">
                         <div className="flex">
@@ -1338,39 +1832,54 @@ Description: ${photo.description || 'N/A'}
                         </div>
                     </div>
                 )}
-                <div className="flex flex-wrap justify-between items-center gap-2 mb-4">
-                    <button onClick={onBack} className="bg-gray-200 hover:bg-gray-300 text-gray-800 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-white font-bold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
-                        <ArrowLeftIcon /> <span>Home</span>
-                    </button>
-                    <div className="flex flex-wrap justify-end gap-2">
-                        <button onClick={handleOpenProject} className="bg-gray-600 hover:bg-gray-700 dark:bg-gray-500 dark:hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
-                            <FolderOpenIcon /> <span>Open Project</span>
+                <div className="sticky top-0 z-40 bg-gray-100 dark:bg-gray-900 py-2 mb-4 border-b border-gray-200 dark:border-gray-700">
+                    <div className="flex flex-wrap justify-between items-center gap-2">
+                        <button onClick={handleBack} className="bg-gray-200 hover:bg-gray-300 text-gray-800 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-white font-bold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
+                            <ArrowLeftIcon /> <span>Home</span>
                         </button>
-                         <input
-                            type="file"
-                            ref={fileInputRef}
-                            onChange={handleFileSelected}
-                            style={{ display: 'none' }}
-                            accept=".spdfr"
-                        />
-                        <button onClick={handleSaveProject} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
-                            <SaveIcon /> <span>Save Project</span>
-                        </button>
-                        {/* @ts-ignore */}
-                        {!window.electronAPI && (
-                            <button onClick={handleDownloadPhotos} className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
-                                <FolderArrowDownIcon /> <span>Download Photos</span>
+                        <div className="flex flex-wrap justify-end gap-2">
+                            <button onClick={handleOpenProject} className="bg-gray-600 hover:bg-gray-700 dark:bg-gray-500 dark:hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
+                                <FolderOpenIcon /> <span>Open Project</span>
                             </button>
-                        )}
-                        <button onClick={handleSavePdf} className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
-                            <DownloadIcon /> <span>Save to PDF</span>
-                        </button>
+                             <input
+                                type="file"
+                                ref={fileInputRef}
+                                onChange={handleFileSelected}
+                                style={{ display: 'none' }}
+                                accept=".spdfr"
+                            />
+                            <button onClick={handleSaveProject} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
+                                <SaveIcon /> <span>Save Project</span>
+                            </button>
+                            {/* @ts-ignore */}
+                            {!window.electronAPI && (
+                                <button onClick={handleDownloadPhotos} className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
+                                    <FolderArrowDownIcon /> <span>Download Photos</span>
+                                </button>
+                            )}
+                            <button onClick={handleSavePdf} className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
+                                <DownloadIcon /> <span>Save to PDF</span>
+                            </button>
+                        </div>
                     </div>
                 </div>
 
-                <div className="main-content space-y-8">
+                {/* Zoom Controls */}
+                <div className="flex items-center justify-end gap-1 mb-4">
+                    <button onClick={handleZoomOut} className="p-1.5 rounded-md bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 transition" title="Zoom out">
+                        <ZoomOutIcon className="h-4 w-4" />
+                    </button>
+                    <button onClick={handleZoomReset} className="px-2 py-1 text-xs font-medium rounded-md bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 transition min-w-[3rem]" title="Reset zoom">
+                        {zoomLevel}%
+                    </button>
+                    <button onClick={handleZoomIn} className="p-1.5 rounded-md bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 transition" title="Zoom in">
+                        <ZoomInIcon className="h-4 w-4" />
+                    </button>
+                </div>
+
+                <div className="main-content space-y-8" style={{ overflow: 'visible', transform: `scale(${zoomLevel / 100})`, transformOrigin: 'top left', width: `${10000 / zoomLevel}%` }}>
                     {/* Header Section */}
-                    <div className="bg-white dark:bg-gray-800 p-6 shadow-md rounded-lg transition-colors duration-200">
+                    <div className="bg-white dark:bg-gray-800 p-6 shadow-md rounded-lg transition-colors duration-200" style={{ overflow: 'visible' }}>
                         <div className="flex justify-center md:justify-start mb-4">
                              <SafeImage fileName="xterra-logo.jpg" alt="X-TERRA Logo" className="h-14 w-auto mix-blend-multiply dark:mix-blend-normal dark:bg-white dark:p-1 dark:rounded-sm" />
                         </div>
@@ -1382,17 +1891,17 @@ Description: ${photo.description || 'N/A'}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                              {/* Col 1 */}
                             <div className="space-y-4">
-                                <EditableField label="PROPONENT" value={data.proponent} onChange={(v) => handleChange('proponent', v)} />
-                                <EditableField label="PROJECT" value={data.projectName} onChange={(v) => handleChange('projectName', v)} />
-                                <EditableField label="LOCATION" value={data.location} onChange={(v) => handleChange('location', v)} isTextArea />
-                                <EditableField label="ENV FILE NUMBER" value={data.envFileNumber} onChange={(v) => handleChange('envFileNumber', v)} />
+                                <EditableField label="PROPONENT" value={data.proponent} onChange={(v) => handleChange('proponent', v)} isInvalid={errors.has('proponent')} />
+                                <EditableField label="PROJECT" value={data.projectName} onChange={(v) => handleChange('projectName', v)} isInvalid={errors.has('projectName')} />
+                                <EditableField label="LOCATION" value={data.location} onChange={(v) => handleChange('location', v)} isTextArea isInvalid={errors.has('location')} />
+                                <EditableField label="ENV FILE NUMBER" value={data.envFileNumber} onChange={(v) => handleChange('envFileNumber', v)} isInvalid={errors.has('envFileNumber')} />
                             </div>
                             {/* Col 2 */}
                              <div className="space-y-4">
-                                <EditableField label="DATE" value={data.date} onChange={(v) => handleChange('date', v)} placeholder="Month Day, Year" />
-                                <EditableField label="X-TERRA PROJECT #" value={data.projectNumber} onChange={(v) => handleChange('projectNumber', v)} />
-                                <EditableField label="MONITOR" value={data.environmentalMonitor} onChange={(v) => handleChange('environmentalMonitor', v)} />
-                                <EditableField label="VENDOR & FOREMAN" value={data.vendorAndForeman} onChange={(v) => handleChange('vendorAndForeman', v)} />
+                                <EditableField label="DATE" value={data.date} onChange={(v) => handleChange('date', v)} placeholder="Month Day, Year" isInvalid={errors.has('date')} />
+                                <EditableField label="X-TERRA PROJECT #" value={data.projectNumber} onChange={(v) => handleChange('projectNumber', v)} isInvalid={errors.has('projectNumber')} />
+                                <EditableField label="MONITOR" value={data.environmentalMonitor} onChange={(v) => handleChange('environmentalMonitor', v)} isInvalid={errors.has('environmentalMonitor')} />
+                                <EditableField label="VENDOR & FOREMAN" value={data.vendorAndForeman} onChange={(v) => handleChange('vendorAndForeman', v)} isInvalid={errors.has('vendorAndForeman')} />
                             </div>
                         </div>
                     </div>
@@ -1406,9 +1915,9 @@ Description: ${photo.description || 'N/A'}
                             </button>
                         </div>
                          {openComments.has('generalActivity') && (
-                            <textarea value={data.comments?.generalActivity || ''} onChange={(e) => handleCommentChange('generalActivity', e.target.value)} placeholder="Add a comment for editing purposes..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 text-gray-900 rounded-md shadow-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition mb-2" />
+                            <textarea value={data.comments?.generalActivity || ''} onChange={(e) => handleCommentChange('generalActivity', e.target.value)} placeholder="Add a comment for editing purposes..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 text-gray-900 rounded-md shadow-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition mb-2" spellCheck={true} />
                         )}
-                        <BulletPointEditor label="" value={data.generalActivity} onChange={(v) => handleChange('generalActivity', v)} rows={15} placeholder={activityPlaceholder} />
+                        <BulletPointEditor label="" fieldId="generalActivity" value={data.generalActivity} highlights={data.highlights?.generalActivity} inlineComments={data.inlineComments?.generalActivity} onChange={(v) => handleChange('generalActivity', v)} onHighlightsChange={(h) => handleHighlightsChange('generalActivity', h)} onInlineCommentsChange={(c) => handleInlineCommentsChange('generalActivity', c)} onAnchorPositionsChange={(a) => handleAnchorPositionsChange('generalActivity', a)} hoveredCommentId={hoveredCommentId} rows={15} placeholder={saskPowerPlaceholders.generalActivity} isInvalid={errors.has('generalActivity')} />
                     </Section>
 
                     {/* Equipment & Conditions */}
@@ -1422,9 +1931,9 @@ Description: ${photo.description || 'N/A'}
                                     </button>
                                 </div>
                                 {openComments.has('equipmentOnsite') && (
-                                    <textarea value={data.comments?.equipmentOnsite || ''} onChange={(e) => handleCommentChange('equipmentOnsite', e.target.value)} placeholder="Add a comment..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 text-gray-900 rounded-md shadow-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition mb-2" />
+                                    <textarea value={data.comments?.equipmentOnsite || ''} onChange={(e) => handleCommentChange('equipmentOnsite', e.target.value)} placeholder="Add a comment..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 text-gray-900 rounded-md shadow-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition mb-2" spellCheck={true} />
                                 )}
-                                <BulletPointEditor label="" value={data.equipmentOnsite} onChange={(v) => handleChange('equipmentOnsite', v)} rows={3} />
+                                <BulletPointEditor label="" fieldId="equipmentOnsite" value={data.equipmentOnsite} highlights={data.highlights?.equipmentOnsite} inlineComments={data.inlineComments?.equipmentOnsite} onChange={(v) => handleChange('equipmentOnsite', v)} onHighlightsChange={(h) => handleHighlightsChange('equipmentOnsite', h)} onInlineCommentsChange={(c) => handleInlineCommentsChange('equipmentOnsite', c)} onAnchorPositionsChange={(a) => handleAnchorPositionsChange('equipmentOnsite', a)} hoveredCommentId={hoveredCommentId} rows={3} placeholder={saskPowerPlaceholders.equipmentOnsite} isInvalid={errors.has('equipmentOnsite')} />
                             </div>
 
                             <div>
@@ -1435,9 +1944,9 @@ Description: ${photo.description || 'N/A'}
                                     </button>
                                 </div>
                                 {openComments.has('weatherAndGroundConditions') && (
-                                    <textarea value={data.comments?.weatherAndGroundConditions || ''} onChange={(e) => handleCommentChange('weatherAndGroundConditions', e.target.value)} placeholder="Add a comment..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 text-gray-900 rounded-md shadow-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition mb-2" />
+                                    <textarea value={data.comments?.weatherAndGroundConditions || ''} onChange={(e) => handleCommentChange('weatherAndGroundConditions', e.target.value)} placeholder="Add a comment..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 text-gray-900 rounded-md shadow-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition mb-2" spellCheck={true} />
                                 )}
-                                <BulletPointEditor label="" value={data.weatherAndGroundConditions} onChange={(v) => handleChange('weatherAndGroundConditions', v)} rows={3} />
+                                <BulletPointEditor label="" fieldId="weatherAndGroundConditions" value={data.weatherAndGroundConditions} highlights={data.highlights?.weatherAndGroundConditions} inlineComments={data.inlineComments?.weatherAndGroundConditions} onChange={(v) => handleChange('weatherAndGroundConditions', v)} onHighlightsChange={(h) => handleHighlightsChange('weatherAndGroundConditions', h)} onInlineCommentsChange={(c) => handleInlineCommentsChange('weatherAndGroundConditions', c)} onAnchorPositionsChange={(a) => handleAnchorPositionsChange('weatherAndGroundConditions', a)} hoveredCommentId={hoveredCommentId} rows={3} placeholder={saskPowerPlaceholders.weatherAndGroundConditions} isInvalid={errors.has('weatherAndGroundConditions')} />
                             </div>
 
                             <div>
@@ -1448,9 +1957,9 @@ Description: ${photo.description || 'N/A'}
                                     </button>
                                 </div>
                                 {openComments.has('environmentalProtection') && (
-                                    <textarea value={data.comments?.environmentalProtection || ''} onChange={(e) => handleCommentChange('environmentalProtection', e.target.value)} placeholder="Add a comment..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 text-gray-900 rounded-md shadow-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition mb-2" />
+                                    <textarea value={data.comments?.environmentalProtection || ''} onChange={(e) => handleCommentChange('environmentalProtection', e.target.value)} placeholder="Add a comment..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 text-gray-900 rounded-md shadow-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition mb-2" spellCheck={true} />
                                 )}
-                                <BulletPointEditor label="" value={data.environmentalProtection} onChange={(v) => handleChange('environmentalProtection', v)} rows={3} />
+                                <BulletPointEditor label="" fieldId="environmentalProtection" value={data.environmentalProtection} highlights={data.highlights?.environmentalProtection} inlineComments={data.inlineComments?.environmentalProtection} onChange={(v) => handleChange('environmentalProtection', v)} onHighlightsChange={(h) => handleHighlightsChange('environmentalProtection', h)} onInlineCommentsChange={(c) => handleInlineCommentsChange('environmentalProtection', c)} onAnchorPositionsChange={(a) => handleAnchorPositionsChange('environmentalProtection', a)} hoveredCommentId={hoveredCommentId} rows={3} placeholder={saskPowerPlaceholders.environmentalProtection} isInvalid={errors.has('environmentalProtection')} />
                             </div>
                             
                             <div>
@@ -1461,9 +1970,9 @@ Description: ${photo.description || 'N/A'}
                                     </button>
                                 </div>
                                 {openComments.has('wildlifeObservations') && (
-                                    <textarea value={data.comments?.wildlifeObservations || ''} onChange={(e) => handleCommentChange('wildlifeObservations', e.target.value)} placeholder="Add a comment..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 text-gray-900 rounded-md shadow-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition mb-2" />
+                                    <textarea value={data.comments?.wildlifeObservations || ''} onChange={(e) => handleCommentChange('wildlifeObservations', e.target.value)} placeholder="Add a comment..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 text-gray-900 rounded-md shadow-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition mb-2" spellCheck={true} />
                                 )}
-                                <BulletPointEditor label="" value={data.wildlifeObservations} onChange={(v) => handleChange('wildlifeObservations', v)} rows={3} />
+                                <BulletPointEditor label="" fieldId="wildlifeObservations" value={data.wildlifeObservations} highlights={data.highlights?.wildlifeObservations} inlineComments={data.inlineComments?.wildlifeObservations} onChange={(v) => handleChange('wildlifeObservations', v)} onHighlightsChange={(h) => handleHighlightsChange('wildlifeObservations', h)} onInlineCommentsChange={(c) => handleInlineCommentsChange('wildlifeObservations', c)} onAnchorPositionsChange={(a) => handleAnchorPositionsChange('wildlifeObservations', a)} hoveredCommentId={hoveredCommentId} rows={3} placeholder={saskPowerPlaceholders.wildlifeObservations} isInvalid={errors.has('wildlifeObservations')} />
                             </div>
 
                              <div>
@@ -1474,9 +1983,9 @@ Description: ${photo.description || 'N/A'}
                                     </button>
                                 </div>
                                 {openComments.has('futureMonitoring') && (
-                                    <textarea value={data.comments?.futureMonitoring || ''} onChange={(e) => handleCommentChange('futureMonitoring', e.target.value)} placeholder="Add a comment..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 text-gray-900 rounded-md shadow-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition mb-2" />
+                                    <textarea value={data.comments?.futureMonitoring || ''} onChange={(e) => handleCommentChange('futureMonitoring', e.target.value)} placeholder="Add a comment..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 text-gray-900 rounded-md shadow-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition mb-2" spellCheck={true} />
                                 )}
-                                <BulletPointEditor label="" value={data.futureMonitoring} onChange={(v) => handleChange('futureMonitoring', v)} rows={3} />
+                                <BulletPointEditor label="" fieldId="futureMonitoring" value={data.futureMonitoring} highlights={data.highlights?.futureMonitoring} inlineComments={data.inlineComments?.futureMonitoring} onChange={(v) => handleChange('futureMonitoring', v)} onHighlightsChange={(h) => handleHighlightsChange('futureMonitoring', h)} onInlineCommentsChange={(c) => handleInlineCommentsChange('futureMonitoring', c)} onAnchorPositionsChange={(a) => handleAnchorPositionsChange('futureMonitoring', a)} hoveredCommentId={hoveredCommentId} rows={3} placeholder={saskPowerPlaceholders.futureMonitoring} isInvalid={errors.has('futureMonitoring')} />
                             </div>
                         </div>
                     </Section>
@@ -1485,14 +1994,14 @@ Description: ${photo.description || 'N/A'}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                         <Section title="Daily Checklists">
                              <div className="space-y-0">
-                                <ChecklistRow label="Completed/Reviewed X-Terra Tailgate" value={data.completedTailgate} onChange={(v) => handleChange('completedTailgate', v)} />
-                                <ChecklistRow label="Reviewed/Signed Crew Tailgate" value={data.reviewedTailgate} onChange={(v) => handleChange('reviewedTailgate', v)} />
-                                <ChecklistRow label="Reviewed Permit(s) with Crew(s)" value={data.reviewedPermits} onChange={(v) => handleChange('reviewedPermits', v)} />
+                                <ChecklistRow label="Completed/Reviewed X-Terra Tailgate" value={data.completedTailgate} onChange={(v) => handleChange('completedTailgate', v)} isInvalid={errors.has('completedTailgate')} />
+                                <ChecklistRow label="Reviewed/Signed Crew Tailgate" value={data.reviewedTailgate} onChange={(v) => handleChange('reviewedTailgate', v)} isInvalid={errors.has('reviewedTailgate')} />
+                                <ChecklistRow label="Reviewed Permit(s) with Crew(s)" value={data.reviewedPermits} onChange={(v) => handleChange('reviewedPermits', v)} isInvalid={errors.has('reviewedPermits')} />
                             </div>
                         </Section>
                         
                          <Section title="Total Hours">
-                            <EditableField label="Total Hours Worked" value={data.totalHoursWorked} onChange={(v) => handleChange('totalHoursWorked', v)} placeholder="e.g., 10.5" />
+                            <EditableField label="Total Hours Worked" value={data.totalHoursWorked} onChange={(v) => handleChange('totalHoursWorked', v)} placeholder="e.g., 10.5" isInvalid={errors.has('totalHoursWorked')} />
                         </Section>
                     </div>
 
@@ -1500,7 +2009,8 @@ Description: ${photo.description || 'N/A'}
 
                     <h2 className="text-3xl font-bold text-gray-700 dark:text-white text-center">Photographic Log</h2>
                     
-                    <div>
+                    <DndContext collisionDetection={closestCenter} onDragEnd={handlePhotoDragEnd}>
+                      <SortableContext items={photosData.map(p => p.id)} strategy={verticalListSortingStrategy}>
                         {photosData.map((photo, index) => (
                            <div key={photo.id}>
                                 <PhotoEntry
@@ -1508,15 +2018,9 @@ Description: ${photo.description || 'N/A'}
                                     onDataChange={(field, value) => handlePhotoDataChange(photo.id, field, value)}
                                     onImageChange={(file) => handleImageChange(photo.id, file)}
                                     onRemove={() => removePhoto(photo.id)}
-                                    onMoveUp={() => movePhoto(photo.id, "up")}
-                                    onMoveDown={() => movePhoto(photo.id, "down")}
-                                    isFirst={index === 0}
-                                    isLast={index === photosData.length - 1}
                                     onImageClick={setEnlargedImageUrl}
                                     errors={getPhotoErrors(photo.id)}
                                     showDirectionField={!photo.isMap}
-
-                                    // NEW FIELDS
                                     headerDate={data.date}
                                     headerLocation={data.location}
                                     onAutoFill={(f, val) => handlePhotoDataChange(photo.id, f, val)}
@@ -1539,7 +2043,8 @@ Description: ${photo.description || 'N/A'}
                                 )}
                             </div>
                         ))}
-                    </div>
+                      </SortableContext>
+                    </DndContext>
 
                     <div className="mt-8 flex justify-center gap-4">
                         <button
@@ -1553,9 +2058,32 @@ Description: ${photo.description || 'N/A'}
                 </div>
                 {photosData.length > 0 && <div className="border-t-4 border-[#007D8C] my-8" />}
                 <footer className="text-center text-gray-500 dark:text-gray-400 text-sm py-4">
-                    X-TES Digital Reporting v1.1.2
+                    X-TES Digital Reporting v1.1.4
                 </footer>
+                </div>
+
+                {/* Comments pane - hidden on small screens, visible on laptops+ */}
+                {hasAnyInlineComments && (
+                    <div className="hidden lg:block flex-shrink-0 sticky top-4 self-start">
+                        <CommentsRail
+                            comments={allComments}
+                            anchors={commentAnchors}
+                            isCollapsed={commentsCollapsed}
+                            onToggleCollapsed={() => setCommentsCollapsed(!commentsCollapsed)}
+                            onDeleteComment={handleDeleteComment}
+                            onResolveComment={handleResolveComment}
+                            onUpdateComment={handleUpdateComment}
+                            onAddReply={handleAddReply}
+                            onDeleteReply={handleDeleteReply}
+                            onHoverComment={setHoveredCommentId}
+                            onFocusComment={handleFocusComment}
+                            contentShiftAmount={160}
+                            railWidth={300}
+                        />
+                    </div>
+                )}
             </div>
+
             {/* Modals */}
              {showUnsupportedFileModal && (
                 <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 transition-opacity duration-300">
@@ -1587,6 +2115,39 @@ Description: ${photo.description || 'N/A'}
                         <button onClick={() => setShowNoInternetModal(false)} className="absolute top-2 right-2 p-1 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"><CloseIcon className="h-6 w-6" /></button>
                         <h3 className="text-2xl font-bold mb-2 text-gray-800 dark:text-white">No Internet Connection</h3>
                         <p className="text-gray-600 dark:text-gray-300">Internet is required for PDF generation.</p>
+                    </div>
+                </div>
+            )}
+
+            {showUnsavedModal && (
+                <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[200]">
+                    <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-2xl text-center relative max-w-md">
+                        <h3 className="text-xl font-bold mb-3 text-gray-800 dark:text-white">Unsaved Changes</h3>
+                        <p className="text-gray-600 dark:text-gray-300 mb-6">
+                            You have unsaved changes. Are you sure you want to leave? Your changes will be lost.
+                        </p>
+                        <div className="flex justify-center gap-3">
+                            <button
+                                onClick={() => setShowUnsavedModal(false)}
+                                className="px-5 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-white font-semibold rounded-lg transition"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={() => {
+                                    setShowUnsavedModal(false);
+                                    if (pendingCloseRef.current) {
+                                        // @ts-ignore
+                                        window.electronAPI?.confirmClose();
+                                    } else {
+                                        onBack();
+                                    }
+                                }}
+                                className="px-5 py-2 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg transition"
+                            >
+                                Leave Without Saving
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}

@@ -1,9 +1,10 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { StandardDfrIcon, CameraIcon, SaskPowerIcon, SearchIcon, FolderOpenIcon, EllipsisVerticalIcon, DocumentDuplicateIcon } from './icons';
 import { AppType } from '../App';
-import { deleteImage, deleteProject, retrieveProject } from './db';
+import { deleteImage, deleteProject, deleteThumbnail, retrieveProject, getAllThumbnails } from './db';
 import SafeImage from './SafeImage';
+import ProjectPreviewTooltip from './ProjectPreviewTooltip';
 
 export interface RecentProject {
     type: AppType;
@@ -73,9 +74,38 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSelectApp, onOpenProject, i
     const [openMenuTimestamp, setOpenMenuTimestamp] = useState<number | null>(null);
     const [isRecentProjectsExpanded, setIsRecentProjectsExpanded] = useState(false);
     const [updateNotificationDismissed, setUpdateNotificationDismissed] = useState(false);
+    const [thumbnails, setThumbnails] = useState<Map<number, string>>(new Map());
+    const [hoveredTimestamp, setHoveredTimestamp] = useState<number | null>(null);
+    const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     useEffect(() => {
         setRecentProjects(getRecentProjects());
+
+        // Prefetch all thumbnails
+        getAllThumbnails()
+            .then(thumbMap => setThumbnails(thumbMap))
+            .catch(e => console.error("Failed to load thumbnails:", e));
+
+        // Initialize spell check languages from saved settings
+        const initSpellCheck = async () => {
+            const electronAPI = (window as any).electronAPI;
+            const savedLanguages = localStorage.getItem('xtec_spellcheck_languages');
+            if (savedLanguages && electronAPI?.setSpellCheckLanguages) {
+                try {
+                    const languages = JSON.parse(savedLanguages);
+                    if (Array.isArray(languages) && languages.length > 0) {
+                        await electronAPI.setSpellCheckLanguages(languages);
+                    }
+                } catch (e) {
+                    console.error("Failed to initialize spell check languages", e);
+                }
+            }
+        };
+        initSpellCheck();
+
+        return () => {
+            if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
+        };
     }, []);
 
     const filteredProjects = useMemo(() => {
@@ -88,11 +118,30 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSelectApp, onOpenProject, i
         );
     }, [searchTerm, recentProjects]);
 
+    const handleMouseEnter = (timestamp: number) => {
+        hoverTimeoutRef.current = setTimeout(() => {
+            setHoveredTimestamp(timestamp);
+        }, 150);
+    };
+
+    const handleMouseLeave = () => {
+        if (hoverTimeoutRef.current) {
+            clearTimeout(hoverTimeoutRef.current);
+            hoverTimeoutRef.current = null;
+        }
+        setHoveredTimestamp(null);
+    };
+
     const handleRemoveFromRecent = (timestamp: number) => {
         const updatedProjects = recentProjects.filter(p => p.timestamp !== timestamp);
         localStorage.setItem(RECENT_PROJECTS_KEY, JSON.stringify(updatedProjects));
         setRecentProjects(updatedProjects);
         setOpenMenuTimestamp(null);
+        setThumbnails(prev => {
+            const next = new Map(prev);
+            next.delete(timestamp);
+            return next;
+        });
     };
 
     const handleDeleteProject = async (projectToDelete: RecentProject) => {
@@ -123,7 +172,18 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSelectApp, onOpenProject, i
         } catch(e) {
             console.error("Failed to delete project from DB:", e);
         }
-        
+
+        try {
+            await deleteThumbnail(projectToDelete.timestamp);
+        } catch(e) {
+            console.error("Failed to delete thumbnail from DB:", e);
+        }
+
+        setThumbnails(prev => {
+            const next = new Map(prev);
+            next.delete(projectToDelete.timestamp);
+            return next;
+        });
         setOpenMenuTimestamp(null);
     };
     
@@ -231,12 +291,21 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSelectApp, onOpenProject, i
                         </div>
                     </div>
                     
-                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl overflow-hidden transition-colors duration-200">
+                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl overflow-visible transition-colors duration-200">
                         {filteredProjects.length > 0 ? (
                             <>
                                 <ul className="divide-y divide-gray-200 dark:divide-gray-700">
                                     {projectsToShow.map((project) => (
-                                        <li key={project.timestamp} className={`relative ${openMenuTimestamp === project.timestamp ? 'z-20' : 'z-auto'}`}>
+                                        <li
+                                            key={project.timestamp}
+                                            className={`relative ${openMenuTimestamp === project.timestamp ? 'z-50' : 'z-auto'}`}
+                                            onMouseEnter={() => handleMouseEnter(project.timestamp)}
+                                            onMouseLeave={handleMouseLeave}
+                                        >
+                                            <ProjectPreviewTooltip
+                                                thumbnailUrl={thumbnails.get(project.timestamp) || null}
+                                                visible={hoveredTimestamp === project.timestamp && openMenuTimestamp !== project.timestamp}
+                                            />
                                             <button onClick={() => onOpenProject(project)} className="w-full text-left block hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:bg-gray-100 dark:focus:bg-gray-700 transition duration-150 ease-in-out pr-12">
                                                 <div className="px-4 py-4 sm:px-6 flex items-center justify-between">
                                                     <div className="flex-1 min-w-0">
@@ -270,7 +339,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSelectApp, onOpenProject, i
                                                 </button>
                                                  {openMenuTimestamp === project.timestamp && (
                                                     <div 
-                                                        className="origin-top-right absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white dark:bg-gray-700 ring-1 ring-black ring-opacity-5 focus:outline-none z-10"
+                                                        className="origin-top-right absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white dark:bg-gray-700 ring-1 ring-black ring-opacity-5 focus:outline-none z-50"
                                                         onMouseLeave={() => setOpenMenuTimestamp(null)}
                                                     >
                                                         <div className="py-1" role="menu" aria-orientation="vertical">
@@ -318,7 +387,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSelectApp, onOpenProject, i
                 </div>
             </main>
             <footer className="text-center text-gray-500 dark:text-gray-400 text-sm py-4">
-                X-TES Digital Reporting v1.1.2
+                X-TES Digital Reporting v1.1.4
             </footer>
         </div>
     );

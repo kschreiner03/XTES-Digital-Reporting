@@ -8,12 +8,31 @@ interface SettingsModalProps {
     onClose: () => void;
 }
 
+// Common spell check language options
+const SPELL_CHECK_LANGUAGES = [
+    { code: 'en-US', name: 'English (US)' },
+    { code: 'en-CA', name: 'English (Canada)' },
+    { code: 'en-GB', name: 'English (UK)' },
+    { code: 'en-AU', name: 'English (Australia)' },
+    { code: 'fr-FR', name: 'French (France)' },
+    { code: 'fr-CA', name: 'French (Canada)' },
+    { code: 'es-ES', name: 'Spanish (Spain)' },
+    { code: 'es-MX', name: 'Spanish (Mexico)' },
+    { code: 'de-DE', name: 'German' },
+    { code: 'pt-BR', name: 'Portuguese (Brazil)' },
+    { code: 'it-IT', name: 'Italian' },
+    { code: 'nl-NL', name: 'Dutch' },
+];
+
 const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
     const [activeTab, setActiveTab] = useState('general');
     const [usageEstimate, setUsageEstimate] = useState<string | null>(null);
     const [quotaEstimate, setQuotaEstimate] = useState<string | null>(null);
     const [isClearing, setIsClearing] = useState(false);
     const [defaults, setDefaults] = useState({ defaultProponent: '', defaultMonitor: '' });
+    const [spellCheckLanguages, setSpellCheckLanguages] = useState<string[]>(['en-US', 'en-CA']);
+    const [availableLanguages, setAvailableLanguages] = useState<string[]>([]);
+    const [spellCheckSaved, setSpellCheckSaved] = useState(false);
     const { isDarkMode, toggleTheme } = useTheme();
 
     useEffect(() => {
@@ -51,6 +70,48 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
         } catch (e) {
             console.error("Failed to load settings", e);
         }
+
+        // Load spell check languages
+        const loadSpellCheckSettings = async () => {
+            const electronAPI = (window as any).electronAPI;
+
+            // First, try to load saved preferences from localStorage
+            const savedLanguages = localStorage.getItem('xtec_spellcheck_languages');
+            if (savedLanguages && electronAPI?.setSpellCheckLanguages) {
+                try {
+                    const languages = JSON.parse(savedLanguages);
+                    if (Array.isArray(languages) && languages.length > 0) {
+                        await electronAPI.setSpellCheckLanguages(languages);
+                        setSpellCheckLanguages(languages);
+                    }
+                } catch (e) {
+                    console.error("Failed to restore spell check languages", e);
+                }
+            } else if (electronAPI?.getSpellCheckLanguages) {
+                // Fall back to getting current languages from Electron
+                try {
+                    const result = await electronAPI.getSpellCheckLanguages();
+                    if (result.success && result.languages) {
+                        setSpellCheckLanguages(result.languages);
+                    }
+                } catch (e) {
+                    console.error("Failed to load spell check languages", e);
+                }
+            }
+
+            // Load available languages
+            if (electronAPI?.getAvailableSpellCheckLanguages) {
+                try {
+                    const result = await electronAPI.getAvailableSpellCheckLanguages();
+                    if (result.success && result.languages) {
+                        setAvailableLanguages(result.languages);
+                    }
+                } catch (e) {
+                    console.error("Failed to load available spell check languages", e);
+                }
+            }
+        };
+        loadSpellCheckSettings();
     }, []);
 
     const handleClearData = async () => {
@@ -78,6 +139,39 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
         const newDefaults = { ...defaults, [field]: value };
         setDefaults(newDefaults);
         localStorage.setItem('xtec_general_settings', JSON.stringify(newDefaults));
+    };
+
+    const handleSpellCheckLanguageChange = async (langCode: string) => {
+        console.log("Changing spell check language to:", langCode);
+        const electronAPI = (window as any).electronAPI;
+        if (!electronAPI?.setSpellCheckLanguages) {
+            console.error("electronAPI.setSpellCheckLanguages not available");
+            alert("Spell check API not available. Please restart the application.");
+            return;
+        }
+
+        const newLanguages = [langCode];
+
+        try {
+            console.log("Calling setSpellCheckLanguages with:", newLanguages);
+            const result = await electronAPI.setSpellCheckLanguages(newLanguages);
+            console.log("setSpellCheckLanguages result:", result);
+            if (result.success) {
+                setSpellCheckLanguages(newLanguages);
+                // Save to localStorage for persistence across sessions
+                localStorage.setItem('xtec_spellcheck_languages', JSON.stringify(newLanguages));
+                // Show saved indicator
+                setSpellCheckSaved(true);
+                setTimeout(() => setSpellCheckSaved(false), 2000);
+                console.log("Spell check language changed successfully to:", langCode);
+            } else {
+                console.error("Failed to set spell check language:", result.error);
+                alert("Failed to change spell check language. The language dictionary may not be available.");
+            }
+        } catch (e) {
+            console.error("Failed to set spell check language", e);
+            alert("Error changing spell check language: " + (e as Error).message);
+        }
     };
 
     return (
@@ -126,6 +220,42 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
                                             <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${isDarkMode ? 'translate-x-6' : 'translate-x-1'}`} />
                                         </button>
                                     </div>
+                                </div>
+
+                                <div>
+                                    <h3 className="text-xl font-bold text-gray-800 dark:text-white mb-4 border-b dark:border-gray-700 pb-2">Spell Check</h3>
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <span className="block text-base font-medium text-gray-700 dark:text-gray-300">Language</span>
+                                            <span className="text-sm text-gray-500 dark:text-gray-400">Select the language for spell checking.</span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            {spellCheckSaved && (
+                                                <span className="text-sm text-green-600 dark:text-green-400 font-medium">Saved!</span>
+                                            )}
+                                            <select
+                                                value={spellCheckLanguages[0] || 'en-US'}
+                                                onChange={(e) => handleSpellCheckLanguageChange(e.target.value)}
+                                                className="w-48 p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-md focus:ring-2 focus:ring-[#007D8C] focus:border-[#007D8C] transition cursor-pointer"
+                                            >
+                                                {SPELL_CHECK_LANGUAGES.map((lang) => {
+                                                    const isAvailable = availableLanguages.length === 0 || availableLanguages.includes(lang.code);
+                                                    return (
+                                                        <option
+                                                            key={lang.code}
+                                                            value={lang.code}
+                                                            disabled={!isAvailable}
+                                                        >
+                                                            {lang.name}{!isAvailable ? ' (unavailable)' : ''}
+                                                        </option>
+                                                    );
+                                                })}
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                                        Changes apply to new text. Restart the app if spell check doesn't update.
+                                    </p>
                                 </div>
 
                                 <div>

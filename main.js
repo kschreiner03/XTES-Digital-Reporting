@@ -1,11 +1,12 @@
 
-const { app, BrowserWindow, ipcMain, dialog, Menu, shell, autoUpdater } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Menu, shell, autoUpdater, nativeTheme, session } = require('electron');
 const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 
 let mainWindow;
 let helpWindow;
+let forceClose = false;
 
 // --- Configuration / Secrets ---
 // Prefer environment variables for sensitive or environment-specific URLs
@@ -127,6 +128,25 @@ const menuTemplate = [
     label: 'File',
     submenu: [
         {
+            label: 'Save Project',
+            click: () => {
+                if (mainWindow) {
+                    mainWindow.webContents.send('save-project-shortcut');
+                }
+            },
+            accelerator: 'CmdOrCtrl+S'
+        },
+        {
+            label: 'Export PDF',
+            click: () => {
+                if (mainWindow) {
+                    mainWindow.webContents.send('export-pdf-shortcut');
+                }
+            },
+            accelerator: 'CmdOrCtrl+E'
+        },
+        { type: 'separator' },
+        {
             label: 'Download Photos',
             click: () => {
                 if (mainWindow) {
@@ -140,6 +160,18 @@ const menuTemplate = [
     ],
   },
   {
+    label: 'Edit',
+    submenu: [
+        { role: 'undo' },
+        { role: 'redo' },
+        { type: 'separator' },
+        { role: 'cut' },
+        { role: 'copy' },
+        { role: 'paste' },
+        { role: 'selectAll' },
+    ],
+  },
+  {
     label: 'Settings',
     submenu: [
       {
@@ -148,7 +180,8 @@ const menuTemplate = [
             if (mainWindow) {
                 mainWindow.webContents.send('open-settings');
             }
-        }
+        },
+        accelerator: 'CmdOrCtrl+,'
       }
     ]
   },
@@ -187,6 +220,7 @@ function createWindow() {
       contextIsolation: true,
       sandbox: false, // Cannot be fully sandboxed due to node:fs usage in main process handlers interacting with dialogs
       plugins: true, // Enable PDF viewer plugin
+      spellcheck: true, // Enable spell checking
     },
   });
 
@@ -208,15 +242,41 @@ function createWindow() {
     return { action: 'deny' };
   });
 
-  // Basic context menu (cut, copy, paste)
+  // Enhanced context menu with spell check support
   mainWindow.webContents.on('context-menu', (event, params) => {
-    const menu = Menu.buildFromTemplate([
+    const menuTemplate = [];
+
+    // Add spell check suggestions if there's a misspelled word
+    if (params.misspelledWord) {
+      // Add suggestions at the top
+      params.dictionarySuggestions.slice(0, 5).forEach(suggestion => {
+        menuTemplate.push({
+          label: suggestion,
+          click: () => mainWindow.webContents.replaceMisspelling(suggestion)
+        });
+      });
+
+      // Add "Add to Dictionary" option
+      if (menuTemplate.length > 0) {
+        menuTemplate.push({ type: 'separator' });
+      }
+      menuTemplate.push({
+        label: 'Add to Dictionary',
+        click: () => mainWindow.webContents.session.addWordToSpellCheckerDictionary(params.misspelledWord)
+      });
+      menuTemplate.push({ type: 'separator' });
+    }
+
+    // Standard editing options
+    menuTemplate.push(
       { role: 'cut', enabled: params.editFlags.canCut },
       { role: 'copy', enabled: params.editFlags.canCopy },
       { role: 'paste', enabled: params.editFlags.canPaste },
       { type: 'separator' },
-      { role: 'selectAll', enabled: params.editFlags.canSelectAll },
-    ]);
+      { role: 'selectAll', enabled: params.editFlags.canSelectAll }
+    );
+
+    const menu = Menu.buildFromTemplate(menuTemplate);
     menu.popup({ window: mainWindow });
   });
 
@@ -229,8 +289,25 @@ function createWindow() {
     }
   });
 
+  // Intercept window close to allow renderer to show unsaved changes modal
+  mainWindow.on('close', (e) => {
+    if (!forceClose) {
+      e.preventDefault();
+      mainWindow.webContents.send('close-attempted');
+    }
+  });
+
+  ipcMain.removeAllListeners('confirm-close');
+  ipcMain.on('confirm-close', () => {
+    forceClose = true;
+    if (mainWindow) {
+      mainWindow.destroy();
+    }
+  });
+
   mainWindow.on('closed', () => {
     mainWindow = null;
+    forceClose = false;
   });
 }
 
@@ -247,6 +324,13 @@ const allowedPdfs = [
 app.whenReady().then(() => {
   const menu = Menu.buildFromTemplate(menuTemplate);
   Menu.setApplicationMenu(menu);
+
+  // --- Spell Checker Configuration ---
+  // Enable spell checking for English (US and CA)
+  session.defaultSession.setSpellCheckerLanguages(['en-US', 'en-CA']);
+
+  // Enable spell checker
+  session.defaultSession.setSpellCheckerEnabled(true);
 
   // --- Auto-updater Logic ---
   const server = 'https://update.electronjs.org';
@@ -290,7 +374,7 @@ app.whenReady().then(() => {
 
   ipcMain.handle('open-pdf', async (event, filename) => {
     // Security: Validate filename against allowlist
-    if (!allowedPdfs.includes(filename)) {
+    if (!allowedPdfs.some(f => f.toLowerCase() === filename.toLowerCase())) {
         console.error('Requested PDF is not allowed:', filename);
         dialog.showErrorBox('Error', 'The requested file is not a valid example document.');
         return;
@@ -482,6 +566,45 @@ app.whenReady().then(() => {
       }
     }
     return { success: false, data: [] };
+  });
+
+  ipcMain.handle('set-theme-source', (event, theme) => {
+    nativeTheme.themeSource = theme;
+  });
+
+  ipcMain.handle('set-spellcheck-languages', (event, languages) => {
+    try {
+      // Validate that languages is an array of strings
+      if (!Array.isArray(languages) || !languages.every(lang => typeof lang === 'string')) {
+        console.error('Invalid languages parameter');
+        return { success: false, error: 'Invalid languages parameter' };
+      }
+      session.defaultSession.setSpellCheckerLanguages(languages);
+      return { success: true, languages };
+    } catch (error) {
+      console.error('Failed to set spell checker languages:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('get-spellcheck-languages', () => {
+    try {
+      const languages = session.defaultSession.getSpellCheckerLanguages();
+      return { success: true, languages };
+    } catch (error) {
+      console.error('Failed to get spell checker languages:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('get-available-spellcheck-languages', () => {
+    try {
+      const languages = session.defaultSession.availableSpellCheckerLanguages;
+      return { success: true, languages };
+    } catch (error) {
+      console.error('Failed to get available spell checker languages:', error);
+      return { success: false, error: error.message };
+    }
   });
 
   createWindow();

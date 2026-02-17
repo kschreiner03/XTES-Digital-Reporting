@@ -15,6 +15,25 @@ export interface IElectronAPI {
     removeOpenSettingsListener: () => void;
     getAssetPath: (filename: string) => Promise<string>;
     setThemeSource: (theme: 'system' | 'light' | 'dark') => Promise<void>;
+
+    // Keyboard shortcut listeners
+    onSaveProjectShortcut: (callback: () => void) => void;
+    removeSaveProjectShortcutListener: () => void;
+    onExportPdfShortcut: (callback: () => void) => void;
+    removeExportPdfShortcutListener: () => void;
+
+    // Spell check
+    setSpellCheckLanguages: (languages: string[]) => Promise<{ success: boolean; languages?: string[]; error?: string }>;
+    getSpellCheckLanguages: () => Promise<{ success: boolean; languages?: string[]; error?: string }>;
+    getAvailableSpellCheckLanguages: () => Promise<{ success: boolean; languages?: string[]; error?: string }>;
+
+    // Window close intercept
+    onCloseAttempted: (callback: () => void) => void;
+    removeCloseAttemptedListener: () => void;
+    confirmClose: () => void;
+
+    // User info
+    getUserInfo: () => { username: string; homedir: string };
 }
 
 declare global {

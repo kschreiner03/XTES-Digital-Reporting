@@ -65,6 +65,7 @@ const EditableField: React.FC<{
                     rows={1}
                     className={`${commonInputClasses} resize-none overflow-hidden`}
                     placeholder={placeholder}
+                    spellCheck={true}
                 />
             </div>
         );
@@ -73,13 +74,14 @@ const EditableField: React.FC<{
     return (
         <div className="flex items-baseline gap-2">
             <label className={labelClasses}>{label}:</label>
-            <input 
+            <input
                 ref={inputRef}
-                type="text" 
+                type="text"
                 value={value}
                 onChange={(e) => onChange(e.target.value)}
                 className={commonInputClasses}
                 placeholder={placeholder}
+                spellCheck={true}
             />
         </div>
     );

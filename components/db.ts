@@ -5,10 +5,11 @@ let dbPromise: Promise<any> | null = null;
 const DB_NAME = 'XtecProjectsDB';
 const IMAGE_STORE_NAME = 'images';
 const PROJECT_STORE_NAME = 'projects';
+const THUMBNAIL_STORE_NAME = 'thumbnails';
 
 const initDB = () => {
   if (!dbPromise) {
-    dbPromise = openDB(DB_NAME, 2, {
+    dbPromise = openDB(DB_NAME, 3, {
       upgrade(db: any, oldVersion: number) {
         if (!db.objectStoreNames.contains(IMAGE_STORE_NAME)) {
           db.createObjectStore(IMAGE_STORE_NAME);
@@ -16,6 +17,11 @@ const initDB = () => {
         if (oldVersion < 2) {
             if (!db.objectStoreNames.contains(PROJECT_STORE_NAME)) {
                 db.createObjectStore(PROJECT_STORE_NAME);
+            }
+        }
+        if (oldVersion < 3) {
+            if (!db.objectStoreNames.contains(THUMBNAIL_STORE_NAME)) {
+                db.createObjectStore(THUMBNAIL_STORE_NAME);
             }
         }
       },
@@ -86,12 +92,41 @@ export const deleteProject = async (id: number): Promise<void> => {
  * Clears all data from the database stores.
  * Used for freeing up storage space.
  */
+export const storeThumbnail = async (id: number, thumbnailData: string): Promise<void> => {
+    const db = await initDB();
+    await db.put(THUMBNAIL_STORE_NAME, thumbnailData, id);
+};
+
+export const retrieveThumbnail = async (id: number): Promise<string | undefined> => {
+    const db = await initDB();
+    return db.get(THUMBNAIL_STORE_NAME, id);
+};
+
+export const deleteThumbnail = async (id: number): Promise<void> => {
+    const db = await initDB();
+    await db.delete(THUMBNAIL_STORE_NAME, id);
+};
+
+export const getAllThumbnails = async (): Promise<Map<number, string>> => {
+    const db = await initDB();
+    const tx = db.transaction(THUMBNAIL_STORE_NAME, 'readonly');
+    const store = tx.objectStore(THUMBNAIL_STORE_NAME);
+    const keys = await store.getAllKeys();
+    const values = await store.getAll();
+    const map = new Map<number, string>();
+    keys.forEach((key: number, i: number) => {
+        map.set(key, values[i]);
+    });
+    return map;
+};
+
 export const clearDatabase = async (): Promise<void> => {
     const db = await initDB();
-    const tx = db.transaction([IMAGE_STORE_NAME, PROJECT_STORE_NAME], 'readwrite');
+    const tx = db.transaction([IMAGE_STORE_NAME, PROJECT_STORE_NAME, THUMBNAIL_STORE_NAME], 'readwrite');
     await Promise.all([
         tx.objectStore(IMAGE_STORE_NAME).clear(),
         tx.objectStore(PROJECT_STORE_NAME).clear(),
+        tx.objectStore(THUMBNAIL_STORE_NAME).clear(),
         tx.done
     ]);
 };

@@ -90,6 +90,24 @@ const App: React.FC = () => {
         }
     }, []);
 
+    // When on landing page (no report open), allow window close immediately
+    useEffect(() => {
+        if (!selectedApp) {
+            // @ts-ignore
+            const api = window.electronAPI;
+            if (api?.onCloseAttempted) {
+                api.removeCloseAttemptedListener?.();
+                api.onCloseAttempted(() => {
+                    api.confirmClose();
+                });
+            }
+            return () => {
+                // @ts-ignore
+                window.electronAPI?.removeCloseAttemptedListener?.();
+            };
+        }
+    }, [selectedApp]);
+
     const handleSelectApp = (app: AppType) => {
         setProjectToOpen(null);
         setSelectedApp(app);

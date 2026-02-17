@@ -1,4 +1,3 @@
-
 import React, { useRef, useLayoutEffect, useEffect } from 'react';
 import type { DfrHeaderData } from '../types';
 import SafeImage from './SafeImage';
@@ -33,7 +32,7 @@ const SelectableLabelField: React.FC<{
     placeholder?: string;
 }> = ({ labelType, value, onLabelChange, onValueChange, isPrintable = false, isInvalid = false, placeholder = '' }) => {
     
-    const options = ["IOCG Lease #", "Disposition #", "ENV File #", "License #"];
+    const options = ["IOCG Lease #", "Disposition #", "ENV File #", "License #", "WSA File #"];
 
     if (isPrintable) {
         return (

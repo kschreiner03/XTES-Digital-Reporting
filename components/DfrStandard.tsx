@@ -1,14 +1,19 @@
-import React, { useState, ReactElement, useEffect, useRef, useCallback } from 'react';
+import React, { useState, ReactElement, useEffect, useRef, useCallback, useMemo } from 'react';
 import { DfrHeader } from './DfrHeader';
 import PhotoEntry from './PhotoEntry';
-import type { DfrHeaderData, DfrStandardBodyData, PhotoData, ActivityBlock, LocationActivity } from '../types';
-import { PlusIcon, DownloadIcon, SaveIcon, FolderOpenIcon, ArrowLeftIcon, TrashIcon, ArrowUpIcon, ArrowDownIcon, CloseIcon, FolderArrowDownIcon, ChatBubbleLeftIcon } from './icons';
+import type { DfrHeaderData, DfrStandardBodyData, PhotoData, ActivityBlock, LocationActivity, TextHighlight, TextComment } from '../types';
+import { PlusIcon, DownloadIcon, SaveIcon, FolderOpenIcon, ArrowLeftIcon, TrashIcon, ArrowUpIcon, ArrowDownIcon, CloseIcon, FolderArrowDownIcon, ChatBubbleLeftIcon, ZoomInIcon, ZoomOutIcon } from './icons';
+import { DndContext, closestCenter, type DragEndEvent } from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
 import { AppType } from '../App';
-import { storeImage, retrieveImage, deleteImage, storeProject, deleteProject, retrieveProject } from './db';
+import { storeImage, retrieveImage, deleteImage, storeProject, deleteProject, deleteThumbnail, storeThumbnail, retrieveProject } from './db';
+import { generateProjectThumbnail } from './thumbnailUtils';
 import { SpecialCharacterPalette } from './SpecialCharacterPalette';
 import BulletPointEditor from './BulletPointEditor';
 import ImageModal from './ImageModal';
 import ActionStatusModal from './ActionStatusModal';
+import CommentsRail, { FieldComment, CommentAnchor } from './CommentsRail';
+import { CommentAnchorPosition } from './BulletPointEditor';
 import { jsPDF } from 'jspdf';
 import JSZip from 'jszip';
 import SafeImage, { getAssetUrl } from './SafeImage';
@@ -63,60 +68,90 @@ const getRecentProjects = (): RecentProjectMetadata[] => {
         const projects = localStorage.getItem(RECENT_PROJECTS_KEY);
         return projects ? JSON.parse(projects) : [];
     } catch (e) {
-        console.error("Failed to parse recent projects from localStorage", e);
+        console.error('Failed to parse recent projects from localStorage', e);
         return [];
     }
 };
 
-const addRecentProject = async (projectData: any, projectInfo: { type: AppType; name: string; projectNumber: string; }) => {
+const addRecentProject = async (
+    projectData: any,
+    projectInfo: { type: AppType; name: string; projectNumber: string }
+) => {
     const timestamp = Date.now();
-    
+
+    /**
+     * IMPORTANT:
+     * Recent Projects MUST be self-contained.
+     * photosData must retain imageUrl (base64).
+     * IndexedDB is treated as OPTIONAL cache only.
+     */
+
     try {
         await storeProject(timestamp, projectData);
     } catch (e) {
-        console.error("Failed to save project to IndexedDB:", e);
-        // Suppress alert to allow process to continue
-        // alert("Could not save the project to the local database.");
+        console.error('Failed to save project to IndexedDB:', e);
         return;
     }
-    
+
+    // Generate and store thumbnail
+    try {
+        const firstPhoto = projectData.photosData?.find(
+            (p: any) => p.imageUrl && !p.isMap
+        );
+        const thumbnail = await generateProjectThumbnail({
+            type: projectInfo.type,
+            projectName: projectInfo.name,
+            firstPhotoUrl: firstPhoto?.imageUrl || null,
+        });
+        await storeThumbnail(timestamp, thumbnail);
+    } catch (e) {
+        console.warn('Failed to generate/store thumbnail:', e);
+    }
+
     const recentProjects = getRecentProjects();
     const identifier = `${projectInfo.type}-${projectInfo.name}-${projectInfo.projectNumber}`;
 
-    const existingProject = recentProjects.find(p => `${p.type}-${p.name}-${p.projectNumber}` === identifier);
-    const filteredProjects = recentProjects.filter(p => `${p.type}-${p.name}-${p.projectNumber}` !== identifier);
+    const existingProject = recentProjects.find(
+        p => `${p.type}-${p.name}-${p.projectNumber}` === identifier
+    );
+
+    const filteredProjects = recentProjects.filter(
+        p => `${p.type}-${p.name}-${p.projectNumber}` !== identifier
+    );
 
     if (existingProject) {
         try {
-            const oldProjectData = await retrieveProject(existingProject.timestamp);
-            if (oldProjectData?.photosData) {
-                for (const photo of oldProjectData.photosData) {
-                    if (photo.imageId) await deleteImage(photo.imageId);
-                }
-            }
             await deleteProject(existingProject.timestamp);
+            await deleteThumbnail(existingProject.timestamp);
         } catch (e) {
-            console.error(`Failed to clean up old project version (${existingProject.timestamp}):`, e);
+            console.error(
+                `Failed to clean up old project version (${existingProject.timestamp}):`,
+                e
+            );
         }
     }
-    
-    const newProjectMetadata: RecentProjectMetadata = { ...projectInfo, timestamp };
+
+    const newProjectMetadata: RecentProjectMetadata = {
+        ...projectInfo,
+        timestamp
+    };
+
     let updatedProjects = [newProjectMetadata, ...filteredProjects];
-    
+
     const MAX_RECENT_PROJECTS_IN_LIST = 50;
+
     if (updatedProjects.length > MAX_RECENT_PROJECTS_IN_LIST) {
         const projectsToDelete = updatedProjects.splice(MAX_RECENT_PROJECTS_IN_LIST);
+
         for (const proj of projectsToDelete) {
-             try {
-                const projectDataToDelete = await retrieveProject(proj.timestamp);
-                if (projectDataToDelete?.photosData) {
-                    for (const photo of projectDataToDelete.photosData) {
-                        if (photo.imageId) await deleteImage(photo.imageId);
-                    }
-                }
+            try {
                 await deleteProject(proj.timestamp);
+                await deleteThumbnail(proj.timestamp);
             } catch (e) {
-                console.error(`Failed to cleanup old project from list (${proj.timestamp}):`, e);
+                console.error(
+                    `Failed to cleanup old project from list (${proj.timestamp}):`,
+                    e
+                );
             }
         }
     }
@@ -124,10 +159,10 @@ const addRecentProject = async (projectData: any, projectInfo: { type: AppType; 
     try {
         localStorage.setItem(RECENT_PROJECTS_KEY, JSON.stringify(updatedProjects));
     } catch (e) {
-        console.error("Failed to save recent projects to localStorage:", e);
-        // alert("Could not update recent projects list. Your browser's local storage may be full.");
+        console.error('Failed to save recent projects to localStorage:', e);
     }
 };
+
 // --- End Utility ---
 
 // --- Helper function to get image dimensions asynchronously
@@ -241,7 +276,7 @@ const PdfPreviewModal: React.FC<{ url: string; filename: string; onClose: () => 
     };
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-75 flex flex-col items-center justify-center z-50 p-4" role="dialog" aria-modal="true">
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex flex-col items-center justify-center z-[100] p-4" role="dialog" aria-modal="true">
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl w-full h-full flex flex-col overflow-hidden">
                 <div className="flex justify-between items-center p-4 border-b bg-gray-50 dark:bg-gray-700 dark:border-gray-600">
                     <h3 className="text-xl font-bold text-gray-800 dark:text-white">PDF Preview</h3>
@@ -332,9 +367,9 @@ const formatDateForFilename = (dateString: string): string => {
 
 // --- Local UI Components ---
 const Section: React.FC<{ title: string; children: React.ReactNode; }> = ({ title, children }) => (
-    <div className="bg-white dark:bg-gray-800 p-6 shadow-md rounded-lg transition-colors duration-200">
+    <div className="bg-white dark:bg-gray-800 p-6 shadow-md rounded-lg transition-colors duration-200" style={{ overflow: 'visible' }}>
         <h2 className="text-xl font-bold text-gray-800 dark:text-gray-100 border-b-2 border-gray-200 dark:border-gray-700 pb-2 mb-4">{title}</h2>
-        <div className="space-y-4">{children}</div>
+        <div className="space-y-4" style={{ overflow: 'visible' }}>{children}</div>
     </div>
 );
 
@@ -377,12 +412,17 @@ const activityPlaceholder = `08:00– Left accommodation for project site #1.
 const LocationBlockEntry: React.FC<{
     data: LocationActivity;
     onDataChange: (id: number, field: keyof Omit<LocationActivity, 'id'>, value: string) => void;
+    onInlineCommentsChange: (id: number, comments: TextComment[]) => void;
+    onHighlightsChange: (id: number, highlights: TextHighlight[]) => void;
+    onAnchorPositionsChange: (fieldId: string, anchors: CommentAnchorPosition[]) => void;
+    hoveredCommentId: string | null;
     onRemove: (id: number) => void;
     onMove: (id: number, direction: 'up' | 'down') => void;
     isFirst: boolean;
     isLast: boolean;
-}> = ({ data, onDataChange, onRemove, onMove, isFirst, isLast }) => {
+}> = ({ data, onDataChange, onInlineCommentsChange, onHighlightsChange, onAnchorPositionsChange, hoveredCommentId, onRemove, onMove, isFirst, isLast }) => {
     const [isCommentOpen, setIsCommentOpen] = useState(false);
+    const fieldId = `locationActivity_${data.id}`;
     return (
         <div className="p-4 border border-gray-200 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 transition-colors duration-200">
             <div className="flex justify-between items-center mb-2">
@@ -415,11 +455,12 @@ const LocationBlockEntry: React.FC<{
                     placeholder="Add a comment for this location..."
                     rows={2}
                     className="block w-full p-2 border border-yellow-300 bg-yellow-50 text-gray-900 rounded-md shadow-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition mb-2"
+                    spellCheck={true}
                 />
             )}
             <div className="space-y-4">
                 <EditableField label="Location" value={data.location || ''} onChange={v => onDataChange(data.id, 'location', v)} />
-                <BulletPointEditor label="Activities (detailed description with timestamps)" value={data.activities} onChange={v => onDataChange(data.id, 'activities', v)} rows={8} placeholder={activityPlaceholder} />
+                <BulletPointEditor label="Activities (detailed description with timestamps)" fieldId={fieldId} value={data.activities} highlights={data.highlights?.activities} inlineComments={data.inlineComments?.activities} onChange={v => onDataChange(data.id, 'activities', v)} onHighlightsChange={h => onHighlightsChange(data.id, h)} onInlineCommentsChange={c => onInlineCommentsChange(data.id, c)} onAnchorPositionsChange={a => onAnchorPositionsChange(fieldId, a)} hoveredCommentId={hoveredCommentId} placeholder={activityPlaceholder} />
             </div>
         </div>
     );
@@ -462,8 +503,208 @@ const DfrStandard = ({ onBack, initialData }: DfrStandardProps): ReactElement =>
     const [showStatusModal, setShowStatusModal] = useState(false);
     const [statusMessage, setStatusMessage] = useState('');
     const [openComments, setOpenComments] = useState<Set<string>>(new Set());
+    const [zoomLevel, setZoomLevel] = useState(100);
+    const [isDirty, setIsDirty] = useState(false);
+    const [showUnsavedModal, setShowUnsavedModal] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const isDownloadingRef = useRef(false);
+
+    const handleZoomIn = () => setZoomLevel(prev => Math.min(prev + 10, 150));
+    const handleZoomOut = () => setZoomLevel(prev => Math.max(prev - 10, 70));
+    const handleZoomReset = () => setZoomLevel(100);
+
+    // Comments panel state
+    const [commentsCollapsed, setCommentsCollapsed] = useState(false);
+    const [commentAnchors, setCommentAnchors] = useState<Map<string, CommentAnchor>>(new Map());
+    const [hoveredCommentId, setHoveredCommentId] = useState<string | null>(null);
+
+    // Handler to collect anchor positions from BulletPointEditor instances
+    const handleAnchorPositionsChange = useCallback((fieldId: string, anchors: CommentAnchorPosition[]) => {
+        setCommentAnchors(prev => {
+            const newMap = new Map(prev);
+            // Remove old anchors for this field
+            for (const key of newMap.keys()) {
+                if (key.startsWith(`${fieldId}:`)) {
+                    newMap.delete(key);
+                }
+            }
+            // Add new anchors
+            anchors.forEach(anchor => {
+                const key = `${anchor.fieldId}:${anchor.commentId}`;
+                newMap.set(key, {
+                    fieldId: anchor.fieldId,
+                    commentId: anchor.commentId,
+                    top: anchor.top,
+                    left: anchor.left,
+                    height: anchor.height,
+                });
+            });
+            return newMap;
+        });
+    }, []);
+
+    // Field labels for comments panel
+    const fieldLabels: Record<string, string> = useMemo(() => {
+        const labels: Record<string, string> = {
+            generalActivity: 'General Activity',
+            communication: 'Communication',
+            weatherAndGroundConditions: 'Weather & Ground',
+            environmentalProtection: 'Environmental Protection',
+            wildlifeObservations: 'Wildlife Observations',
+            furtherRestoration: 'Further Restoration',
+        };
+        bodyData.locationActivities.forEach(loc => {
+            labels[`locationActivity_${loc.id}`] = `Location: ${loc.location || 'Untitled'}`;
+        });
+        return labels;
+    }, [bodyData.locationActivities]);
+
+    // Helper: check if a fieldId belongs to a location activity
+    const getLocationActivityId = (fieldId: string): number | null => {
+        const match = fieldId.match(/^locationActivity_(\d+)$/);
+        return match ? parseInt(match[1], 10) : null;
+    };
+
+    // Helper: get comments array for a fieldId (body field or location activity)
+    const getFieldComments = (fieldId: string): TextComment[] | undefined => {
+        const locId = getLocationActivityId(fieldId);
+        if (locId !== null) {
+            const loc = bodyData.locationActivities.find(l => l.id === locId);
+            return loc?.inlineComments?.activities;
+        }
+        return bodyData.inlineComments?.[fieldId as keyof typeof bodyData.inlineComments];
+    };
+
+    // Helper: update comments for a fieldId (body field or location activity)
+    const setFieldComments = (fieldId: string, updater: (comments: TextComment[]) => TextComment[]) => {
+        const locId = getLocationActivityId(fieldId);
+        if (locId !== null) {
+            setBodyData(prev => ({
+                ...prev,
+                locationActivities: prev.locationActivities.map(block =>
+                    block.id === locId
+                        ? { ...block, inlineComments: { ...block.inlineComments, activities: updater(block.inlineComments?.activities || []) } }
+                        : block
+                )
+            }));
+        } else {
+            setBodyData(prev => ({
+                ...prev,
+                inlineComments: {
+                    ...prev.inlineComments,
+                    [fieldId]: updater((prev.inlineComments as any)?.[fieldId] || []),
+                },
+            }));
+        }
+        setIsDirty(true);
+    };
+
+    // Collect all comments from all fields into a single array
+    const allComments: FieldComment[] = React.useMemo(() => {
+        const comments: FieldComment[] = [];
+        // Body fields
+        const fields = ['generalActivity', 'communication', 'weatherAndGroundConditions', 'environmentalProtection', 'wildlifeObservations', 'furtherRestoration'] as const;
+        fields.forEach(field => {
+            const fieldComments = bodyData.inlineComments?.[field];
+            if (fieldComments && Array.isArray(fieldComments) && fieldComments.length > 0) {
+                fieldComments.forEach(comment => {
+                    if (!comment || !comment.id || typeof comment.start !== 'number' || typeof comment.end !== 'number') {
+                        return;
+                    }
+                    comments.push({
+                        ...comment,
+                        fieldId: field,
+                        fieldLabel: fieldLabels[field] || field,
+                    });
+                });
+            }
+        });
+        // Location activity fields
+        bodyData.locationActivities.forEach(loc => {
+            const locComments = loc.inlineComments?.activities;
+            if (locComments && Array.isArray(locComments) && locComments.length > 0) {
+                const locFieldId = `locationActivity_${loc.id}`;
+                locComments.forEach(comment => {
+                    if (!comment || !comment.id || typeof comment.start !== 'number' || typeof comment.end !== 'number') {
+                        return;
+                    }
+                    comments.push({
+                        ...comment,
+                        fieldId: locFieldId,
+                        fieldLabel: fieldLabels[locFieldId] || `Location: ${loc.location || 'Untitled'}`,
+                    });
+                });
+            }
+        });
+        return comments;
+    }, [bodyData.inlineComments, bodyData.locationActivities, fieldLabels]);
+
+    const hasAnyInlineComments = allComments.length > 0;
+
+    // Comment action handlers for CommentsRail
+    const handleDeleteComment = (fieldId: string, commentId: string) => {
+        if (getFieldComments(fieldId)) {
+            setFieldComments(fieldId, comments => comments.filter(c => c.id !== commentId));
+        }
+    };
+
+    const handleResolveComment = (fieldId: string, commentId: string) => {
+        if (getFieldComments(fieldId)) {
+            setFieldComments(fieldId, comments =>
+                comments.map(c => c.id === commentId ? { ...c, resolved: !c.resolved } : c)
+            );
+        }
+    };
+
+    const handleUpdateComment = (fieldId: string, commentId: string, newText: string) => {
+        if (getFieldComments(fieldId)) {
+            setFieldComments(fieldId, comments =>
+                comments.map(c => c.id === commentId ? { ...c, text: newText } : c)
+            );
+        }
+    };
+
+    // Reply handlers for CommentsRail
+    const handleAddReply = (fieldId: string, commentId: string, replyText: string) => {
+        if (getFieldComments(fieldId)) {
+            setFieldComments(fieldId, comments =>
+                comments.map(c => {
+                    if (c.id === commentId) {
+                        const newReply = {
+                            id: `reply_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`,
+                            text: replyText,
+                            author: (window as any).electronAPI?.getUserInfo?.()?.username || 'User',
+                            timestamp: new Date(),
+                        };
+                        return { ...c, replies: [...(c.replies || []), newReply] };
+                    }
+                    return c;
+                })
+            );
+        }
+    };
+
+    const handleDeleteReply = (fieldId: string, commentId: string, replyId: string) => {
+        if (getFieldComments(fieldId)) {
+            setFieldComments(fieldId, comments =>
+                comments.map(c => {
+                    if (c.id === commentId && c.replies) {
+                        return { ...c, replies: c.replies.filter(r => r.id !== replyId) };
+                    }
+                    return c;
+                })
+            );
+        }
+    };
+
+    // Focus handler - scrolls to comment in text and triggers glow
+    const handleFocusComment = (fieldId: string, commentId: string) => {
+        // Find the element with the comment underline
+        const element = document.querySelector(`[data-comment-id="${commentId}"]`);
+        if (element) {
+            element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+    };
 
      const parseAndLoadProject = async (fileContent: string) => {
         try {
@@ -499,8 +740,9 @@ const DfrStandard = ({ onBack, initialData }: DfrStandardProps): ReactElement =>
                     } else if (loadedText && loadedText.projectActivities) { // legacy textData format
                          general = loadedText.projectActivities;
                     }
-                    
+
                     finalBodyData = {
+                        ...loadedBody, // Preserve all properties including comments, highlights, and inlineComments
                         generalActivity: general,
                         locationActivities: locations,
                         communication: loadedBody.communication || loadedText?.communication || '',
@@ -585,6 +827,9 @@ const DfrStandard = ({ onBack, initialData }: DfrStandardProps): ReactElement =>
                         environmentalProtection: loadedBody.environmentalProtection || '',
                         wildlifeObservations: loadedBody.wildlifeObservations || '',
                         furtherRestoration: loadedBody.furtherRestoration || '',
+                        comments: loadedBody.comments,
+                        highlights: loadedBody.highlights,
+                        inlineComments: loadedBody.inlineComments,
                     });
                 }
 
@@ -618,16 +863,64 @@ const DfrStandard = ({ onBack, initialData }: DfrStandardProps): ReactElement =>
     }, [initialData]);
 
 
+    // Track whether the unsaved modal was triggered by window close vs Home button
+    const pendingCloseRef = useRef(false);
+
+    // Warn before closing browser window (non-Electron fallback)
+    useEffect(() => {
+        const handler = (e: BeforeUnloadEvent) => {
+            if (isDirty) {
+                e.preventDefault();
+                e.returnValue = '';
+            }
+        };
+        window.addEventListener('beforeunload', handler);
+        return () => window.removeEventListener('beforeunload', handler);
+    }, [isDirty]);
+
+    // Intercept Electron window close (X button)
+    useEffect(() => {
+        // @ts-ignore
+        const api = window.electronAPI;
+        if (api?.onCloseAttempted) {
+            api.removeCloseAttemptedListener?.();
+            api.onCloseAttempted(() => {
+                if (isDirty) {
+                    pendingCloseRef.current = true;
+                    setShowUnsavedModal(true);
+                } else {
+                    api.confirmClose();
+                }
+            });
+        }
+        return () => {
+            // @ts-ignore
+            window.electronAPI?.removeCloseAttemptedListener?.();
+        };
+    }, [isDirty]);
+
+    const handleBack = () => {
+        if (isDirty) {
+            pendingCloseRef.current = false;
+            setShowUnsavedModal(true);
+        } else {
+            onBack();
+        }
+    };
+
     const handleHeaderChange = (field: keyof DfrHeaderData, value: string) => {
         setHeaderData(prev => ({ ...prev, [field]: value }));
+        setIsDirty(true);
     };
-    
+
     const handleBodyDataChange = (field: keyof Omit<DfrStandardBodyData, 'activityBlocks' | 'generalActivity' | 'locationActivities' | 'comments'>, value: string) => {
         setBodyData(prev => ({ ...prev, [field]: value }));
+        setIsDirty(true);
     };
 
     const handleGeneralActivityChange = (value: string) => {
         setBodyData(prev => ({ ...prev, generalActivity: value }));
+        setIsDirty(true);
     };
 
     const toggleComment = (field: string) => {
@@ -650,6 +943,29 @@ const DfrStandard = ({ onBack, initialData }: DfrStandardProps): ReactElement =>
                 [field]: value
             }
         }));
+        setIsDirty(true);
+    };
+
+    const handleHighlightsChange = (field: keyof DfrStandardBodyData, highlights: TextHighlight[]) => {
+        setBodyData(prev => ({
+            ...prev,
+            highlights: {
+                ...prev.highlights,
+                [field]: highlights
+            }
+        }));
+        setIsDirty(true);
+    };
+
+    const handleInlineCommentsChange = (field: keyof DfrStandardBodyData, comments: TextComment[]) => {
+        setBodyData(prev => ({
+            ...prev,
+            inlineComments: {
+                ...prev.inlineComments,
+                [field]: comments
+            }
+        }));
+        setIsDirty(true);
     };
 
     // --- Location Activity Handlers ---
@@ -680,6 +996,27 @@ const DfrStandard = ({ onBack, initialData }: DfrStandardProps): ReactElement =>
                 block.id === id ? { ...block, [field]: value } : block
             )
         }));
+        setIsDirty(true);
+    };
+
+    const updateLocationActivityHighlights = (id: number, highlights: TextHighlight[]) => {
+        setBodyData(prev => ({
+            ...prev,
+            locationActivities: prev.locationActivities.map(block =>
+                block.id === id ? { ...block, highlights: { ...block.highlights, activities: highlights } } : block
+            )
+        }));
+        setIsDirty(true);
+    };
+
+    const updateLocationActivityInlineComments = (id: number, comments: TextComment[]) => {
+        setBodyData(prev => ({
+            ...prev,
+            locationActivities: prev.locationActivities.map(block =>
+                block.id === id ? { ...block, inlineComments: { ...block.inlineComments, activities: comments } } : block
+            )
+        }));
+        setIsDirty(true);
     };
 
     const moveLocationActivity = (id: number, direction: 'up' | 'down') => {
@@ -698,6 +1035,7 @@ const DfrStandard = ({ onBack, initialData }: DfrStandardProps): ReactElement =>
 
     const handlePhotoDataChange = (id: number, field: keyof Omit<PhotoData, 'id' | 'imageUrl' | 'imageId'>, value: string) => {
         setPhotosData(prev => prev.map(photo => photo.id === id ? { ...photo, [field]: value } : photo));
+        setIsDirty(true);
     };
     
     const handleImageChange = (id: number, file: File) => {
@@ -712,6 +1050,7 @@ const DfrStandard = ({ onBack, initialData }: DfrStandardProps): ReactElement =>
              const dataUrl = e.target?.result as string;
              autoCropImage(dataUrl).then(croppedImageUrl => {
                 setPhotosData(prev => prev.map(photo => photo.id === id ? { ...photo, imageUrl: croppedImageUrl } : photo));
+                setIsDirty(true);
              });
         };
         reader.readAsDataURL(file);
@@ -754,6 +1093,7 @@ const DfrStandard = ({ onBack, initialData }: DfrStandardProps): ReactElement =>
             }
             return renumberPhotos(newPhotos);
         });
+        setIsDirty(true);
     };
 
     const removePhoto = (id: number) => {
@@ -764,31 +1104,43 @@ const DfrStandard = ({ onBack, initialData }: DfrStandardProps): ReactElement =>
             }
             return renumberPhotos(prev.filter(photo => photo.id !== id));
         });
+        setIsDirty(true);
     };
 
-    const movePhoto = (id: number, direction: 'up' | 'down') => {
-        const index = photosData.findIndex(p => p.id === id);
-        if (index === -1) return;
-
-        const newIndex = direction === 'up' ? index - 1 : index + 1;
-        if (newIndex < 0 || newIndex >= photosData.length) return;
-
-        const newPhotos = [...photosData];
-        [newPhotos[index], newPhotos[newIndex]] = [newPhotos[newIndex], newPhotos[index]];
-        
-        setPhotosData(renumberPhotos(newPhotos));
+    const handlePhotoDragEnd = (event: DragEndEvent) => {
+        const { active, over } = event;
+        if (active.id !== over?.id) {
+            const oldIndex = photosData.findIndex(p => p.id === active.id);
+            const newIndex = photosData.findIndex(p => p.id === over!.id);
+            setPhotosData(renumberPhotos(arrayMove(photosData, oldIndex, newIndex)));
+            setIsDirty(true);
+        }
     };
     
     const prepareStateForRecentProjectStorage = async () => {
-        const photosForStorage = await Promise.all(
-            photosData.map(async (photo) => {
-                if (photo.imageUrl) {
-                    const imageId = photo.imageId || `${headerData.projectNumber || 'proj'}-${photo.id}-${Date.now()}`;
+    const photosForStorage = await Promise.all(
+        photosData.map(async (photo) => {
+            if (photo.imageUrl) {
+                const imageId =
+                    photo.imageId ||
+                    `${headerData.projectNumber || 'proj'}-${photo.id}-${Date.now()}`;
+
+                // IndexedDB is optional cache — failure should not break save
+                try {
                     await storeImage(imageId, photo.imageUrl);
-                    const { imageUrl, ...rest } = photo;
-                    return { ...rest, imageId };
+                } catch (e) {
+                    console.warn('Failed to cache image in IndexedDB', e);
                 }
-                return photo;
+
+                // KEEP imageUrl embedded for offline reliability
+                return {
+                    ...photo,
+                    imageId,
+                    imageUrl: photo.imageUrl
+                };
+            }
+
+            return photo;
             })
         );
         return { headerData, bodyData, photosData: photosForStorage };
@@ -832,8 +1184,9 @@ const DfrStandard = ({ onBack, initialData }: DfrStandardProps): ReactElement =>
             document.body.removeChild(link);
             URL.revokeObjectURL(link.href);
         }
+        setIsDirty(false);
     };
-    
+
     const handleDownloadPhotos = useCallback(async () => {
         if (isDownloadingRef.current) return;
         isDownloadingRef.current = true;
@@ -940,6 +1293,26 @@ Description: ${photo.description || 'N/A'}
         };
     }, [stableListener]); // stableListener is memoized, so this effect runs once on mount/unmount.
 
+    // Keyboard shortcut listeners
+    useEffect(() => {
+        const api = window.electronAPI;
+        if (api?.onSaveProjectShortcut) {
+            api.removeSaveProjectShortcutListener?.();
+            api.onSaveProjectShortcut(() => {
+                handleSaveProject();
+            });
+        }
+        if (api?.onExportPdfShortcut) {
+            api.removeExportPdfShortcutListener?.();
+            api.onExportPdfShortcut(() => {
+                handleSavePdf();
+            });
+        }
+        return () => {
+            api?.removeSaveProjectShortcutListener?.();
+            api?.removeExportPdfShortcutListener?.();
+        };
+    }, [headerData, bodyData, photosData]);
 
     const handleFileSelected = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
@@ -1010,8 +1383,8 @@ Description: ${photo.description || 'N/A'}
     };
 
     const addSafeLogo = async (docInstance: any, x: number, y: number, w: number, h: number) => {
-        const logoUrl = await getAssetUrl("xterra-logo.jpg");
         try {
+            const logoUrl = await getAssetUrl("xterra-logo.jpg");
             const response = await fetch(logoUrl);
             if (!response.ok) throw new Error('Logo fetch failed');
             const blob = await response.blob();
@@ -1020,6 +1393,10 @@ Description: ${photo.description || 'N/A'}
                 reader.onloadend = () => {
                     const base64data = reader.result as string;
                     docInstance.addImage(base64data, 'JPEG', x, y, w, h);
+                    resolve();
+                };
+                reader.onerror = () => {
+                    console.error("FileReader failed to read logo");
                     resolve();
                 };
                 reader.readAsDataURL(blob);
@@ -1037,6 +1414,14 @@ Description: ${photo.description || 'N/A'}
         // Removed internet check to allow offline PDF generation
         if (!validateForm()) return;
 
+        // Show loading indicator
+        setStatusMessage('Generating PDF...');
+        setShowStatusModal(true);
+
+        // Allow UI to update before heavy processing
+        await new Promise(resolve => setTimeout(resolve, 50));
+
+        try {
         const stateForSaving = await prepareStateForRecentProjectStorage();
     
         const formattedDate = formatDateForRecentProject(headerData.date);
@@ -1069,7 +1454,14 @@ Description: ${photo.description || 'N/A'}
             const bottomY = pageHeight - borderMargin;
 
             // Bottom line only
-            docInstance.line(startX, bottomY, endX, bottomY);
+            const BOTTOM_LINE_NUDGE_UP = 3; // mm (use 0.5–2)
+
+            docInstance.line(
+            startX,
+            bottomY - BOTTOM_LINE_NUDGE_UP,
+            endX,
+            bottomY - BOTTOM_LINE_NUDGE_UP
+);
         };
 
         const drawProjectInfoBlock = (docInstance: any, startY: number, options: { drawTopLine?: boolean, drawBottomLine?: boolean } = {}) => {
@@ -1142,9 +1534,17 @@ Description: ${photo.description || 'N/A'}
             
             docInstance.setDrawColor(0, 125, 140); // Teal
             docInstance.setLineWidth(0.5);
+            
+            const TEXT_PAGE_TOP_LINE_NUDGE_UP = 1; // mm (use 3–6)
+
             if (drawTopLine) {
-                docInstance.line(borderMargin, startY, pageWidth - borderMargin, startY);
-            }
+            docInstance.line(
+            borderMargin,
+            startY - TEXT_PAGE_TOP_LINE_NUDGE_UP,
+            pageWidth - borderMargin,
+            startY - TEXT_PAGE_TOP_LINE_NUDGE_UP
+        );
+    }
             if (drawBottomLine) {
                 docInstance.line(borderMargin, blockBottomY, pageWidth - borderMargin, blockBottomY);
             }
@@ -1188,13 +1588,18 @@ Description: ${photo.description || 'N/A'}
             
             docInstance.setTextColor(0, 0, 0);
             
-            let yPos = headerContentStartY + 15;
+            const TOP_LINE_OFFSET = 13; // was 15
+            let yPos = headerContentStartY + TOP_LINE_OFFSET;
             
             // Manually draw the top line since drawPageBorder no longer does it.
             docInstance.setDrawColor(0, 125, 140); // Teal
             docInstance.setLineWidth(0.5);
-            docInstance.line(borderMargin, yPos, pageWidth - borderMargin, yPos);
-
+            const TOP_LINE_NUDGE_UP = 1; // mm
+            docInstance.line(
+            borderMargin,
+            yPos - TOP_LINE_NUDGE_UP,
+            pageWidth - borderMargin,
+            yPos - TOP_LINE_NUDGE_UP);
             // The project info block is positioned at the top and should not draw its own top line
             const yAfterBlock = drawProjectInfoBlock(docInstance, yPos, { drawTopLine: false });
             return yAfterBlock + 1;
@@ -1297,14 +1702,29 @@ Description: ${photo.description || 'N/A'}
 
             for (const block of bodyData.locationActivities) {
                 if (!block.activities || !block.activities.trim()) continue;
-                doc.setFontSize(12); doc.setFont('times', 'bold');
                 const subTitle = `Location: ${block.location || 'N/A'}`;
+                
+                // Calculate dimensions in bold to get accurate height
+                doc.setFontSize(12);
+                doc.setFont('times', 'bold');
                 const subTitleHeight = doc.getTextDimensions(subTitle).h + 2;
+                
+                // Check if title fits on current page, if not start new page
                 if (yPos + subTitleHeight > maxYPos) {
-                    drawPageBorder(doc); doc.addPage(); pageNum++; yPos = await drawDfrHeader(doc);
+                    drawPageBorder(doc); 
+                    doc.addPage(); 
+                    pageNum++; 
+                    yPos = await drawDfrHeader(doc);
                 }
+                
+                // Ensure bold font is set before rendering the title
+                doc.setFontSize(12);
+                doc.setFont('times', 'bold');
                 doc.text(subTitle, contentMargin, yPos);
                 yPos += subTitleHeight;
+                
+                // Reset to normal font for activities content
+                doc.setFont('times', 'normal');
                 yPos = await renderTextWithBullets(block.activities, yPos);
                 yPos += 2;
             }
@@ -1415,13 +1835,27 @@ Description: ${photo.description || 'N/A'}
             docInstance.text(descLines, xStart, textY);
         };
         
-        const drawPhotoEntry = async (docInstance: any, photo: PhotoData, yStart: number) => {
-            const gap = 5;
-            const availableWidth = contentWidth - gap;
-            const textBlockWidth = availableWidth * 0.35;
-            const imageBlockWidth = availableWidth * 0.65;
-            const imageX = contentMargin + textBlockWidth + gap;
-            
+        const drawPhotoEntry = async (
+          docInstance: any,
+          photo: PhotoData,
+          yStart: number
+        ) => {
+          const gap = 5;
+          const availableWidth = contentWidth - gap;
+          const textBlockWidth = availableWidth * 0.33;
+        
+          // Bigger photo (fixed size)
+          const imageBlockWidth = availableWidth * 0.72;      // wider
+          const imageBlockHeight = imageBlockWidth * (3 / 4); // 4:3 ratio
+        
+          // Shift photo slightly to the right
+          const PHOTO_X_NUDGE = -5; // mm
+          const imageX =
+            contentMargin +
+            textBlockWidth +
+            gap +
+            PHOTO_X_NUDGE;
+        
             drawPhotoEntryText(docInstance, photo, contentMargin, yStart, textBlockWidth);
 
             if (photo.imageUrl) {
@@ -1432,6 +1866,8 @@ Description: ${photo.description || 'N/A'}
         };
 
         if (sitePhotos.length > 0) {
+            setStatusMessage(`Processing ${sitePhotos.length} photo(s)...`);
+            await new Promise(resolve => setTimeout(resolve, 10));
             const entryHeights = await Promise.all(sitePhotos.map(p => calculatePhotoEntryHeight(doc, p)));
             const dummyDoc = new jsPDF();
             const yAfterHeader = await drawPhotoPageHeader(dummyDoc);
@@ -1489,11 +1925,18 @@ Description: ${photo.description || 'N/A'}
                     await drawPhotoEntry(doc, photosOnPage[0], yPos);
                     yPos += heightsOnPage[0];
 
-                    // Position separator line
+                    // Position separator line (middle)
                     yPos += largeGap;
                     doc.setDrawColor(0, 125, 140); // Teal
                     doc.setLineWidth(0.5);
-                    doc.line(borderMargin, yPos, pageWidth - borderMargin, yPos);
+                    const MIDDLE_LINE_NUDGE_UP = 0; // mm
+
+                    doc.line(
+                    borderMargin,
+                    yPos - MIDDLE_LINE_NUDGE_UP,
+                    pageWidth - borderMargin,
+                    yPos - MIDDLE_LINE_NUDGE_UP
+                );
                     
                     // Position second photo
                     yPos += tightGap;
@@ -1583,6 +2026,9 @@ Description: ${photo.description || 'N/A'}
         const pdfBlob = doc.output('blob');
         const pdfUrl = URL.createObjectURL(pdfBlob);
         setPdfPreview({ url: pdfUrl, filename, blob: pdfBlob });
+        } finally {
+            setShowStatusModal(false);
+        }
     };
 
     const getHeaderErrors = (): Set<keyof DfrHeaderData> => {
@@ -1621,7 +2067,11 @@ Description: ${photo.description || 'N/A'}
             )}
             {showStatusModal && <ActionStatusModal message={statusMessage} />}
             <SpecialCharacterPalette />
-            <div className="max-w-7xl mx-auto p-4 md:p-8">
+
+            {/* Flex container: content + comments side by side, scroll together */}
+            <div className="flex justify-center gap-2 lg:gap-4 p-2 sm:p-4 lg:p-6 xl:p-8">
+                {/* Main content column - scales down on laptops to fit comments */}
+                <div className="flex-1 min-w-0 max-w-[1400px]">
                 {showMigrationNotice && (
                     <div className="bg-blue-100 border-l-4 border-blue-500 text-blue-700 p-4 mb-6 rounded-md shadow-sm" role="alert">
                         <div className="flex">
@@ -1639,37 +2089,52 @@ Description: ${photo.description || 'N/A'}
                         </div>
                     </div>
                 )}
-                <div className="flex flex-wrap justify-between items-center gap-2 mb-4">
-                    <button onClick={onBack} className="bg-gray-200 hover:bg-gray-300 text-gray-800 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-white font-bold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
-                        <ArrowLeftIcon /> <span>Home</span>
-                    </button>
-                    <div className="flex flex-wrap justify-end gap-2">
-                        <button onClick={handleOpenProject} className="bg-gray-600 hover:bg-gray-700 dark:bg-gray-500 dark:hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
-                            <FolderOpenIcon /> <span>Open Project</span>
+                <div className="sticky top-0 z-40 bg-gray-100 dark:bg-gray-900 py-2 mb-4 border-b border-gray-200 dark:border-gray-700">
+                    <div className="flex flex-wrap justify-between items-center gap-2">
+                        <button onClick={handleBack} className="bg-gray-200 hover:bg-gray-300 text-gray-800 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-white font-bold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
+                            <ArrowLeftIcon /> <span>Home</span>
                         </button>
-                         <input
-                            type="file"
-                            ref={fileInputRef}
-                            onChange={handleFileSelected}
-                            style={{ display: 'none' }}
-                            accept=".dfr"
-                        />
-                        <button onClick={handleSaveProject} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
-                            <SaveIcon /> <span>Save Project</span>
-                        </button>
-                        {/* @ts-ignore */}
-                        {!window.electronAPI && (
-                            <button onClick={handleDownloadPhotos} className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
-                                <FolderArrowDownIcon /> <span>Download Photos</span>
+                        <div className="flex flex-wrap justify-end gap-2">
+                            <button onClick={handleOpenProject} className="bg-gray-600 hover:bg-gray-700 dark:bg-gray-500 dark:hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
+                                <FolderOpenIcon /> <span>Open Project</span>
                             </button>
-                        )}
-                        <button onClick={handleSavePdf} className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
-                            <DownloadIcon /> <span>Save to PDF</span>
-                        </button>
+                             <input
+                                type="file"
+                                ref={fileInputRef}
+                                onChange={handleFileSelected}
+                                style={{ display: 'none' }}
+                                accept=".dfr"
+                            />
+                            <button onClick={handleSaveProject} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
+                                <SaveIcon /> <span>Save Project</span>
+                            </button>
+                            {/* @ts-ignore */}
+                            {!window.electronAPI && (
+                                <button onClick={handleDownloadPhotos} className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
+                                    <FolderArrowDownIcon /> <span>Download Photos</span>
+                                </button>
+                            )}
+                            <button onClick={handleSavePdf} className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
+                                <DownloadIcon /> <span>Save to PDF</span>
+                            </button>
+                        </div>
                     </div>
                 </div>
-                
-                <div className="main-content space-y-8">
+
+                {/* Zoom Controls */}
+                <div className="flex items-center justify-end gap-1 mb-4">
+                    <button onClick={handleZoomOut} className="p-1.5 rounded-md bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 transition" title="Zoom out">
+                        <ZoomOutIcon className="h-4 w-4" />
+                    </button>
+                    <button onClick={handleZoomReset} className="px-2 py-1 text-xs font-medium rounded-md bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 transition min-w-[3rem]" title="Reset zoom">
+                        {zoomLevel}%
+                    </button>
+                    <button onClick={handleZoomIn} className="p-1.5 rounded-md bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 transition" title="Zoom in">
+                        <ZoomInIcon className="h-4 w-4" />
+                    </button>
+                </div>
+
+                <div className="main-content space-y-8" style={{ overflow: 'visible', transform: `scale(${zoomLevel / 100})`, transformOrigin: 'top left', width: `${10000 / zoomLevel}%` }}>
                     <DfrHeader data={headerData} onDataChange={handleHeaderChange} errors={getHeaderErrors()} placeholders={dfrPlaceholders.header} />
                     
                     <Section title="Project Activities">
@@ -1681,16 +2146,20 @@ Description: ${photo.description || 'N/A'}
                                 </button>
                             </div>
                             {openComments.has('generalActivity') && (
-                                <textarea value={bodyData.comments?.generalActivity || ''} onChange={(e) => handleCommentChange('generalActivity', e.target.value)} placeholder="Add a comment for editing purposes..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 text-gray-900 rounded-md shadow-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition mb-2" />
+                                <textarea value={bodyData.comments?.generalActivity || ''} onChange={(e) => handleCommentChange('generalActivity', e.target.value)} placeholder="Add a comment for editing purposes..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 text-gray-900 rounded-md shadow-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition mb-2" spellCheck={true} />
                             )}
-                            <BulletPointEditor label="" value={bodyData.generalActivity} onChange={handleGeneralActivityChange} rows={15} placeholder={dfrPlaceholders.body.generalActivity} isInvalid={errors.has('generalActivity')} />
+                            <BulletPointEditor label="" fieldId="generalActivity" value={bodyData.generalActivity} highlights={bodyData.highlights?.generalActivity} inlineComments={bodyData.inlineComments?.generalActivity} onChange={handleGeneralActivityChange} onHighlightsChange={h => handleHighlightsChange('generalActivity', h)} onInlineCommentsChange={c => handleInlineCommentsChange('generalActivity', c)} onAnchorPositionsChange={a => handleAnchorPositionsChange('generalActivity', a)} hoveredCommentId={hoveredCommentId} placeholder={dfrPlaceholders.body.generalActivity} isInvalid={errors.has('generalActivity')} />
                         </div>
                          <div className="space-y-4">
                             {bodyData.locationActivities.map((block, index) => (
-                                <LocationBlockEntry 
+                                <LocationBlockEntry
                                     key={block.id}
                                     data={block}
                                     onDataChange={updateLocationActivity}
+                                    onInlineCommentsChange={updateLocationActivityInlineComments}
+                                    onHighlightsChange={updateLocationActivityHighlights}
+                                    onAnchorPositionsChange={handleAnchorPositionsChange}
+                                    hoveredCommentId={hoveredCommentId}
                                     onRemove={removeLocationActivity}
                                     onMove={moveLocationActivity}
                                     isFirst={index === 0}
@@ -1715,9 +2184,9 @@ Description: ${photo.description || 'N/A'}
                                 </button>
                             </div>
                             {openComments.has('communication') && (
-                                <textarea value={bodyData.comments?.communication || ''} onChange={(e) => handleCommentChange('communication', e.target.value)} placeholder="Add a comment for editing purposes..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 text-gray-900 rounded-md shadow-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition mb-2" />
+                                <textarea value={bodyData.comments?.communication || ''} onChange={(e) => handleCommentChange('communication', e.target.value)} placeholder="Add a comment for editing purposes..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 text-gray-900 rounded-md shadow-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition mb-2" spellCheck={true} />
                             )}
-                            <BulletPointEditor label="" value={bodyData.communication} onChange={v => handleBodyDataChange('communication', v)} rows={3} placeholder={dfrPlaceholders.body.communication} isInvalid={errors.has('communication')}/>
+                            <BulletPointEditor label="" fieldId="communication" value={bodyData.communication} highlights={bodyData.highlights?.communication} inlineComments={bodyData.inlineComments?.communication} onChange={v => handleBodyDataChange('communication', v)} onHighlightsChange={h => handleHighlightsChange('communication', h)} onInlineCommentsChange={c => handleInlineCommentsChange('communication', c)} onAnchorPositionsChange={a => handleAnchorPositionsChange('communication', a)} hoveredCommentId={hoveredCommentId} placeholder={dfrPlaceholders.body.communication} isInvalid={errors.has('communication')}/>
                         </div>
                         <div>
                              <div className="flex items-center justify-between mb-1">
@@ -1727,9 +2196,9 @@ Description: ${photo.description || 'N/A'}
                                 </button>
                             </div>
                             {openComments.has('weatherAndGroundConditions') && (
-                                <textarea value={bodyData.comments?.weatherAndGroundConditions || ''} onChange={(e) => handleCommentChange('weatherAndGroundConditions', e.target.value)} placeholder="Add a comment for editing purposes..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 text-gray-900 rounded-md shadow-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition mb-2" />
+                                <textarea value={bodyData.comments?.weatherAndGroundConditions || ''} onChange={(e) => handleCommentChange('weatherAndGroundConditions', e.target.value)} placeholder="Add a comment for editing purposes..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 text-gray-900 rounded-md shadow-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition mb-2" spellCheck={true} />
                             )}
-                            <BulletPointEditor label="" value={bodyData.weatherAndGroundConditions} onChange={v => handleBodyDataChange('weatherAndGroundConditions', v)} rows={3} placeholder={dfrPlaceholders.body.weatherAndGroundConditions} isInvalid={errors.has('weatherAndGroundConditions')}/>
+                            <BulletPointEditor label="" fieldId="weatherAndGroundConditions" value={bodyData.weatherAndGroundConditions} highlights={bodyData.highlights?.weatherAndGroundConditions} inlineComments={bodyData.inlineComments?.weatherAndGroundConditions} onChange={v => handleBodyDataChange('weatherAndGroundConditions', v)} onHighlightsChange={h => handleHighlightsChange('weatherAndGroundConditions', h)} onInlineCommentsChange={c => handleInlineCommentsChange('weatherAndGroundConditions', c)} onAnchorPositionsChange={a => handleAnchorPositionsChange('weatherAndGroundConditions', a)} hoveredCommentId={hoveredCommentId} placeholder={dfrPlaceholders.body.weatherAndGroundConditions} isInvalid={errors.has('weatherAndGroundConditions')}/>
                         </div>
                     </Section>
                     
@@ -1742,9 +2211,9 @@ Description: ${photo.description || 'N/A'}
                                 </button>
                             </div>
                             {openComments.has('environmentalProtection') && (
-                                <textarea value={bodyData.comments?.environmentalProtection || ''} onChange={(e) => handleCommentChange('environmentalProtection', e.target.value)} placeholder="Add a comment for editing purposes..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 text-gray-900 rounded-md shadow-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition mb-2" />
+                                <textarea value={bodyData.comments?.environmentalProtection || ''} onChange={(e) => handleCommentChange('environmentalProtection', e.target.value)} placeholder="Add a comment for editing purposes..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 text-gray-900 rounded-md shadow-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition mb-2" spellCheck={true} />
                             )}
-                            <BulletPointEditor label="" value={bodyData.environmentalProtection} onChange={v => handleBodyDataChange('environmentalProtection', v)} rows={7} placeholder={dfrPlaceholders.body.environmentalProtection} isInvalid={errors.has('environmentalProtection')} />
+                            <BulletPointEditor label="" fieldId="environmentalProtection" value={bodyData.environmentalProtection} highlights={bodyData.highlights?.environmentalProtection} inlineComments={bodyData.inlineComments?.environmentalProtection} onChange={v => handleBodyDataChange('environmentalProtection', v)} onHighlightsChange={h => handleHighlightsChange('environmentalProtection', h)} onInlineCommentsChange={c => handleInlineCommentsChange('environmentalProtection', c)} onAnchorPositionsChange={a => handleAnchorPositionsChange('environmentalProtection', a)} hoveredCommentId={hoveredCommentId} placeholder={dfrPlaceholders.body.environmentalProtection} isInvalid={errors.has('environmentalProtection')} />
                         </div>
                         <div>
                             <div className="flex items-center justify-between mb-1">
@@ -1754,9 +2223,9 @@ Description: ${photo.description || 'N/A'}
                                 </button>
                             </div>
                             {openComments.has('wildlifeObservations') && (
-                                <textarea value={bodyData.comments?.wildlifeObservations || ''} onChange={(e) => handleCommentChange('wildlifeObservations', e.target.value)} placeholder="Add a comment for editing purposes..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 text-gray-900 rounded-md shadow-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition mb-2" />
+                                <textarea value={bodyData.comments?.wildlifeObservations || ''} onChange={(e) => handleCommentChange('wildlifeObservations', e.target.value)} placeholder="Add a comment for editing purposes..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 text-gray-900 rounded-md shadow-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition mb-2" spellCheck={true} />
                             )}
-                            <BulletPointEditor label="" value={bodyData.wildlifeObservations} onChange={v => handleBodyDataChange('wildlifeObservations', v)} rows={3} placeholder={dfrPlaceholders.body.wildlifeObservations} isInvalid={errors.has('wildlifeObservations')}/>
+                            <BulletPointEditor label="" fieldId="wildlifeObservations" value={bodyData.wildlifeObservations} highlights={bodyData.highlights?.wildlifeObservations} inlineComments={bodyData.inlineComments?.wildlifeObservations} onChange={v => handleBodyDataChange('wildlifeObservations', v)} onHighlightsChange={h => handleHighlightsChange('wildlifeObservations', h)} onInlineCommentsChange={c => handleInlineCommentsChange('wildlifeObservations', c)} onAnchorPositionsChange={a => handleAnchorPositionsChange('wildlifeObservations', a)} hoveredCommentId={hoveredCommentId} placeholder={dfrPlaceholders.body.wildlifeObservations} isInvalid={errors.has('wildlifeObservations')}/>
                         </div>
                         <div>
                             <div className="flex items-center justify-between mb-1">
@@ -1766,9 +2235,9 @@ Description: ${photo.description || 'N/A'}
                                 </button>
                             </div>
                             {openComments.has('furtherRestoration') && (
-                                <textarea value={bodyData.comments?.furtherRestoration || ''} onChange={(e) => handleCommentChange('furtherRestoration', e.target.value)} placeholder="Add a comment for editing purposes..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 text-gray-900 rounded-md shadow-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition mb-2" />
+                                <textarea value={bodyData.comments?.furtherRestoration || ''} onChange={(e) => handleCommentChange('furtherRestoration', e.target.value)} placeholder="Add a comment for editing purposes..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 text-gray-900 rounded-md shadow-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition mb-2" spellCheck={true} />
                             )}
-                            <BulletPointEditor label="" value={bodyData.furtherRestoration} onChange={v => handleBodyDataChange('furtherRestoration', v)} rows={3} placeholder={dfrPlaceholders.body.furtherRestoration} isInvalid={errors.has('furtherRestoration')} />
+                            <BulletPointEditor label="" fieldId="furtherRestoration" value={bodyData.furtherRestoration} highlights={bodyData.highlights?.furtherRestoration} inlineComments={bodyData.inlineComments?.furtherRestoration} onChange={v => handleBodyDataChange('furtherRestoration', v)} onHighlightsChange={h => handleHighlightsChange('furtherRestoration', h)} onInlineCommentsChange={c => handleInlineCommentsChange('furtherRestoration', c)} onAnchorPositionsChange={a => handleAnchorPositionsChange('furtherRestoration', a)} hoveredCommentId={hoveredCommentId} placeholder={dfrPlaceholders.body.furtherRestoration} isInvalid={errors.has('furtherRestoration')} />
                         </div>
                     </Section>
 
@@ -1776,7 +2245,8 @@ Description: ${photo.description || 'N/A'}
 
                     <h2 className="text-3xl font-bold text-gray-700 dark:text-white text-center">Photographic Log</h2>
                     
-                    <div>
+                    <DndContext collisionDetection={closestCenter} onDragEnd={handlePhotoDragEnd}>
+                      <SortableContext items={photosData.map(p => p.id)} strategy={verticalListSortingStrategy}>
                         {photosData.map((photo, index) => (
                            <div key={photo.id}>
                                 <PhotoEntry
@@ -1784,15 +2254,9 @@ Description: ${photo.description || 'N/A'}
                                 onDataChange={(field, value) => handlePhotoDataChange(photo.id, field, value)}
                                 onImageChange={(file) => handleImageChange(photo.id, file)}
                                 onRemove={() => removePhoto(photo.id)}
-                                onMoveUp={() => movePhoto(photo.id, "up")}
-                                onMoveDown={() => movePhoto(photo.id, "down")}
-                                isFirst={index === 0}
-                                isLast={index === photosData.length - 1}
                                 onImageClick={setEnlargedImageUrl}
                                 errors={getPhotoErrors(photo.id)}
                                 showDirectionField={!photo.isMap}
-
-                                // NEW FIELDS
                                 headerDate={headerData.date}
                                 headerLocation={headerData.location}
                                 onAutoFill={(f, val) => handlePhotoDataChange(photo.id, f, val)}
@@ -1815,7 +2279,8 @@ Description: ${photo.description || 'N/A'}
                                 )}
                             </div>
                         ))}
-                    </div>
+                      </SortableContext>
+                    </DndContext>
 
                     <div className="mt-8 flex justify-center gap-4">
                         <button
@@ -1836,9 +2301,32 @@ Description: ${photo.description || 'N/A'}
                 </div>
                 {photosData.length > 0 && <div className="border-t-4 border-[#007D8C] my-8" />}
                 <footer className="text-center text-gray-500 dark:text-gray-400 text-sm py-4">
-                    X-TES Digital Reporting v1.1.2
+                    X-TES Digital Reporting v1.1.4
                 </footer>
+                </div>
+
+                {/* Comments pane - hidden on small screens, visible on laptops+ */}
+                {hasAnyInlineComments && (
+                    <div className="hidden lg:block flex-shrink-0 sticky top-4 self-start">
+                        <CommentsRail
+                            comments={allComments}
+                            anchors={commentAnchors}
+                            isCollapsed={commentsCollapsed}
+                            onToggleCollapsed={() => setCommentsCollapsed(!commentsCollapsed)}
+                            onDeleteComment={handleDeleteComment}
+                            onResolveComment={handleResolveComment}
+                            onUpdateComment={handleUpdateComment}
+                            onAddReply={handleAddReply}
+                            onDeleteReply={handleDeleteReply}
+                            onHoverComment={setHoveredCommentId}
+                            onFocusComment={handleFocusComment}
+                            contentShiftAmount={160}
+                            railWidth={300}
+                        />
+                    </div>
+                )}
             </div>
+
             {showUnsupportedFileModal && (
                 <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 transition-opacity duration-300">
                     <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-2xl text-center relative max-w-md transform scale-95 hover:scale-100 transition-transform duration-300">
@@ -1903,6 +2391,39 @@ Description: ${photo.description || 'N/A'}
                         <p className="text-gray-600 dark:text-gray-300">
                             An internet connection is required to save the PDF. Please connect to the internet and try again.
                         </p>
+                    </div>
+                </div>
+            )}
+
+            {showUnsavedModal && (
+                <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[200]">
+                    <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-2xl text-center relative max-w-md">
+                        <h3 className="text-xl font-bold mb-3 text-gray-800 dark:text-white">Unsaved Changes</h3>
+                        <p className="text-gray-600 dark:text-gray-300 mb-6">
+                            You have unsaved changes. Are you sure you want to leave? Your changes will be lost.
+                        </p>
+                        <div className="flex justify-center gap-3">
+                            <button
+                                onClick={() => setShowUnsavedModal(false)}
+                                className="px-5 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-white font-semibold rounded-lg transition"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={() => {
+                                    setShowUnsavedModal(false);
+                                    if (pendingCloseRef.current) {
+                                        // @ts-ignore
+                                        window.electronAPI?.confirmClose();
+                                    } else {
+                                        onBack();
+                                    }
+                                }}
+                                className="px-5 py-2 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg transition"
+                            >
+                                Leave Without Saving
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
