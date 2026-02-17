@@ -5,3 +5,225 @@
 body {
     font-family: Calibri, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
 }
+
+/* Grey Dark Theme — neutral grays replacing Tailwind's blue-tinted grays */
+.theme-grey {
+    --grey-50:  #fafafa;
+    --grey-100: #f0f0f0;
+    --grey-200: #e0e0e0;
+    --grey-300: #c0c0c0;
+    --grey-400: #a0a0a0;
+    --grey-500: #787878;
+    --grey-600: #585858;
+    --grey-700: #404040;
+    --grey-800: #2c2c2c;
+    --grey-900: #1a1a1a;
+    --grey-950: #121212;
+}
+
+/* Background overrides */
+html.dark.theme-grey .dark\:bg-gray-900,
+html.dark.theme-grey.dark\:bg-gray-900 {
+    background-color: var(--grey-900) !important;
+}
+html.dark.theme-grey .dark\:bg-gray-800,
+html.dark.theme-grey.dark\:bg-gray-800 {
+    background-color: var(--grey-800) !important;
+}
+html.dark.theme-grey .dark\:bg-gray-700,
+html.dark.theme-grey.dark\:bg-gray-700 {
+    background-color: var(--grey-700) !important;
+}
+html.dark.theme-grey .dark\:bg-gray-600,
+html.dark.theme-grey.dark\:bg-gray-600 {
+    background-color: var(--grey-600) !important;
+}
+
+/* Hover background overrides */
+html.dark.theme-grey .dark\:hover\:bg-gray-700:hover {
+    background-color: var(--grey-700) !important;
+}
+html.dark.theme-grey .dark\:hover\:bg-gray-600:hover {
+    background-color: var(--grey-600) !important;
+}
+
+/* Gradient stop overrides */
+html.dark.theme-grey .dark\:from-gray-900 {
+    --tw-gradient-from: var(--grey-900) var(--tw-gradient-from-position) !important;
+    --tw-gradient-to: rgb(26 26 26 / 0) var(--tw-gradient-to-position) !important;
+    --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to) !important;
+}
+
+/* Border overrides */
+html.dark.theme-grey .dark\:border-gray-700 {
+    border-color: var(--grey-700) !important;
+}
+html.dark.theme-grey .dark\:border-gray-600 {
+    border-color: var(--grey-600) !important;
+}
+
+/* Sepia Dark Theme — warm, brownish tones */
+.theme-sepia {
+    --sepia-50:  #fdfaf5;
+    --sepia-100: #f8f3eb;
+    --sepia-200: #f0e8dd;
+    --sepia-300: #e0d4c0;
+    --sepia-400: #c9b8a0;
+    --sepia-500: #9d8b75;
+    --sepia-600: #6d5d4d;
+    --sepia-700: #543d2e;
+    --sepia-800: #3d2d1f;
+    --sepia-900: #2a1f15;
+    --sepia-950: #1a100a;
+}
+
+html.dark.theme-sepia .dark\:bg-gray-900 {
+    background-color: var(--sepia-900) !important;
+}
+html.dark.theme-sepia .dark\:bg-gray-800 {
+    background-color: var(--sepia-800) !important;
+}
+html.dark.theme-sepia .dark\:bg-gray-700 {
+    background-color: var(--sepia-700) !important;
+}
+html.dark.theme-sepia .dark\:bg-gray-600 {
+    background-color: var(--sepia-600) !important;
+}
+html.dark.theme-sepia .dark\:text-gray-100 {
+    color: var(--sepia-100) !important;
+}
+html.dark.theme-sepia .dark\:text-gray-300 {
+    color: var(--sepia-300) !important;
+}
+html.dark.theme-sepia .dark\:border-gray-700 {
+    border-color: var(--sepia-700) !important;
+}
+html.dark.theme-sepia .dark\:border-gray-600 {
+    border-color: var(--sepia-600) !important;
+}
+html.dark.theme-sepia .dark\:hover\:bg-gray-700:hover {
+    background-color: var(--sepia-700) !important;
+}
+html.dark.theme-sepia .dark\:hover\:bg-gray-600:hover {
+    background-color: var(--sepia-600) !important;
+}
+
+/* Blue Dark Theme — cool, bluish tones */
+.theme-blue {
+    --blue-50:   #f0f4ff;
+    --blue-100:  #e6ebff;
+    --blue-200:  #ccd7ff;
+    --blue-300:  #99afff;
+    --blue-400:  #6687ff;
+    --blue-500:  #4061d5;
+    --blue-600:  #2d4399;
+    --blue-700:  #1f2e5f;
+    --blue-800:  #162244;
+    --blue-900:  #0f1729;
+    --blue-950:  #0a0d13;
+}
+
+html.dark.theme-blue .dark\:bg-gray-900 {
+    background-color: var(--blue-900) !important;
+}
+html.dark.theme-blue .dark\:bg-gray-800 {
+    background-color: var(--blue-800) !important;
+}
+html.dark.theme-blue .dark\:bg-gray-700 {
+    background-color: var(--blue-700) !important;
+}
+html.dark.theme-blue .dark\:bg-gray-600 {
+    background-color: var(--blue-600) !important;
+}
+html.dark.theme-blue .dark\:text-gray-100 {
+    color: var(--blue-100) !important;
+}
+html.dark.theme-blue .dark\:text-gray-300 {
+    color: var(--blue-300) !important;
+}
+html.dark.theme-blue .dark\:border-gray-700 {
+    border-color: var(--blue-700) !important;
+}
+html.dark.theme-blue .dark\:border-gray-600 {
+    border-color: var(--blue-600) !important;
+}
+html.dark.theme-blue .dark\:hover\:bg-gray-700:hover {
+    background-color: var(--blue-700) !important;
+}
+html.dark.theme-blue .dark\:hover\:bg-gray-600:hover {
+    background-color: var(--blue-600) !important;
+}
+
+/* High Contrast Dark Theme — maximum contrast for accessibility */
+html.dark.theme-high-contrast {
+    --hc-50:   #ffffff;
+    --hc-100:  #ffffff;
+    --hc-200:  #f5f5f5;
+    --hc-300:  #cccccc;
+    --hc-400:  #666666;
+    --hc-500:  #333333;
+    --hc-600:  #1a1a1a;
+    --hc-700:  #000000;
+    --hc-800:  #000000;
+    --hc-900:  #000000;
+    --hc-950:  #000000;
+}
+
+html.dark.theme-high-contrast .dark\:bg-gray-900 {
+    background-color: var(--hc-900) !important;
+}
+html.dark.theme-high-contrast .dark\:bg-gray-800 {
+    background-color: var(--hc-800) !important;
+}
+html.dark.theme-high-contrast .dark\:bg-gray-700 {
+    background-color: var(--hc-700) !important;
+}
+html.dark.theme-high-contrast .dark\:bg-gray-600 {
+    background-color: var(--hc-600) !important;
+}
+html.dark.theme-high-contrast .dark\:text-gray-100 {
+    color: var(--hc-50) !important;
+}
+html.dark.theme-high-contrast .dark\:text-gray-300 {
+    color: var(--hc-100) !important;
+}
+html.dark.theme-high-contrast .dark\:text-gray-900 {
+    color: var(--hc-900) !important;
+}
+html.dark.theme-high-contrast .dark\:border-gray-700 {
+    border-color: var(--hc-700) !important;
+}
+html.dark.theme-high-contrast .dark\:border-gray-600 {
+    border-color: var(--hc-600) !important;
+}
+html.dark.theme-high-contrast .dark\:hover\:bg-gray-700:hover {
+    background-color: var(--hc-700) !important;
+}
+html.dark.theme-high-contrast .dark\:hover\:bg-gray-600:hover {
+    background-color: var(--hc-600) !important;
+}
+html.dark.theme-high-contrast a {
+    color: #0066ff;
+    text-decoration: underline;
+}
+html.dark.theme-high-contrast button:focus {
+    outline: 3px solid #0066ff !important;
+    outline-offset: 2px;
+}
+
+/* Gradient overlays for landing page backgrounds on new themes */
+
+/* Sepia theme gradient — warm browns transitioning naturally */
+html.dark.theme-sepia .bg-gradient-to-t {
+    background-image: linear-gradient(to top, var(--sepia-900) 0%, rgba(42, 31, 21, 0.5) 50%, var(--sepia-700) 100%) !important;
+}
+
+/* Blue theme gradient — cool blues with proper visibility */
+html.dark.theme-blue .bg-gradient-to-t {
+    background-image: linear-gradient(to top, var(--blue-900) 0%, rgba(15, 23, 41, 0.5) 50%, var(--blue-700) 100%) !important;
+}
+
+/* High Contrast gradient — maximum contrast for accessibility */
+html.dark.theme-high-contrast .bg-gradient-to-t {
+    background-image: linear-gradient(to top, #000000 0%, rgba(0, 0, 0, 0) 50%, #ffffff 100%) !important;
+}

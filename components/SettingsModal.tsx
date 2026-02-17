@@ -1,8 +1,9 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { CloseIcon, TrashIcon } from './icons';
 import { clearDatabase } from './db';
 import { useTheme } from './ThemeContext';
+import SafeImage, { getAssetUrl } from './SafeImage';
 
 interface SettingsModalProps {
     onClose: () => void;
@@ -24,6 +25,34 @@ const SPELL_CHECK_LANGUAGES = [
     { code: 'nl-NL', name: 'Dutch' },
 ];
 
+const LANDING_PHOTO_KEY = 'xtec_landing_photo';
+const LANDING_PHOTO_POS_KEY = 'xtec_landing_photo_position';
+const LANDING_PHOTO_ZOOM_KEY = 'xtec_landing_photo_zoom';
+const LANDING_PHOTO_PRESET_KEY = 'xtec_landing_photo_preset';
+
+// Crop viewport height matches the landing page header aspect ratio
+const CROP_VIEWPORT_HEIGHT = 120;
+
+interface PresetWallpaper {
+    fileName: string;
+    label: string;
+    defaultPosition: number; // cropPct default
+}
+
+const PRESET_WALLPAPERS: PresetWallpaper[] = [
+    { fileName: 'landscape.JPG', label: 'Oil Field', defaultPosition: 85 },
+    { fileName: 'bison1.jpg', label: 'Bison', defaultPosition: 60 },
+    { fileName: 'wallpaper/116911439_10223823748248481_4788712539515562122_o - Copy.jpg', label: 'Lake Sunset', defaultPosition: 40 },
+    { fileName: 'wallpaper/bison rock - Copy.jpg', label: 'Prairie', defaultPosition: 50 },
+    { fileName: 'wallpaper/Breeding Bird Surveys_CL.jpg', label: 'Yellow Warbler', defaultPosition: 50 },
+    { fileName: 'wallpaper/common nighthawk - Copy.JPG', label: 'Nighthawk', defaultPosition: 50 },
+    { fileName: 'wallpaper/DJI_0041.JPG', label: 'Aerial', defaultPosition: 50 },
+
+    { fileName: 'wallpaper/IMG_0009_CL.jpg', label: 'Wildflowers', defaultPosition: 50 },
+    { fileName: 'wallpaper/IMG_0283.JPG', label: 'Sinkhole', defaultPosition: 40 },
+    { fileName: 'wallpaper/Owl.jpg', label: 'Great Grey Owl', defaultPosition: 50 },
+];
+
 const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
     const [activeTab, setActiveTab] = useState('general');
     const [usageEstimate, setUsageEstimate] = useState<string | null>(null);
@@ -33,7 +62,25 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
     const [spellCheckLanguages, setSpellCheckLanguages] = useState<string[]>(['en-US', 'en-CA']);
     const [availableLanguages, setAvailableLanguages] = useState<string[]>([]);
     const [spellCheckSaved, setSpellCheckSaved] = useState(false);
-    const { isDarkMode, toggleTheme } = useTheme();
+    const [hasCustomPhoto, setHasCustomPhoto] = useState(false);
+    const [customPhotoPreview, setCustomPhotoPreview] = useState<string | null>(null);
+    const [selectedPreset, setSelectedPreset] = useState<string | null>(null); // preset fileName or null
+    const [activePresetUrl, setActivePresetUrl] = useState<string | null>(null);
+    const [photoPosition, setPhotoPosition] = useState('center 85%');
+    const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+    const [isDragging, setIsDragging] = useState(false);
+    const [dragStartY, setDragStartY] = useState(0);
+    const [dragStartPct, setDragStartPct] = useState(85);
+    const [cropPct, setCropPct] = useState(85); // 0-100, vertical position percentage
+    const [cropZoom, setCropZoom] = useState(1.0); // 0.5 to 3.0
+    const [imgNatDims, setImgNatDims] = useState({ w: 0, h: 0 });
+    const cropContainerRef = useRef<HTMLDivElement>(null);
+    const cropImgRef = useRef<HTMLImageElement>(null);
+    const { theme, setTheme } = useTheme();
+
+    // The active preview image: custom upload data URL, or resolved preset URL
+    const activePreviewSrc = customPhotoPreview || activePresetUrl;
+    const hasActivePhoto = hasCustomPhoto || !!selectedPreset;
 
     useEffect(() => {
         const checkStorage = async () => {
@@ -70,6 +117,26 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
         } catch (e) {
             console.error("Failed to load settings", e);
         }
+
+        // Load custom landing photo state
+        const savedPreset = localStorage.getItem(LANDING_PHOTO_PRESET_KEY);
+        const savedPhoto = localStorage.getItem(LANDING_PHOTO_KEY);
+        if (savedPreset) {
+            setSelectedPreset(savedPreset);
+            getAssetUrl(savedPreset).then(url => setActivePresetUrl(url));
+        } else if (savedPhoto) {
+            setHasCustomPhoto(true);
+            setCustomPhotoPreview(savedPhoto);
+        }
+        const savedPos = localStorage.getItem(LANDING_PHOTO_POS_KEY);
+        if (savedPos) {
+            setPhotoPosition(savedPos);
+            // Parse percentage from "center XX%" format
+            const match = savedPos.match(/(\d+)%/);
+            if (match) setCropPct(parseInt(match[1], 10));
+        }
+        const savedZoom = localStorage.getItem(LANDING_PHOTO_ZOOM_KEY);
+        if (savedZoom) setCropZoom(parseFloat(savedZoom));
 
         // Load spell check languages
         const loadSpellCheckSettings = async () => {
@@ -141,6 +208,157 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
         localStorage.setItem('xtec_general_settings', JSON.stringify(newDefaults));
     };
 
+    const handleLandingPhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        if (!file.type.startsWith('image/')) {
+            alert('Please select an image file.');
+            return;
+        }
+        setIsUploadingPhoto(true);
+        const reader = new FileReader();
+        reader.onload = () => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = img.width;
+                canvas.height = img.height;
+                const ctx = canvas.getContext('2d');
+                if (ctx) {
+                    ctx.drawImage(img, 0, 0);
+                    const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
+                    try {
+                        localStorage.setItem(LANDING_PHOTO_KEY, dataUrl);
+                        localStorage.removeItem(LANDING_PHOTO_PRESET_KEY);
+                        setHasCustomPhoto(true);
+                        setCustomPhotoPreview(dataUrl);
+                        setSelectedPreset(null);
+                        setActivePresetUrl(null);
+                        setImgNatDims({ w: 0, h: 0 });
+                    } catch {
+                        alert('Image is too large to store. Please try a smaller image.');
+                    }
+                }
+                setIsUploadingPhoto(false);
+            };
+            img.src = reader.result as string;
+        };
+        reader.readAsDataURL(file);
+        e.target.value = '';
+    };
+
+    const handleRemoveLandingPhoto = () => {
+        localStorage.removeItem(LANDING_PHOTO_KEY);
+        localStorage.removeItem(LANDING_PHOTO_POS_KEY);
+        localStorage.removeItem(LANDING_PHOTO_ZOOM_KEY);
+        localStorage.removeItem(LANDING_PHOTO_PRESET_KEY);
+        setHasCustomPhoto(false);
+        setCustomPhotoPreview(null);
+        setSelectedPreset(null);
+        setActivePresetUrl(null);
+        setPhotoPosition('center 85%');
+    };
+
+    const handleSelectPreset = (preset: PresetWallpaper) => {
+        // Clear custom photo if any
+        localStorage.removeItem(LANDING_PHOTO_KEY);
+        setHasCustomPhoto(false);
+        setCustomPhotoPreview(null);
+        // Set the preset and resolve its URL for the crop viewport
+        setSelectedPreset(preset.fileName);
+        getAssetUrl(preset.fileName).then(url => setActivePresetUrl(url));
+        setImgNatDims({ w: 0, h: 0 }); // Reset so onLoad re-measures
+        // Apply default crop position for this preset
+        setCropPct(preset.defaultPosition);
+        setCropZoom(1.0);
+        // Save immediately
+        const pos = `center ${preset.defaultPosition}%`;
+        setPhotoPosition(pos);
+        localStorage.setItem(LANDING_PHOTO_PRESET_KEY, preset.fileName);
+        localStorage.setItem(LANDING_PHOTO_POS_KEY, pos);
+        localStorage.setItem(LANDING_PHOTO_ZOOM_KEY, '1.00');
+        window.dispatchEvent(new CustomEvent('xtec-bg-photo-changed'));
+    };
+
+    // Compute the "cover" base dimensions — minimum size to fill the container
+    const getCoverDims = useCallback((cW: number, cH: number) => {
+        if (!imgNatDims.w || !imgNatDims.h) return { w: cW, h: cH };
+        const imgAspect = imgNatDims.w / imgNatDims.h;
+        const containerAspect = cW / cH;
+        if (imgAspect > containerAspect) {
+            // Image is proportionally wider → match height
+            return { w: cH * imgAspect, h: cH };
+        } else {
+            // Image is proportionally taller → match width
+            return { w: cW, h: cW / imgAspect };
+        }
+    }, [imgNatDims]);
+
+    // Compute the image display style for the crop preview
+    const getCropImgStyle = useCallback((): React.CSSProperties => {
+        if (!imgNatDims.w || !cropContainerRef.current) {
+            // Fallback before dimensions known
+            return { width: '100%', height: CROP_VIEWPORT_HEIGHT, objectFit: 'cover' as const };
+        }
+        const cW = cropContainerRef.current.clientWidth;
+        const cH = CROP_VIEWPORT_HEIGHT;
+        const base = getCoverDims(cW, cH);
+        const dW = base.w * cropZoom;
+        const dH = base.h * cropZoom;
+        const overflowY = dH - cH;
+        return {
+            position: 'absolute' as const,
+            width: dW,
+            height: dH,
+            left: (cW - dW) / 2,
+            top: overflowY > 0 ? -(cropPct / 100) * overflowY : (cH - dH) / 2,
+        };
+    }, [imgNatDims, cropZoom, cropPct, getCoverDims]);
+
+    const handleCropMouseDown = useCallback((e: React.MouseEvent) => {
+        e.preventDefault();
+        setIsDragging(true);
+        setDragStartY(e.clientY);
+        setDragStartPct(cropPct);
+    }, [cropPct]);
+
+    useEffect(() => {
+        if (!isDragging) return;
+        const handleMouseMove = (e: MouseEvent) => {
+            if (!cropContainerRef.current) return;
+            const cW = cropContainerRef.current.clientWidth;
+            const cH = CROP_VIEWPORT_HEIGHT;
+            const base = getCoverDims(cW, cH);
+            const overflow = base.h * cropZoom - cH;
+            if (overflow <= 0) return;
+            const deltaY = e.clientY - dragStartY;
+            const deltaPct = (deltaY / overflow) * 100;
+            const newPct = Math.max(0, Math.min(100, dragStartPct + deltaPct));
+            setCropPct(newPct);
+        };
+        const handleMouseUp = () => {
+            setIsDragging(false);
+        };
+        window.addEventListener('mousemove', handleMouseMove);
+        window.addEventListener('mouseup', handleMouseUp);
+        return () => {
+            window.removeEventListener('mousemove', handleMouseMove);
+            window.removeEventListener('mouseup', handleMouseUp);
+        };
+    }, [isDragging, dragStartY, dragStartPct, cropZoom, getCoverDims]);
+
+    const handleSetPhoto = () => {
+        const pos = `center ${Math.round(cropPct)}%`;
+        setPhotoPosition(pos);
+        localStorage.setItem(LANDING_PHOTO_POS_KEY, pos);
+        localStorage.setItem(LANDING_PHOTO_ZOOM_KEY, cropZoom.toFixed(2));
+        if (selectedPreset) {
+            localStorage.setItem(LANDING_PHOTO_PRESET_KEY, selectedPreset);
+            localStorage.removeItem(LANDING_PHOTO_KEY);
+        }
+        window.dispatchEvent(new CustomEvent('xtec-bg-photo-changed'));
+    };
+
     const handleSpellCheckLanguageChange = async (langCode: string) => {
         console.log("Changing spell check language to:", langCode);
         const electronAPI = (window as any).electronAPI;
@@ -210,15 +428,185 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
                                     <h3 className="text-xl font-bold text-gray-800 dark:text-white mb-4 border-b dark:border-gray-700 pb-2">Appearance</h3>
                                     <div className="flex items-center justify-between">
                                         <div>
-                                            <span className="block text-base font-medium text-gray-700 dark:text-gray-300">Dark Mode</span>
-                                            <span className="text-sm text-gray-500 dark:text-gray-400">Switch between light and dark themes.</span>
+                                            <span className="block text-base font-medium text-gray-700 dark:text-gray-300">Theme</span>
+                                            <span className="text-sm text-gray-500 dark:text-gray-400">Choose your preferred appearance.</span>
                                         </div>
-                                        <button 
-                                            onClick={toggleTheme}
-                                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-[#007D8C] focus:ring-offset-2 ${isDarkMode ? 'bg-[#007D8C]' : 'bg-gray-300'}`}
+                                        <select
+                                            value={theme}
+                                            onChange={(e) => setTheme(e.target.value as 'light' | 'dark' | 'grey' | 'sepia' | 'blue' | 'high-contrast')}
+                                            className="px-3 py-1.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#007D8C]"
                                         >
-                                            <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${isDarkMode ? 'translate-x-6' : 'translate-x-1'}`} />
-                                        </button>
+                                            <option value="light">Light</option>
+                                            <option value="dark">Dark</option>
+                                            <option value="grey">Grey</option>
+                                            <option value="sepia">Sepia (Warm)</option>
+                                            <option value="blue">Blue (Cool)</option>
+                                            <option value="high-contrast">High Contrast</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <h3 className="text-xl font-bold text-gray-800 dark:text-white mb-4 border-b dark:border-gray-700 pb-2">Landing Page Background</h3>
+                                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
+                                        Choose a preset wallpaper or upload your own photo.
+                                    </p>
+
+                                    {/* Preset wallpaper grid */}
+                                    <div className="grid grid-cols-5 gap-2 mb-3">
+                                        {PRESET_WALLPAPERS.map((preset) => {
+                                            const isSelected = selectedPreset === preset.fileName && !hasCustomPhoto;
+                                            return (
+                                                <button
+                                                    key={preset.fileName}
+                                                    onClick={() => handleSelectPreset(preset)}
+                                                    className={`relative rounded-lg overflow-hidden border-2 transition-all duration-150 group focus:outline-none ${
+                                                        isSelected
+                                                            ? 'border-[#007D8C] ring-1 ring-[#007D8C]/30'
+                                                            : 'border-gray-200 dark:border-gray-600 hover:border-[#007D8C]/40'
+                                                    }`}
+                                                    style={{ aspectRatio: '16/9' }}
+                                                    title={preset.label}
+                                                >
+                                                    <SafeImage
+                                                        fileName={preset.fileName}
+                                                        alt={preset.label}
+                                                        className="w-full h-full object-cover"
+                                                        draggable={false}
+                                                    />
+                                                    <div className={`absolute inset-0 flex items-end justify-center pb-1 bg-gradient-to-t from-black/50 to-transparent ${isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity`}>
+                                                        <span className="text-[10px] font-medium text-white drop-shadow-sm">{preset.label}</span>
+                                                    </div>
+                                                    {isSelected && (
+                                                        <div className="absolute top-1 right-1 w-4 h-4 rounded-full bg-[#007D8C] flex items-center justify-center">
+                                                            <svg className="h-2.5 w-2.5 text-white" fill="none" viewBox="0 0 24 24" strokeWidth={3} stroke="currentColor">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                                                            </svg>
+                                                        </div>
+                                                    )}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+
+                                    {/* Crop viewport */}
+                                    <div
+                                        ref={cropContainerRef}
+                                        className={`mb-3 rounded-lg overflow-hidden border-2 bg-black relative select-none ${
+                                            activePreviewSrc
+                                                ? 'border-[#007D8C]/50 cursor-grab active:cursor-grabbing'
+                                                : 'border-gray-200 dark:border-gray-600'
+                                        }`}
+                                        style={{ height: CROP_VIEWPORT_HEIGHT }}
+                                        onMouseDown={activePreviewSrc ? handleCropMouseDown : undefined}
+                                    >
+                                        {activePreviewSrc ? (
+                                            <>
+                                                {/* Blurred fill layer — always covers, fills gaps when zoomed out */}
+                                                <img
+                                                    src={activePreviewSrc}
+                                                    alt=""
+                                                    aria-hidden="true"
+                                                    className="absolute inset-0 w-full object-cover pointer-events-none"
+                                                    style={{
+                                                        height: CROP_VIEWPORT_HEIGHT,
+                                                        filter: 'blur(20px)',
+                                                        transform: 'scale(1.15)',
+                                                        opacity: 0.5,
+                                                    }}
+                                                    draggable={false}
+                                                />
+                                                {/* Main image — explicitly sized, no object-fit */}
+                                                <img
+                                                    ref={cropImgRef}
+                                                    src={activePreviewSrc}
+                                                    alt="Drag to position"
+                                                    className="pointer-events-none"
+                                                    style={getCropImgStyle()}
+                                                    draggable={false}
+                                                    onLoad={(e) => {
+                                                        const img = e.currentTarget;
+                                                        setImgNatDims({ w: img.naturalWidth, h: img.naturalHeight });
+                                                    }}
+                                                />
+                                                {/* Drag hint overlay */}
+                                                {!isDragging && (
+                                                    <div className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 hover:opacity-100 transition-opacity pointer-events-none">
+                                                        <div className="bg-black/60 text-white text-xs px-3 py-1.5 rounded-full flex items-center gap-1.5">
+                                                            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" d="M3 7.5L7.5 3m0 0L12 7.5M7.5 3v13.5m13.5-3L16.5 18m0 0L12 13.5M16.5 18V4.5" />
+                                                            </svg>
+                                                            Drag to reposition
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </>
+                                        ) : (
+                                            <div className="w-full h-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
+                                                <span className="text-sm text-gray-400 dark:text-gray-500">Select a preset or upload a photo</span>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {hasActivePhoto && activePreviewSrc && (
+                                        <p className="text-xs text-gray-400 dark:text-gray-500 mb-2">Tip: Drag on the photo to adjust position</p>
+                                    )}
+
+                                    {/* Zoom slider */}
+                                    {hasActivePhoto && activePreviewSrc && (
+                                        <div className="mb-3 flex items-center gap-3">
+                                            <svg className="h-4 w-4 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607zM13.5 10.5h-6" />
+                                            </svg>
+                                            <input
+                                                type="range"
+                                                min="0.5"
+                                                max="3"
+                                                step="0.05"
+                                                value={cropZoom}
+                                                onChange={(e) => setCropZoom(parseFloat(e.target.value))}
+                                                className="flex-1 h-1.5 bg-gray-200 dark:bg-gray-600 rounded-full appearance-none cursor-pointer accent-[#007D8C]"
+                                            />
+                                            <svg className="h-5 w-5 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607zM10.5 7.5v6m3-3h-6" />
+                                            </svg>
+                                            <span className="text-xs text-gray-400 w-10 text-right">{Math.round(cropZoom * 100)}%</span>
+                                        </div>
+                                    )}
+
+                                    {/* Upload / Set / Reset buttons */}
+                                    <div className="flex items-center gap-3">
+                                        <label className={`${isUploadingPhoto ? 'opacity-50 pointer-events-none' : ''} bg-[#007D8C] hover:bg-[#006b7a] text-white font-medium py-2 px-4 rounded-lg cursor-pointer transition-colors text-sm inline-flex items-center gap-2`}>
+                                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+                                            </svg>
+                                            {isUploadingPhoto ? 'Processing...' : hasCustomPhoto ? 'Change Photo' : 'Upload Photo'}
+                                            <input type="file" accept="image/*" onChange={handleLandingPhotoUpload} className="hidden" disabled={isUploadingPhoto} />
+                                        </label>
+                                        {hasActivePhoto && (
+                                            <button
+                                                onClick={handleSetPhoto}
+                                                className="bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 font-medium py-2 px-4 rounded-lg transition-colors text-sm inline-flex items-center gap-1.5"
+                                            >
+                                                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                                                </svg>
+                                                Set
+                                            </button>
+                                        )}
+                                        {hasActivePhoto && (
+                                            <button
+                                                onClick={() => {
+                                                    handleRemoveLandingPhoto();
+                                                    setCropPct(85);
+                                                    setCropZoom(1.0);
+                                                    window.dispatchEvent(new CustomEvent('xtec-bg-photo-changed'));
+                                                }}
+                                                className="text-sm text-red-500 hover:text-red-600 font-medium transition-colors"
+                                            >
+                                                Reset to Default
+                                            </button>
+                                        )}
                                     </div>
                                 </div>
 

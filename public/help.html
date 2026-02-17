@@ -182,7 +182,7 @@
                     </tr>
                     <tr>
                         <td>Revision No</td>
-                        <td>1B</td>
+                        <td>1C</td>
                     </tr>
                     <tr>
                         <td>Document Review</td>
@@ -213,6 +213,11 @@
                         <td>INCORPORATE USER-PROVIDED TEXT AND REFORMAT</td>
                         <td>NOVEMBER 15, 2025</td>
                     </tr>
+                    <tr>
+                        <td>1C</td>
+                        <td>ADD NEW FEATURES: THEMES, SETTINGS, INLINE COMMENTS, HIGHLIGHTING, COMBINED LOG, DRAG-TO-REORDER, LANDING PAGE CUSTOMIZATION</td>
+                        <td>FEBRUARY 17, 2026</td>
+                    </tr>
                 </tbody>
             </table>
 
@@ -237,11 +242,22 @@
                                     <li><a href="#report-photolog">4.4.1&emsp;Photographic Log</a></li>
                                     <li><a href="#report-dfr-standard">4.4.2&emsp;Standard Daily Field Report (DFR)</a></li>
                                     <li><a href="#report-dfr-saskpower">4.4.3&emsp;SaskPower Daily Field Report (DFR)</a></li>
+                                    <li><a href="#report-combined-log">4.4.4&emsp;Combined Log</a></li>
                                 </ol>
                             </li>
                             <li><a href="#photo-log-management">4.5&emsp;Photographic Log Management</a></li>
-                            <li><a href="#data-management">4.6&emsp;Saving, Exporting & Data Management</a></li>
-                            <li><a href="#advanced-features">4.7&emsp;Advanced Features & Data Concepts</a></li>
+                            <li><a href="#inline-comments">4.6&emsp;Inline Comments & Text Highlighting</a></li>
+                            <li><a href="#settings">4.7&emsp;Settings</a>
+                                <ol class="subsubsection">
+                                    <li><a href="#settings-theme">4.7.1&emsp;Theme Selection</a></li>
+                                    <li><a href="#settings-landing-bg">4.7.2&emsp;Landing Page Background</a></li>
+                                    <li><a href="#settings-defaults">4.7.3&emsp;Default Values</a></li>
+                                    <li><a href="#settings-spellcheck">4.7.4&emsp;Spell Check Languages</a></li>
+                                    <li><a href="#settings-data">4.7.5&emsp;Data Management</a></li>
+                                </ol>
+                            </li>
+                            <li><a href="#data-management">4.8&emsp;Saving, Exporting & Data Management</a></li>
+                            <li><a href="#advanced-features">4.9&emsp;Advanced Features & Data Concepts</a></li>
                         </ol>
                     </li>
                      <li><a href="#formatting-tips"><span class="section-title">5&emsp;FORMATTING TIPS</span></a></li>
@@ -320,10 +336,14 @@
 
                     <h2 id="ui-overview">4.3&emsp;User Interface Overview</h2>
                     <h3 id="ui-landing">4.3.1&emsp;The Landing Page</h3>
-                    <p>This is the main hub of the application.</p>
+                    <p>This is the main hub of the application. It features a customizable header background photo (see Section 4.7.2) and provides access to all report types and recent work.</p>
                     <ul>
-                        <li><strong>Create a New Report:</strong> The three large cards at the top are for starting a new, blank project.</li>
-                        <li><strong>Recent Projects:</strong> This section lists projects you have saved. This data is stored locally on your computer for quick access. Use the search bar to filter this list by project name or number.</li>
+                        <li><strong>Create a New Report:</strong> The cards at the top are for starting a new, blank project. Available report types include Photo Log, Standard DFR, SaskPower DFR, Combined Log, and IOGC Lease Audit.</li>
+                        <li><strong>Recent Projects:</strong> This section lists projects you have saved. This data is stored locally on your computer for quick access. By default, up to 5 projects are shown; click "See All" to expand the full list (up to 50 projects).</li>
+                        <li><strong>Search:</strong> Use the search bar to filter the Recent Projects list by project name or project number in real time.</li>
+                        <li><strong>Project Preview:</strong> Hover over a recent project entry to see a thumbnail preview of the first photo in that project.</li>
+                        <li><strong>Settings:</strong> Click the gear icon on the landing page to open the Settings modal (see Section 4.7).</li>
+                        <li><strong>Update Notifications:</strong> When a new version of the application is available, a banner will appear at the top of the landing page. The update will install automatically the next time the application is restarted.</li>
                     </ul>
                     <h3 id="ui-report-screen">4.3.2&emsp;The Report Creation Screen</h3>
                     <p>This is where you will do all your work.</p>
@@ -336,7 +356,9 @@
                            <li><strong>Help > Report Issues:</strong> Opens a web form to report bugs or suggest improvements.</li>
                        </ul>
                    </li>
-                    <li><strong>Symbols Palette:</strong> A floating vertical tab on the right edge of the screen. Clicking it opens a palette of special characters (°, ±, µ). Clicking any character copies it to your clipboard, ready to be pasted.</li>
+                    <li><strong>Symbols Palette:</strong> A floating vertical tab on the right edge of the screen. Clicking it opens a palette of special characters (°, ±, µ, and many more including Greek letters and math symbols). Clicking any character copies it to your clipboard, ready to be pasted with <kbd>Ctrl</kbd> + <kbd>V</kbd>.</li>
+                    <li><strong>Inline Comments:</strong> A collapsible comments panel on the right side of the screen allows you to add, reply to, and resolve comments on specific text fields. See Section 4.6 for details.</li>
+                    <li><strong>Image Viewer:</strong> Click on any uploaded photo in a report to open a full-screen preview. Press <kbd>Esc</kbd> or click the close button to dismiss. The viewer displays file name, file size, and date taken (if available).</li>
                 </ul>
                 
                 <h2 id="report-creation">4.4&emsp;Report Creation & Data Entry</h2>
@@ -376,25 +398,113 @@
                         <strong>Note on Opening Older Files:</strong> If you open an older SaskPower DFR file that used separate location blocks, the application will automatically merge all activity text into the single "Project Activities" box to conform to the new standard. A notice will appear. Be sure to review and save the project to finalize this change.
                     </div>
                 </ol>
-                
+
+                <h3 id="report-combined-log">4.4.4&emsp;Combined Log</h3>
+                <p>The Combined Log allows you to merge photos from multiple existing projects into a single photographic report.</p>
+                <ol>
+                    <li><strong>Creating a Combined Log:</strong> Select "Combined Log" from the landing page to start a new combined report.</li>
+                    <li><strong>Importing from Recent Projects:</strong> Click the "Import Recent" button to select from your saved projects. Photos from the selected project will be added to the combined log while preserving their individual metadata (date, location, direction, description).</li>
+                    <li><strong>Managing the Combined Report:</strong> Once imported, you can reorder, add, or remove photos just like in a standard Photo Log. The combined log can be saved as its own project file (<span class="filepath">.clog</span>) and exported to PDF.</li>
+                </ol>
+
                 <h2 id="photo-log-management">4.5&emsp;Photographic Log Management</h2>
                 <ol>
                     <li><strong>Adding Entries:</strong> Click "Add Photo" for a standard entry. In the Standard DFR, you can also click "Add Map" for overview images like GPS tracks or site plans. Maps are given their own full page in the final PDF for better readability and are automatically labeled sequentially (Map 1, Map 2, etc.). You can also click "Add Photo Here" between existing entries to insert a new photo at a specific position.</li>
                     <li><strong>Uploading Images:</strong> Click the camera icon area and select one of your prepared, cropped and resized images.</li>
                     <li><strong>Managing Entries:</strong>
                         <ul>
-                            <li>Use the up and down arrows to reorder photos. All photo/map numbers will update automatically.</li>
+                            <li><strong>Drag to Reorder:</strong> Click and hold the grip handle icon on the left side of any photo entry, then drag it up or down to reorder. All photo/map numbers update automatically.</li>
+                            <li>You can also use the up and down arrow buttons to reorder photos.</li>
                             <li>Click the trash can icon to permanently delete an entry.</li>
                             <li>Hover over an uploaded image and click the "enlarge" icon that appears in the top-right corner to view it full-screen.</li>
                         </ul>
                     </li>
+                    <li><strong>Auto-Fill Photo Fields:</strong> When the report header fields (Date, Location) are filled in, you can click the auto-fill buttons on individual photo entries to quickly populate the Date and Location fields from the header values.</li>
                 </ol>
 
-                <h2 id="data-management">4.6&emsp;Saving, Exporting & Data Management</h2>
+                <h2 id="inline-comments">4.6&emsp;Inline Comments & Text Highlighting</h2>
+                <p>The application includes collaboration tools for reviewing and annotating reports before final submission. These annotations are stored in the project file but are <strong>not</strong> exported to the final PDF.</p>
+
+                <h3>Inline Comments</h3>
+                <p>A collapsible comments panel on the right side of the report screen allows for targeted feedback on specific text fields.</p>
+                <ol>
+                    <li><strong>Adding a Comment:</strong> Select text within a text field, then click the "Add Comment" option that appears. Type your comment and submit. The comment is anchored to the specific text you selected.</li>
+                    <li><strong>Replying to Comments:</strong> Click on an existing comment to expand its thread. Type a reply in the reply box to continue the conversation.</li>
+                    <li><strong>Resolving Comments:</strong> Click the resolve button on a comment thread to mark it as resolved. Resolved comments can be viewed using the filter tabs (All / Open / Resolved) at the top of the comments panel.</li>
+                    <li><strong>Editing & Deleting:</strong> You can edit or delete your own comments and replies using the options on each comment.</li>
+                    <li><strong>Author Attribution:</strong> Comments are automatically attributed to the current Windows username.</li>
+                </ol>
+
+                <h3>Text Highlighting</h3>
+                <p>Multi-color highlighting is available for text fields to help mark important sections during review.</p>
+                <ol>
+                    <li><strong>Applying a Highlight:</strong> Select text within a text field, then choose a highlight color from the palette that appears. Five colors are available: Yellow, Green, Blue, Pink, and Orange.</li>
+                    <li><strong>Removing Highlights:</strong> Select highlighted text and click the remove option, or use "Clear All" to remove all highlights from a field.</li>
+                </ol>
+                <div class="note">
+                    <strong>Note:</strong> Both inline comments and text highlights are saved in your project file for collaborative review purposes. They are <strong>not</strong> included in the generated PDF output.
+                </div>
+
+                <h2 id="settings">4.7&emsp;Settings</h2>
+                <p>Click the gear icon on the landing page to open the Settings modal. Settings are organized into tabs and are saved locally on your computer.</p>
+
+                <h3 id="settings-theme">4.7.1&emsp;Theme Selection</h3>
+                <p>Choose your preferred visual appearance from the Theme dropdown in the Appearance section. Six themes are available:</p>
+                <ul>
+                    <li><strong>Light:</strong> The default bright theme.</li>
+                    <li><strong>Dark:</strong> A standard dark theme with Tailwind's default colors.</li>
+                    <li><strong>Grey:</strong> A dark theme with neutral grey tones (no blue tint).</li>
+                    <li><strong>Sepia (Warm):</strong> A dark theme with warm, brownish tones.</li>
+                    <li><strong>Blue (Cool):</strong> A dark theme with cool, bluish tones.</li>
+                    <li><strong>High Contrast:</strong> A maximum-contrast dark theme for improved accessibility.</li>
+                </ul>
+                <p>Your theme selection is remembered across sessions.</p>
+
+                <h3 id="settings-landing-bg">4.7.2&emsp;Landing Page Background</h3>
+                <p>Customize the header photo displayed on the landing page.</p>
+                <ol>
+                    <li><strong>Preset Wallpapers:</strong> Choose from a grid of built-in wallpaper photos. Click any thumbnail to select it as your landing page background.</li>
+                    <li><strong>Upload Custom Photo:</strong> Click "Upload Photo" to select any image from your computer as the background.</li>
+                    <li><strong>Adjusting Position:</strong> After selecting a photo, drag on the preview image to adjust the vertical crop position. A tip below the preview reminds you of this feature.</li>
+                    <li><strong>Zoom:</strong> Use the zoom slider below the preview to zoom in or out on the background image (0.5x to 3.0x).</li>
+                    <li><strong>Applying Changes:</strong> Click "Set as Background" to apply your chosen photo, position, and zoom to the landing page.</li>
+                    <li><strong>Removing:</strong> Click "Remove Photo" to reset back to the default background.</li>
+                </ol>
+
+                <h3 id="settings-defaults">4.7.3&emsp;Default Values</h3>
+                <p>Set default values that will auto-populate in new reports to save time on repetitive data entry.</p>
+                <ul>
+                    <li><strong>Default Proponent:</strong> Automatically fills the Proponent field when creating new Photo Logs and Standard DFRs.</li>
+                    <li><strong>Default Monitor Name:</strong> Automatically fills the Monitor Name field when creating new DFRs.</li>
+                </ul>
+
+                <h3 id="settings-spellcheck">4.7.4&emsp;Spell Check Languages</h3>
+                <p>Select which languages the spell checker should use when checking text in your reports. Multiple languages can be selected simultaneously. Available languages include:</p>
+                <ul>
+                    <li>English (US, Canada, UK, Australia)</li>
+                    <li>French (France, Canada)</li>
+                    <li>Spanish (Spain, Mexico)</li>
+                    <li>German, Portuguese (Brazil), Italian, Dutch</li>
+                </ul>
+                <div class="note">
+                    <strong>Note:</strong> Changes to spell check languages require an application restart to take effect.
+                </div>
+
+                <h3 id="settings-data">4.7.5&emsp;Data Management</h3>
+                <p>The Data Management tab in Settings allows you to:</p>
+                <ul>
+                    <li><strong>View Storage Usage:</strong> See how much local storage space is being used by the application and the total available quota.</li>
+                    <li><strong>Clear All Local Data:</strong> Remove all locally cached project data and settings. This does <strong>not</strong> delete any saved project files on your computer or server &mdash; only the application's internal database.</li>
+                </ul>
+                <div class="warning">
+                    <strong>Warning:</strong> Clearing local data will remove all entries from your Recent Projects list. Make sure your project files are saved to your computer or server before clearing.
+                </div>
+
+                <h2 id="data-management">4.8&emsp;Saving, Exporting & Data Management</h2>
                 <div class="warning">
                     <strong>THE GOLDEN RULE: "SAVE PROJECT" VS. "SAVE TO PDF".</strong> Understanding this distinction is essential to avoid data loss and rework.
                     <ul>
-                        <li><strong>Save Project:</strong> Creates a live, <strong>EDITABLE</strong> source file (<span class="filepath">.dfr</span>, <span class="filepath">.plog</span>). This is your master copy for saving progress and making future edits. You can only open these files with this application.</li>
+                        <li><strong>Save Project:</strong> Creates a live, <strong>EDITABLE</strong> source file (<span class="filepath">.dfr</span>, <span class="filepath">.plog</span>, <span class="filepath">.spdfr</span>, or <span class="filepath">.clog</span>). This is your master copy for saving progress and making future edits. You can only open these files with this application.</li>
                         <li><strong>Save to PDF:</strong> Generates a final, <strong>NON-EDITABLE</strong> document for submission, printing, or sharing. It cannot be opened or edited by this application.</li>
                     </ul>
                 </div>
@@ -409,9 +519,9 @@
                     <li><strong>Procedure: Downloading All Photos (Desktop App):</strong> In the desktop app menu, go to <strong>File > Download Photos</strong>. The application will generate and ask you to save a single <span class="filepath">.zip</span> file. This file contains all your report images (named by photo/map number) and a <span class="filepath">metadata.txt</span> file with all associated text (date, location, direction, description).</li>
                 </ol>
 
-                <h2 id="advanced-features">4.7&emsp;Advanced Features & Data Concepts</h2>
+                <h2 id="advanced-features">4.9&emsp;Advanced Features & Data Concepts</h2>
                 <ol>
-                    <li><strong>File Associations ("Open with..."):</strong> You can set the application as the default program for project files to open them with a double-click. Right-click a project file (e.g., <span class="filepath">my_project.dfr</span>), choose "Open with > Choose another app," and navigate to the application shortcut on your Desktop. Select the <span class="filepath">X-TES Digital Reporting</span> shortcut file and check "Always use this app...". Repeat for <span class="filepath">.plog</span> and <span class="filepath">.spdfr</span> files.</li>
+                    <li><strong>File Associations ("Open with..."):</strong> You can set the application as the default program for project files to open them with a double-click. Right-click a project file (e.g., <span class="filepath">my_project.dfr</span>), choose "Open with > Choose another app," and navigate to the application shortcut on your Desktop. Select the <span class="filepath">X-TES Digital Reporting</span> shortcut file and check "Always use this app...". Repeat for <span class="filepath">.plog</span>, <span class="filepath">.spdfr</span>, and <span class="filepath">.clog</span> files.</li>
                     <li><strong>Understanding Local Data Storage:</strong> The "Recent Projects" list is powered by a local database (IndexedDB) on your computer. This allows for instant loading of your recent work. This data is stored <strong>only on the computer you are using</strong> and does not sync to the cloud or other machines.</li>
                     <li><strong>Removing vs. Deleting Recent Projects:</strong> On the landing page, clicking the "..." on a recent project gives two options:
                         <ul>

@@ -401,16 +401,21 @@ app.whenReady().then(() => {
   });
 
   ipcMain.handle('get-asset-path', (event, filename) => {
-    // Security: Basic path traversal prevention
-    if (filename.includes('..') || filename.includes('/') || filename.includes('\\')) {
+    // Security: Block path traversal but allow subfolder paths (e.g. wallpaper/image.jpg)
+    if (filename.includes('..')) {
         return '';
     }
+    // Normalize to forward slashes for consistency
+    const safeName = filename.replace(/\\/g, '/');
+    // URL-encode each path segment (handles spaces, commas, etc.) but preserve /
+    const encodedName = safeName.split('/').map(s => encodeURIComponent(s)).join('/');
 
     if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
-      return `${MAIN_WINDOW_VITE_DEV_SERVER_URL}/assets/${filename}`;
+      return `${MAIN_WINDOW_VITE_DEV_SERVER_URL}/assets/${encodedName}`;
     } else {
-      const assetPath = path.join(process.resourcesPath, 'assets', filename);
-      return `file://${assetPath.replace(/\\/g, '/')}`;
+      const assetPath = path.join(process.resourcesPath, 'assets', ...safeName.split('/'));
+      // Use encodeURI which preserves :, /, etc. but encodes spaces and special chars
+      return encodeURI(`file://${assetPath.replace(/\\/g, '/')}`);
     }
   });
 

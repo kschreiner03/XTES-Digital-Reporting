@@ -22,7 +22,8 @@ const SafeImage: React.FC<SafeImageProps> = ({ fileName, ...props }) => {
                     if (isMounted) console.error("Asset not resolved:", fileName); 
                 }
             } else {
-                if (isMounted) setSrc(`./assets/${fileName}`);
+                const encoded = fileName.replace(/\\/g, '/').split('/').map(s => encodeURIComponent(s)).join('/');
+                if (isMounted) setSrc(`./assets/${encoded}`);
             }
         };
         loadAsset();
@@ -40,7 +41,9 @@ export const getAssetUrl = async (fileName: string): Promise<string> => {
         // @ts-ignore
         return await window.electronAPI.getAssetPath(fileName);
     }
-    return `./assets/${fileName}`;
+    // Encode each path segment to handle spaces/special chars in filenames
+    const encoded = fileName.replace(/\\/g, '/').split('/').map(s => encodeURIComponent(s)).join('/');
+    return `./assets/${encoded}`;
 };
 
 export default SafeImage;
