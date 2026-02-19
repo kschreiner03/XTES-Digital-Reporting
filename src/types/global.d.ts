@@ -11,6 +11,10 @@ export interface IElectronAPI {
     saveZipFile: (data: ArrayBuffer, defaultPath: string) => Promise<{ success: boolean; path?: string; error?: string }>;
     onUpdateAvailable: (callback: () => void) => void;
     removeUpdateAvailableListener: () => void;
+    onUpdateDownloaded: (callback: () => void) => void;
+    removeUpdateDownloadedListener: () => void;
+    installUpdateNow: () => void;
+    installUpdateLater: () => void;
     onOpenSettings: (callback: () => void) => void;
     removeOpenSettingsListener: () => void;
     getAssetPath: (filename: string) => Promise<string>;

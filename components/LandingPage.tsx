@@ -1,10 +1,11 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { StandardDfrIcon, CameraIcon, SaskPowerIcon, SearchIcon, FolderOpenIcon, EllipsisVerticalIcon, DocumentDuplicateIcon, IogcAuditIcon } from './icons';
+import { StandardDfrIcon, CameraIcon, SaskPowerIcon, SearchIcon, FolderOpenIcon, EllipsisVerticalIcon, DocumentDuplicateIcon } from './icons';
 import { AppType } from '../App';
 import { deleteImage, deleteProject, deleteThumbnail, retrieveProject, getAllThumbnails } from './db';
 import SafeImage, { getAssetUrl } from './SafeImage';
 import ProjectPreviewTooltip from './ProjectPreviewTooltip';
+import WhatsNewModal, { shouldShowWhatsNew } from './WhatsNewModal';
 
 export interface RecentProject {
     type: AppType;
@@ -16,7 +17,6 @@ export interface RecentProject {
 interface LandingPageProps {
   onSelectApp: (app: AppType) => void;
   onOpenProject: (project: RecentProject) => void;
-  isUpdateAvailable: boolean;
 }
 
 const RECENT_PROJECTS_KEY = 'xtec_recent_projects';
@@ -43,8 +43,6 @@ const getReportTypeName = (type: AppType): string => {
             return 'Sask Power Daily Field Report';
         case 'combinedLog':
             return 'Combine Logs';
-        case 'iogcLeaseAudit':
-            return 'IOGC Lease Audit';
         default:
             return 'Report';
     }
@@ -70,12 +68,12 @@ const AppSelectionCard: React.FC<{ title: string; description: string; icon: Rea
     </div>
 );
 
-const LandingPage: React.FC<LandingPageProps> = ({ onSelectApp, onOpenProject, isUpdateAvailable }) => {
+const LandingPage: React.FC<LandingPageProps> = ({ onSelectApp, onOpenProject }) => {
     const [recentProjects, setRecentProjects] = useState<RecentProject[]>([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [openMenuTimestamp, setOpenMenuTimestamp] = useState<number | null>(null);
     const [isRecentProjectsExpanded, setIsRecentProjectsExpanded] = useState(false);
-    const [updateNotificationDismissed, setUpdateNotificationDismissed] = useState(false);
+
     const [thumbnails, setThumbnails] = useState<Map<number, string>>(new Map());
     const [hoveredTimestamp, setHoveredTimestamp] = useState<number | null>(null);
     const [customBgPhoto, setCustomBgPhoto] = useState<string | null>(null);
@@ -84,6 +82,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSelectApp, onOpenProject, i
     const [bgZoom, setBgZoom] = useState(1.0);
     const [bgImgDims, setBgImgDims] = useState({ w: 0, h: 0 });
     const [headerWidth, setHeaderWidth] = useState(0);
+    const [showWhatsNew, setShowWhatsNew] = useState(() => shouldShowWhatsNew());
     const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const menuRef = useRef<HTMLDivElement>(null);
     const headerRef = useRef<HTMLElement>(null);
@@ -294,25 +293,6 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSelectApp, onOpenProject, i
 
     return (
         <div className="bg-gray-50 dark:bg-gray-900 min-h-screen transition-colors duration-200">
-            {isUpdateAvailable && !updateNotificationDismissed && (
-                <div className="bg-[#007D8C]/5 dark:bg-[#007D8C]/10 border-b border-[#007D8C]/20 px-6 py-3 relative" role="alert">
-                    <div className="max-w-7xl mx-auto flex items-center gap-3">
-                        <div className="w-2 h-2 rounded-full bg-[#007D8C] animate-pulse flex-shrink-0" />
-                        <p className="text-sm text-gray-700 dark:text-gray-200 flex-1">
-                            <span className="font-semibold">Update available</span> — will install automatically on restart.
-                        </p>
-                        <button
-                            onClick={() => setUpdateNotificationDismissed(true)}
-                            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors p-1 rounded-lg hover:bg-black/5 dark:hover:bg-white/5"
-                            aria-label="Dismiss"
-                        >
-                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                            </svg>
-                        </button>
-                    </div>
-                </div>
-            )}
             <header ref={headerRef} className="relative h-[28rem] bg-black overflow-hidden">
                 {/* Determine the active background image source */}
                 {(() => {
@@ -360,7 +340,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSelectApp, onOpenProject, i
                         </p>
                     </div>
 
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                         <AppSelectionCard
                             title="Photo Log"
                             description="Create and edit photographic logs."
@@ -384,12 +364,6 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSelectApp, onOpenProject, i
                             description="Merge photos from multiple reports."
                             icon={<DocumentDuplicateIcon className="h-7 w-7" />}
                             onClick={() => onSelectApp('combinedLog')}
-                        />
-                        <AppSelectionCard
-                            title="IOGC Audit"
-                            description="Surface lease environmental audit report."
-                            icon={<IogcAuditIcon className="h-7 w-7" />}
-                            onClick={() => onSelectApp('iogcLeaseAudit')}
                         />
                     </div>
                 </div>
@@ -531,6 +505,9 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSelectApp, onOpenProject, i
             <footer className="text-center text-gray-400 dark:text-gray-500 text-xs py-6">
                 X-TES Digital Reporting v1.1.4
             </footer>
+            {showWhatsNew && (
+                <WhatsNewModal onClose={() => setShowWhatsNew(false)} />
+            )}
         </div>
     );
 };

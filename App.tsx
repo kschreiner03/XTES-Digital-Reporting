@@ -8,13 +8,15 @@ import DfrSaskpower from './components/DfrSaskpower';
 import { retrieveProject } from './components/db';
 import CombinedLog from './components/CombinedLog';
 import SettingsModal from './components/SettingsModal';
+import UpdateModal from './components/UpdateModal';
 
 export type AppType = 'photoLog' | 'dfrSaskpower' | 'dfrStandard' | 'combinedLog' | 'iogcLeaseAudit';
 
 const App: React.FC = () => {
     const [selectedApp, setSelectedApp] = useState<AppType | null>(null);
     const [projectToOpen, setProjectToOpen] = useState<any>(null);
-    const [isUpdateAvailable, setIsUpdateAvailable] = useState(false);
+    const [isUpdateDownloaded, setIsUpdateDownloaded] = useState(false);
+    const [showUpdateModal, setShowUpdateModal] = useState(false);
     const [showSettings, setShowSettings] = useState(false);
 
     const loadProjectFromFileContent = (content: string, path: string) => {
@@ -64,7 +66,15 @@ const App: React.FC = () => {
         if (window.electronAPI?.onUpdateAvailable) {
             // @ts-ignore
             window.electronAPI.onUpdateAvailable(() => {
-                setIsUpdateAvailable(true);
+                setShowUpdateModal(true);
+            });
+        }
+
+        // @ts-ignore
+        if (window.electronAPI?.onUpdateDownloaded) {
+            // @ts-ignore
+            window.electronAPI.onUpdateDownloaded(() => {
+                setIsUpdateDownloaded(true);
             });
         }
         
@@ -81,6 +91,11 @@ const App: React.FC = () => {
             if (window.electronAPI?.removeUpdateAvailableListener) {
                 // @ts-ignore
                 window.electronAPI.removeUpdateAvailableListener();
+            }
+            // @ts-ignore
+            if (window.electronAPI?.removeUpdateDownloadedListener) {
+                // @ts-ignore
+                window.electronAPI.removeUpdateDownloadedListener();
             }
             // @ts-ignore
              if (window.electronAPI?.removeOpenSettingsListener) {
@@ -136,8 +151,14 @@ const App: React.FC = () => {
     return (
         <>
             {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
+            {showUpdateModal && (
+                <UpdateModal
+                    isDownloaded={isUpdateDownloaded}
+                    onClose={() => setShowUpdateModal(false)}
+                />
+            )}
             {!selectedApp ? (
-                <LandingPage onSelectApp={handleSelectApp} onOpenProject={handleOpenProject} isUpdateAvailable={isUpdateAvailable} />
+                <LandingPage onSelectApp={handleSelectApp} onOpenProject={handleOpenProject} />
             ) : (
                 (() => {
                     switch (selectedApp) {
@@ -152,7 +173,7 @@ const App: React.FC = () => {
                         // case 'iogcLeaseAudit':
                         //     return <IogcLeaseAudit onBack={handleBackToHome} initialData={projectToOpen} />;
                         default:
-                            return <LandingPage onSelectApp={handleSelectApp} onOpenProject={handleOpenProject} isUpdateAvailable={isUpdateAvailable}/>;
+                            return <LandingPage onSelectApp={handleSelectApp} onOpenProject={handleOpenProject} />;
                     }
                 })()
             )}

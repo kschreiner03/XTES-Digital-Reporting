@@ -7,6 +7,7 @@ const fs = require('fs');
 let mainWindow;
 let helpWindow;
 let forceClose = false;
+let pendingUpdate = false; // true when update downloaded but user chose "Later"
 
 // --- Configuration / Secrets ---
 // Prefer environment variables for sensitive or environment-specific URLs
@@ -346,24 +347,36 @@ app.whenReady().then(() => {
   setTimeout(() => autoUpdater.checkForUpdates(), 5000);
   setInterval(() => autoUpdater.checkForUpdates(), 60 * 60 * 1000);
 
-  // For the banner on the landing page
+  // Notify renderer when an update is available (download starts automatically)
   autoUpdater.on('update-available', () => {
     if (mainWindow) {
       mainWindow.webContents.send('update-available');
     }
   });
 
-  // For the dialog to restart the app
-  autoUpdater.on('update-downloaded', (event, releaseNotes, releaseName) => {
-    dialog.showMessageBox({
-      type: 'info',
-      buttons: ['Restart', 'Later'],
-      title: 'Application Update',
-      message: process.platform === 'win32' ? releaseNotes : releaseName,
-      detail: 'A new version has been downloaded. Restart the application to apply the updates.'
-    }).then(returnValue => {
-      if (returnValue.response === 0) autoUpdater.quitAndInstall();
-    });
+  // Notify renderer when download is complete (no native dialog)
+  autoUpdater.on('update-downloaded', () => {
+    if (mainWindow) {
+      mainWindow.webContents.send('update-downloaded');
+    }
+  });
+
+  // Renderer requests immediate install + restart
+  ipcMain.on('install-update-now', () => {
+    forceClose = true;
+    autoUpdater.quitAndInstall();
+  });
+
+  // Renderer requests deferred install — will apply on next quit
+  ipcMain.on('install-update-later', () => {
+    pendingUpdate = true;
+  });
+
+  // When the app is about to quit, apply deferred update if one is pending
+  app.on('before-quit', () => {
+    if (pendingUpdate) {
+      autoUpdater.quitAndInstall();
+    }
   });
 
   autoUpdater.on('error', (error) => {

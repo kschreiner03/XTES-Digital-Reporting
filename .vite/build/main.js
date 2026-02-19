@@ -6,6 +6,7 @@ const fs = require("fs");
 let mainWindow;
 let helpWindow;
 let forceClose = false;
+let pendingUpdate = false;
 const REPO_URL = process.env.GITHUB_REPOSITORY || "kschreiner03/XTES-Digital-Reporting";
 const REPORT_ISSUE_URL = process.env.REPORT_ISSUE_URL || "https://forms.office.com/r/A0jqm6vHb6";
 const ALLOWED_EXTENSIONS = [".dfr", ".spdfr", ".plog", ".clog", ".iogc", ".json"];
@@ -287,16 +288,22 @@ app.whenReady().then(() => {
       mainWindow.webContents.send("update-available");
     }
   });
-  autoUpdater.on("update-downloaded", (event, releaseNotes, releaseName) => {
-    dialog.showMessageBox({
-      type: "info",
-      buttons: ["Restart", "Later"],
-      title: "Application Update",
-      message: process.platform === "win32" ? releaseNotes : releaseName,
-      detail: "A new version has been downloaded. Restart the application to apply the updates."
-    }).then((returnValue) => {
-      if (returnValue.response === 0) autoUpdater.quitAndInstall();
-    });
+  autoUpdater.on("update-downloaded", () => {
+    if (mainWindow) {
+      mainWindow.webContents.send("update-downloaded");
+    }
+  });
+  ipcMain.on("install-update-now", () => {
+    forceClose = true;
+    autoUpdater.quitAndInstall();
+  });
+  ipcMain.on("install-update-later", () => {
+    pendingUpdate = true;
+  });
+  app.on("before-quit", () => {
+    if (pendingUpdate) {
+      autoUpdater.quitAndInstall();
+    }
   });
   autoUpdater.on("error", (error) => {
     console.error("There was a problem updating the application");
@@ -322,11 +329,13 @@ app.whenReady().then(() => {
     }
   });
   ipcMain.handle("get-asset-path", (event, filename) => {
-    if (filename.includes("..") || filename.includes("/") || filename.includes("\\")) {
+    if (filename.includes("..")) {
       return "";
     }
+    const safeName = filename.replace(/\\/g, "/");
+    const encodedName = safeName.split("/").map((s) => encodeURIComponent(s)).join("/");
     {
-      return `${"http://localhost:5173"}/assets/${filename}`;
+      return `${"http://localhost:5173"}/assets/${encodedName}`;
     }
   });
   ipcMain.handle("save-project", async (event, data, defaultPath) => {

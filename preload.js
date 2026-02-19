@@ -47,6 +47,18 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.on("update-available", () => callback());
   },
 
+  onUpdateDownloaded: (callback) => {
+    ipcRenderer.on("update-downloaded", () => callback());
+  },
+
+  installUpdateNow: () => {
+    ipcRenderer.send("install-update-now");
+  },
+
+  installUpdateLater: () => {
+    ipcRenderer.send("install-update-later");
+  },
+
   onSaveProjectShortcut: (callback) => {
     ipcRenderer.on("save-project-shortcut", () => callback());
   },
@@ -73,6 +85,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   removeUpdateAvailableListener: () => {
     ipcRenderer.removeAllListeners("update-available");
+  },
+
+  removeUpdateDownloadedListener: () => {
+    ipcRenderer.removeAllListeners("update-downloaded");
   },
 
   removeSaveProjectShortcutListener: () => {
