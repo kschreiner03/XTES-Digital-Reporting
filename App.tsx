@@ -233,7 +233,7 @@ const App: React.FC = () => {
                                 case 'combinedLog':
                                     return <CombinedLog onBack={handleBackToHome} onBackDirect={handleBackDirect} initialData={projectToOpen} />;
                                 default:
-                                    return <LandingPage onSelectApp={handleSelectApp} onOpenProject={handleOpenProject} />;
+                                    return <LandingPage onSelectApp={handleSelectApp} onOpenProject={handleOpenProject} showWhatsNew={false} onCloseWhatsNew={() => {}} />;
                             }
                         })()}
                     </Suspense>
