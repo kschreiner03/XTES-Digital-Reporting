@@ -8,7 +8,7 @@ All notable changes to X-TEC Digital Reporting are documented here.
 
 ---
 
-## [1.1.4 beta] — March 2026
+## [1.1.4] — March 2026
 
 ### Added
 

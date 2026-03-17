@@ -13,7 +13,7 @@ interface ReleaseNote {
 const RELEASE_NOTES: ReleaseNote[] = [
     {
         version: '1.1.4',
-        date: 'February 2026',
+        date: 'March 2026',
         highlights: [
             'Preset wallpapers — choose a background photo for the landing page from the Settings menu',
             'Inline comments — select any text in a report to add anchored comments, replies, and resolutions',

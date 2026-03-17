@@ -44,7 +44,7 @@ const RECENT_PROJECTS_KEY = 'xtec_recent_projects';
 const MAX_RECENT_PROJECTS = 10;
 
 
-const VALID_APP_TYPES = new Set<string>(['photoLog', 'dfrSaskpower', 'dfrStandard', 'combinedLog', 'iogcLeaseAudit']);
+const VALID_APP_TYPES = new Set<string>(['photoLog', 'dfrSaskpower', 'dfrStandard', 'combinedLog']);
 
 const isValidProject = (obj: unknown): obj is RecentProject =>
     typeof obj === 'object' && obj !== null &&
@@ -70,7 +70,7 @@ const getReportTypeName = (type: AppType): string => {
         case 'photoLog':
             return 'Photographic Log';
         case 'dfrStandard':
-            return 'Daily field Report';
+            return 'Daily Field Report';
         case 'dfrSaskpower':
             return 'Sask Power Daily Field Report';
         case 'combinedLog':

@@ -2,7 +2,6 @@ import React, { useState, useEffect, lazy, Suspense } from 'react';
 import ReactDOM from 'react-dom/client';
 import LandingPage, { RecentProject } from './components/LandingPage';
 import SettingsModal from './components/SettingsModal';
-// import IogcLeaseAudit from './components/IogcLeaseAudit'; // Hidden for now
 import { retrieveProject } from './components/db';
 
 const PhotoLog   = lazy(() => import('./components/PhotoLog'));
@@ -13,7 +12,7 @@ import UpdateModal from './components/UpdateModal';
 import { shouldShowWhatsNew } from './components/WhatsNewModal';
 import { ToastContainer, toast } from './components/Toast';
 import { getAssetUrl } from './components/SafeImage';
-import { perfMark, PERF_ENABLED } from './components/perf';
+import { perfMark } from './components/perf';
 
 perfMark('app-module-loaded');
 
@@ -27,7 +26,7 @@ const WALLPAPER_FILENAMES = [
 ];
 WALLPAPER_FILENAMES.forEach(f => getAssetUrl(f));
 
-export type AppType = 'photoLog' | 'dfrSaskpower' | 'dfrStandard' | 'combinedLog' | 'iogcLeaseAudit';
+export type AppType = 'photoLog' | 'dfrSaskpower' | 'dfrStandard' | 'combinedLog';
 
 const App: React.FC = () => {
     const [selectedApp, setSelectedApp] = useState<AppType | null>(null);
@@ -55,7 +54,6 @@ const App: React.FC = () => {
             else if (ext === 'dfr') type = 'dfrStandard';
             else if (ext === 'spdfr') type = 'dfrSaskpower';
             else if (ext === 'clog') type = 'combinedLog';
-            else if (ext === 'iogc') type = 'iogcLeaseAudit';
 
             if (type) {
                 setProjectToOpen(projectData);
@@ -221,8 +219,6 @@ const App: React.FC = () => {
                                     return <DfrStandard onBack={handleBackToHome} onBackDirect={handleBackDirect} initialData={projectToOpen} />;
                                 case 'combinedLog':
                                     return <CombinedLog onBack={handleBackToHome} onBackDirect={handleBackDirect} initialData={projectToOpen} />;
-                                // case 'iogcLeaseAudit':
-                                //     return <IogcLeaseAudit onBack={handleBackToHome} initialData={projectToOpen} />;
                                 default:
                                     return <LandingPage onSelectApp={handleSelectApp} onOpenProject={handleOpenProject} />;
                             }

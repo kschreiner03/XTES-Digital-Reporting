@@ -90,8 +90,7 @@ export const deleteProject = async (id: number): Promise<void> => {
 };
 
 /**
- * Clears all data from the database stores.
- * Used for freeing up storage space.
+ * Stores a thumbnail image for a project by its ID.
  */
 export const storeThumbnail = async (id: number, thumbnailData: string): Promise<void> => {
     const db = await initDB();

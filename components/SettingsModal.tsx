@@ -246,10 +246,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
     };
 
     const handleSpellCheckLanguageChange = async (langCode: string) => {
-        console.log("Changing spell check language to:", langCode);
         const electronAPI = (window as any).electronAPI;
         if (!electronAPI?.setSpellCheckLanguages) {
-            console.error("electronAPI.setSpellCheckLanguages not available");
             alert("Spell check API not available. Please restart the application.");
             return;
         }
@@ -257,9 +255,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
         const newLanguages = [langCode];
 
         try {
-            console.log("Calling setSpellCheckLanguages with:", newLanguages);
             const result = await electronAPI.setSpellCheckLanguages(newLanguages);
-            console.log("setSpellCheckLanguages result:", result);
             if (result.success) {
                 setSpellCheckLanguages(newLanguages);
                 // Save to localStorage for persistence across sessions
@@ -267,7 +263,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
                 // Show saved indicator
                 setSpellCheckSaved(true);
                 setTimeout(() => setSpellCheckSaved(false), 2000);
-                console.log("Spell check language changed successfully to:", langCode);
             } else {
                 console.error("Failed to set spell check language:", result.error);
                 alert("Failed to change spell check language. The language dictionary may not be available.");
