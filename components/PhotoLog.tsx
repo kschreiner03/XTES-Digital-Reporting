@@ -739,6 +739,13 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, onBackDirect, initialData }
     };
     quickSaveRef.current = handleQuickSave;
 
+    // Auto-export PDF when opened from Projects View with autoPdfExport flag
+    useEffect(() => {
+        if (initialData?.autoPdfExport) {
+            setTimeout(() => handleSavePdf(), 400);
+        }
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
     const handleSaveProject = async () => {
         await handleQuickSave();
         const photosForExport = photosData.map(({ imageId, ...photo }) => photo);
@@ -1176,10 +1183,19 @@ const drawPhotoEntry = async (
         perfMark('pdf-gen-end');
         perfMeasure('PDF generation (PhotoLog)', 'pdf-gen-start', 'pdf-gen-end');
         const pdfBlob = doc.output('blob');
+        if (initialData?.autoPdfExport) {
+            const ab = await pdfBlob.arrayBuffer();
+            // @ts-ignore
+            if (window.electronAPI?.savePdf) { // @ts-ignore
+                await window.electronAPI.savePdf(ab, filename);
+            }
+            (onBackDirect ?? onBack)();
+            return;
+        }
         const pdfUrl = URL.createObjectURL(pdfBlob);
         setPdfPreview({ url: pdfUrl, filename, blob: pdfBlob });
     };
-    
+
     const handleDownloadPhotos = useCallback(async () => {
         if (isDownloadingRef.current) return;
         isDownloadingRef.current = true;

@@ -1633,6 +1633,15 @@ const renderTextSection = async (
         perfMark('pdf-gen-end');
         perfMeasure('PDF generation (DfrSaskpower)', 'pdf-gen-start', 'pdf-gen-end');
         const pdfBlob = doc.output('blob');
+        if (initialData?.autoPdfExport) {
+            const ab = await pdfBlob.arrayBuffer();
+            // @ts-ignore
+            if (window.electronAPI?.savePdf) { // @ts-ignore
+                await window.electronAPI.savePdf(ab, filename);
+            }
+            (onBackDirect ?? onBack)();
+            return;
+        }
         const pdfUrl = URL.createObjectURL(pdfBlob);
         setPdfPreview({ url: pdfUrl, filename, blob: pdfBlob });
         } finally {
@@ -1650,6 +1659,12 @@ const renderTextSection = async (
         toast('Saved ✓');
     };
     quickSaveRef.current = handleQuickSave;
+
+    useEffect(() => {
+        if (initialData?.autoPdfExport) {
+            setTimeout(() => handleSavePdf(), 400);
+        }
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
     const handleSaveProject = async () => {
         await handleQuickSave();

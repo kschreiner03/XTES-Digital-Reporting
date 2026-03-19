@@ -827,6 +827,12 @@ const CombinedLog: React.FC<CombinedLogProps> = ({ onBack, onBackDirect, initial
     };
     quickSaveRef.current = handleQuickSave;
 
+    useEffect(() => {
+        if (initialData?.autoPdfExport) {
+            setTimeout(() => handleSavePdf(), 400);
+        }
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
     const handleSaveProject = async () => {
         await handleQuickSave();
         const photosForExport = photosData.map(({ imageId, ...photo }) => photo);
@@ -1165,6 +1171,15 @@ const CombinedLog: React.FC<CombinedLogProps> = ({ onBack, onBackDirect, initial
         perfMark('pdf-gen-end');
         perfMeasure('PDF generation (CombinedLog)', 'pdf-gen-start', 'pdf-gen-end');
         const pdfBlob = doc.output('blob');
+        if (initialData?.autoPdfExport) {
+            const ab = await pdfBlob.arrayBuffer();
+            // @ts-ignore
+            if (window.electronAPI?.savePdf) { // @ts-ignore
+                await window.electronAPI.savePdf(ab, filename);
+            }
+            (onBackDirect ?? onBack)();
+            return;
+        }
         const pdfUrl = URL.createObjectURL(pdfBlob);
         setPdfPreview({ url: pdfUrl, filename, blob: pdfBlob });
     };

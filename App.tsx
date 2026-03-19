@@ -36,6 +36,7 @@ const App: React.FC = () => {
     const [showUpdateModal, setShowUpdateModal] = useState(false);
     const [showSettings, setShowSettings] = useState(false);
     const [showProjectsView, setShowProjectsView] = useState(false);
+    const [pendingReturnToProjects, setPendingReturnToProjects] = useState(false);
     // Evaluated once per session — not re-checked on every LandingPage mount
     const [showWhatsNew, setShowWhatsNew] = useState(() => shouldShowWhatsNew());
     // View-transition animation state
@@ -186,7 +187,25 @@ const App: React.FC = () => {
     const handleBackDirect = () => {
         setSelectedApp(null);
         setProjectToOpen(null);
-        setLandingReturning(true);
+        if (pendingReturnToProjects) {
+            setPendingReturnToProjects(false);
+            setShowProjectsView(true);
+        } else {
+            setLandingReturning(true);
+        }
+    };
+
+    const handleRequestPdfExport = async (project: RecentProject) => {
+        try {
+            const data = await retrieveProject(project.timestamp);
+            if (!data) { return; }
+            setShowProjectsView(false);
+            setPendingReturnToProjects(true);
+            setProjectToOpen({ ...data, timestamp: project.timestamp, autoPdfExport: true });
+            setSelectedApp(project.type);
+        } catch (e) {
+            console.error('Failed to load project for PDF export:', e);
+        }
     };
 
     const handleExitAnimationEnd = (e: React.AnimationEvent<HTMLDivElement>) => {
@@ -202,7 +221,7 @@ const App: React.FC = () => {
         <>
             <ToastContainer />
             {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
-            {showProjectsView && <ProjectsView onClose={() => setShowProjectsView(false)} onOpenProject={(p) => { setShowProjectsView(false); handleOpenProject(p); }} />}
+            {showProjectsView && <ProjectsView onClose={() => setShowProjectsView(false)} onOpenProject={(p) => { setShowProjectsView(false); handleOpenProject(p); }} onRequestPdfExport={handleRequestPdfExport} />}
             {showUpdateModal && (
                 <UpdateModal
                     isDownloaded={isUpdateDownloaded}
@@ -218,7 +237,8 @@ const App: React.FC = () => {
                 </div>
             ) : (
                 <div
-                    className={isExiting ? 'xtec-report-exit' : 'xtec-report-enter'}
+                    className={projectToOpen?.autoPdfExport ? '' : (isExiting ? 'xtec-report-exit' : 'xtec-report-enter')}
+                    style={projectToOpen?.autoPdfExport ? { visibility: 'hidden', position: 'absolute', pointerEvents: 'none' } : undefined}
                     onAnimationEnd={isExiting ? handleExitAnimationEnd : undefined}
                 >
                     <Suspense fallback={null}>
@@ -237,6 +257,15 @@ const App: React.FC = () => {
                             }
                         })()}
                     </Suspense>
+                </div>
+            )}
+            {projectToOpen?.autoPdfExport && selectedApp && (
+                <div className="fixed inset-0 z-[100] bg-black/60 flex items-center justify-center">
+                    <div className="bg-white dark:bg-gray-800 rounded-2xl p-8 flex flex-col items-center gap-4 shadow-2xl">
+                        <div className="h-10 w-10 rounded-full border-4 border-[#007D8C] border-t-transparent animate-spin" />
+                        <p className="text-base font-semibold text-gray-800 dark:text-white">Generating PDF...</p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">A save dialog will appear shortly.</p>
+                    </div>
                 </div>
             )}
         </>
