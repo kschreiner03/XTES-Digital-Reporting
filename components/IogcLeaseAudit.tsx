@@ -1,24 +1,26 @@
-import React, { useState, useEffect, useRef, useCallback, ReactElement } from 'react';
-import type { IogcLeaseAuditData, IogcCoverData, IogcSectionA, IogcSectionB, IogcSectionC, IogcSectionD, IogcSectionE } from '../types';
-import { DownloadIcon, SaveIcon, FolderOpenIcon, ArrowLeftIcon, CloseIcon, ZoomInIcon, ZoomOutIcon } from './icons';
+import React, { useState, useEffect, useRef, useCallback, ReactElement, useMemo } from 'react';
+import type { IogcLeaseAuditData, IogcCoverData, IogcSectionA, IogcSectionB, IogcSectionC, IogcSectionD, IogcSectionE, IogcSectionF, IogcAttachment, TextHighlight, TextComment } from '../types';
+import { DownloadIcon, SaveIcon, FolderOpenIcon, ArrowLeftIcon, CloseIcon, ZoomInIcon, ZoomOutIcon, PrintIcon } from './icons';
 import { AppType } from '../App';
 import { storeProject, deleteProject, deleteThumbnail, storeThumbnail } from './db';
 import { generateProjectThumbnail } from './thumbnailUtils';
 import ActionStatusModal from './ActionStatusModal';
-import { IogcCoverSection, IogcSectionAPanel, IogcSectionBPanel, IogcSectionCPanel, IogcSectionDPanel, IogcSectionEPanel } from './iogc/IogcSections';
+import { IogcCoverSection, IogcSectionAPanel, IogcSectionBPanel, IogcSectionCPanel, IogcSectionDPanel, IogcSectionEPanel, IogcSectionFPanel } from './iogc/IogcSections';
 import { generateIogcPdf } from './iogc/IogcPdfGenerator';
+import CommentsRail, { FieldComment, CommentAnchor } from './CommentsRail';
+import { CommentAnchorPosition } from './BulletPointEditor';
 
 // ─── Recent Projects Utility ───────────────────────────────────────
 
 const RECENT_PROJECTS_KEY = 'xtec_recent_projects';
-interface RecentProjectMetadata { type: AppType; name: string; projectNumber: string; timestamp: number; }
+interface RecentProjectMetadata { type: AppType; name: string; projectNumber: string; timestamp: number; proponent?: string; date?: string; }
 
 const getRecentProjects = (): RecentProjectMetadata[] => {
     try { return JSON.parse(localStorage.getItem(RECENT_PROJECTS_KEY) || '[]'); }
     catch { return []; }
 };
 
-const addRecentProject = async (projectData: any, info: { type: AppType; name: string; projectNumber: string }) => {
+const addRecentProject = async (projectData: any, info: { type: AppType; name: string; projectNumber: string; proponent?: string; date?: string }) => {
     const timestamp = Date.now();
     try { await storeProject(timestamp, projectData); } catch (e) { console.error('Failed to save project:', e); return; }
     try {
@@ -52,6 +54,7 @@ const formatDateForFilename = (s: string): string => {
 // ─── PDF Preview Modal ─────────────────────────────────────────────
 
 const PdfPreviewModal: React.FC<{ url: string; filename: string; onClose: () => void; pdfBlob?: Blob }> = ({ url, filename, onClose, pdfBlob }) => {
+    const iframeRef = useRef<HTMLIFrameElement>(null);
     useEffect(() => {
         const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
         window.addEventListener('keydown', h); document.body.style.overflow = 'hidden';
@@ -70,18 +73,32 @@ const PdfPreviewModal: React.FC<{ url: string; filename: string; onClose: () => 
             const a = document.createElement('a'); a.href = url; a.download = filename; document.body.appendChild(a); a.click(); document.body.removeChild(a);
         }
     };
+    const handlePrint = async () => {
+        // @ts-ignore
+        if (window.electronAPI?.printPdf) {
+            try {
+                const ab = pdfBlob ? await pdfBlob.arrayBuffer() : await (await fetch(url)).blob().then(b => b.arrayBuffer());
+                // @ts-ignore
+                await window.electronAPI.printPdf(ab);
+            } catch { alert('Error opening PDF for printing.'); }
+        } else {
+            // Web fallback
+            iframeRef.current?.contentWindow?.print();
+        }
+    };
     return (
         <div className="fixed inset-0 bg-black bg-opacity-75 flex flex-col items-center justify-center z-[100] p-4" role="dialog" aria-modal="true">
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl w-full h-full flex flex-col overflow-hidden">
                 <div className="flex justify-between items-center p-4 border-b bg-gray-50 dark:bg-gray-700 dark:border-gray-600">
                     <h3 className="text-xl font-bold text-gray-800 dark:text-white">PDF Preview</h3>
                     <div className="flex items-center gap-4">
+                        <button onClick={handlePrint} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition"><PrintIcon className="h-5 w-5" /><span>Print</span></button>
                         <button onClick={handleDownload} className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition"><DownloadIcon /><span>Download PDF</span></button>
                         <button onClick={onClose} className="text-gray-500 hover:text-gray-800 dark:text-gray-300 dark:hover:text-white transition-colors"><CloseIcon className="h-8 w-8" /></button>
                     </div>
                 </div>
                 <div className="flex-grow bg-gray-200 dark:bg-gray-900 relative">
-                    <iframe src={url} className="w-full h-full" style={{ border: 'none' }} title="PDF Preview" />
+                    <iframe ref={iframeRef} src={url} className="w-full h-full" style={{ border: 'none' }} title="PDF Preview" />
                 </div>
             </div>
         </div>
@@ -91,12 +108,13 @@ const PdfPreviewModal: React.FC<{ url: string; filename: string; onClose: () => 
 // ─── Initial State ─────────────────────────────────────────────────
 
 const emptyCover: IogcCoverData = {
-    iogcFileNumber: '', legalLocation: '', province: '', reserveNameNumber: '', lesseeName: '',
+    iogcFileNumber: '', legalLocation: '', province: '', reserveNameNumber: '',
+    reserveNamePreset: '', lesseeName: '',
     wellSpudDate: '', siteStatus: '', siteTypes: [], gasFlags: [], auditDate: '',
     auditType: '', copySentToFirstNation: '', reportAddressesFacilities: '', reportAddressesVegetation: '',
     reportAddressesHousekeeping: '', reportAddressesProtection: '', reportAddressesSummary: '',
     reportAddressesTermsReview: '', attachTermsLetter: '', attachSiteSketch: '', attachSitePhotos: '',
-    attachFollowUp: '', complianceStatus: '', recommendationsIncluded: '', complianceDescriptionIncluded: '',
+    attachFollowUp: '', complianceStatus: '', nonComplianceSummaryIncluded: '', recommendationsIncluded: '', complianceDescriptionIncluded: '',
     declarationName: '', declarationDesignation: '', declarationDate: '',
 };
 
@@ -118,7 +136,8 @@ const emptySectionA: IogcSectionA = {
 
 const emptySectionB: IogcSectionB = {
     q12WeedList: '', q12Comments: '', q13VegetationStatus: '', q13StressedVegetation: '',
-    q13BareSpots: '', q13Comments: '', q14WeedMonitoringPlan: '', q14WeedControlStrategies: '',
+    q13BareSpots: '', q13Comments: '', q14WeedMonitoringPlan: '',
+    q14WeedControlOptions: [], q14WeedControlStrategies: '',
     q14OngoingInspections: '', q14CompliantWithRegs: '', q14Comments: '',
 };
 
@@ -156,11 +175,18 @@ const emptySectionE: IogcSectionE = {
     q44SummaryNonCompliance: '', q45NonComplianceFollowUp: '', q46OverallCompliance: '', q46Comments: '',
 };
 
+const emptyAttachment = (): IogcAttachment => ({ included: false });
+const emptySectionF: IogcSectionF = {
+    termsLetter: emptyAttachment(), siteSketch: emptyAttachment(),
+    sitePhotos: emptyAttachment(), followUpReport: emptyAttachment(),
+};
+
 const emptyData: IogcLeaseAuditData = {
     projectNumber: '', surfaceLeaseOS: '', proponent: '', projectName: '', location: '', date: '',
     reportWrittenBy: '', professionalSignOff: '', followUpDate: '', reportDate: '',
     cover: emptyCover, sectionA: emptySectionA, sectionB: emptySectionB,
     sectionC: emptySectionC, sectionD: emptySectionD, sectionE: emptySectionE,
+    sectionF: emptySectionF,
 };
 
 // ─── Main Component ────────────────────────────────────────────────
@@ -180,6 +206,11 @@ const IogcLeaseAudit = ({ onBack, initialData }: Props): ReactElement => {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const pendingCloseRef = useRef(false);
 
+    // Comments rail state
+    const [commentsCollapsed, setCommentsCollapsed] = useState(false);
+    const [commentAnchors, setCommentAnchors] = useState<Map<string, CommentAnchor>>(new Map());
+    const [hoveredCommentId, setHoveredCommentId] = useState<string | null>(null);
+
     // ─── Handlers ──────────────────────────────────────────────────
 
     const handleTopChange = (field: string, value: string) => {
@@ -189,6 +220,17 @@ const IogcLeaseAudit = ({ onBack, initialData }: Props): ReactElement => {
 
     const handleSectionChange = <T extends keyof IogcLeaseAuditData>(section: T, field: string, value: any) => {
         setData(prev => ({ ...prev, [section]: { ...(prev[section] as any), [field]: value } }));
+        setIsDirty(true);
+    };
+
+    const handleAttachmentChange = (key: keyof IogcSectionF, changes: Partial<IogcAttachment>) => {
+        setData(prev => ({
+            ...prev,
+            sectionF: {
+                ...(prev.sectionF ?? emptySectionF),
+                [key]: { ...(prev.sectionF?.[key] ?? emptyAttachment()), ...changes },
+            },
+        }));
         setIsDirty(true);
     };
 
@@ -202,10 +244,199 @@ const IogcLeaseAudit = ({ onBack, initialData }: Props): ReactElement => {
         setIsDirty(true);
     };
 
+    // ─── Anchor positions handler ──────────────────────────────────
+
+    const handleAnchorPositionsChange = useCallback((fieldId: string, anchors: CommentAnchorPosition[]) => {
+        setCommentAnchors(prev => {
+            const newMap = new Map(prev);
+            for (const key of newMap.keys()) {
+                if (key.startsWith(`${fieldId}:`)) newMap.delete(key);
+            }
+            anchors.forEach(anchor => {
+                newMap.set(`${anchor.fieldId}:${anchor.commentId}`, {
+                    fieldId: anchor.fieldId, commentId: anchor.commentId,
+                    top: anchor.top, left: anchor.left, height: anchor.height,
+                });
+            });
+            if (newMap.size === prev.size) {
+                let changed = false;
+                for (const [k, v] of newMap) {
+                    const p = prev.get(k);
+                    if (!p || p.top !== v.top || p.left !== v.left || p.height !== v.height) { changed = true; break; }
+                }
+                if (!changed) return prev;
+            }
+            return newMap;
+        });
+    }, []);
+
+    // ─── Highlight / comment change handlers ───────────────────────
+
+    const handleSectionHighlightsChange = useCallback((section: keyof IogcLeaseAuditData, field: string, h: TextHighlight[]) => {
+        setData(prev => ({
+            ...prev,
+            [section]: { ...(prev[section] as any), highlights: { ...(prev[section] as any)?.highlights, [field]: h } }
+        }));
+        setIsDirty(true);
+    }, []);
+
+    const handleSectionInlineCommentsChange = useCallback((section: keyof IogcLeaseAuditData, field: string, c: TextComment[]) => {
+        setData(prev => ({
+            ...prev,
+            [section]: { ...(prev[section] as any), inlineComments: { ...(prev[section] as any)?.inlineComments, [field]: c } }
+        }));
+        setIsDirty(true);
+    }, []);
+
+    // ─── Collect all comments for CommentsRail ─────────────────────
+
+    const allComments: FieldComment[] = useMemo(() => {
+        const comments: FieldComment[] = [];
+        const sections: Array<{ key: keyof IogcLeaseAuditData; label: string }> = [
+            { key: 'cover', label: 'Cover' },
+            { key: 'sectionA', label: 'Section A' },
+            { key: 'sectionB', label: 'Section B' },
+            { key: 'sectionC', label: 'Section C' },
+            { key: 'sectionD', label: 'Section D' },
+            { key: 'sectionE', label: 'Section E' },
+        ];
+        sections.forEach(({ key, label }) => {
+            const section = data[key] as any;
+            if (!section?.inlineComments) return;
+            Object.entries(section.inlineComments as Record<string, TextComment[]>).forEach(([field, fieldComments]) => {
+                if (!Array.isArray(fieldComments)) return;
+                fieldComments.forEach(comment => {
+                    if (!comment || !comment.id || typeof comment.start !== 'number' || typeof comment.end !== 'number') return;
+                    comments.push({
+                        ...comment,
+                        fieldId: `${key === 'cover' ? 'cover' : key.replace('section', '').toLowerCase()}.${field}`,
+                        fieldLabel: `${label} — ${field}`,
+                    });
+                });
+            });
+        });
+        return comments;
+    }, [data.cover, data.sectionA, data.sectionB, data.sectionC, data.sectionD, data.sectionE]);
+
+    // ─── Comment CRUD handlers ─────────────────────────────────────
+
+    const getSectionAndField = (fieldId: string): { section: keyof IogcLeaseAuditData; field: string } | null => {
+        const parts = fieldId.split('.');
+        if (parts.length < 2) return null;
+        const [sectionKey, ...rest] = parts;
+        const field = rest.join('.');
+        const sectionMap: Record<string, keyof IogcLeaseAuditData> = {
+            cover: 'cover', a: 'sectionA', b: 'sectionB', c: 'sectionC', d: 'sectionD', e: 'sectionE',
+        };
+        const section = sectionMap[sectionKey];
+        if (!section) return null;
+        return { section, field };
+    };
+
+    const getFieldComments = (fieldId: string): TextComment[] | undefined => {
+        const sf = getSectionAndField(fieldId);
+        if (!sf) return undefined;
+        return (data[sf.section] as any)?.inlineComments?.[sf.field];
+    };
+
+    const setFieldComments = useCallback((fieldId: string, updater: (comments: TextComment[]) => TextComment[]) => {
+        const sf = getSectionAndField(fieldId);
+        if (!sf) return;
+        setData(prev => ({
+            ...prev,
+            [sf.section]: {
+                ...(prev[sf.section] as any),
+                inlineComments: {
+                    ...(prev[sf.section] as any)?.inlineComments,
+                    [sf.field]: updater((prev[sf.section] as any)?.inlineComments?.[sf.field] || []),
+                },
+            },
+        }));
+        setIsDirty(true);
+    }, []);
+
+    const handleDeleteComment = useCallback((fieldId: string, commentId: string) => {
+        if (getFieldComments(fieldId)) {
+            setFieldComments(fieldId, comments => comments.filter(c => c.id !== commentId));
+        }
+    }, [setFieldComments]);
+
+    const handleResolveComment = useCallback((fieldId: string, commentId: string) => {
+        if (getFieldComments(fieldId)) {
+            setFieldComments(fieldId, comments =>
+                comments.map(c => c.id === commentId ? { ...c, resolved: !c.resolved } : c)
+            );
+        }
+    }, [setFieldComments]);
+
+    const handleUpdateComment = useCallback((fieldId: string, commentId: string, newText: string) => {
+        if (getFieldComments(fieldId)) {
+            setFieldComments(fieldId, comments =>
+                comments.map(c => c.id === commentId ? { ...c, text: newText } : c)
+            );
+        }
+    }, [setFieldComments]);
+
+    const handleAddReply = useCallback((fieldId: string, commentId: string, replyText: string) => {
+        if (getFieldComments(fieldId)) {
+            setFieldComments(fieldId, comments =>
+                comments.map(c => {
+                    if (c.id === commentId) {
+                        const newReply = {
+                            id: `reply_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`,
+                            text: replyText,
+                            author: (window as any).electronAPI?.getUserInfo?.()?.username || 'User',
+                            timestamp: new Date(),
+                        };
+                        return { ...c, replies: [...(c.replies || []), newReply] };
+                    }
+                    return c;
+                })
+            );
+        }
+    }, [setFieldComments]);
+
+    const handleDeleteReply = useCallback((fieldId: string, commentId: string, replyId: string) => {
+        if (getFieldComments(fieldId)) {
+            setFieldComments(fieldId, comments =>
+                comments.map(c => {
+                    if (c.id === commentId && c.replies) {
+                        return { ...c, replies: c.replies.filter(r => r.id !== replyId) };
+                    }
+                    return c;
+                })
+            );
+        }
+    }, [setFieldComments]);
+
+    const handleFocusComment = useCallback((fieldId: string, commentId: string) => {
+        const element = document.querySelector(`[data-comment-id="${commentId}"]`);
+        if (element) {
+            element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+    }, []);
+
+    // ─── Autofill: Item 46 → cover.complianceStatus ───────────────
+    // Keeps the cover page compliance badge in sync without requiring
+    // the user to enter the same value twice.
+    useEffect(() => {
+        const q46 = data.sectionE.q46OverallCompliance;
+        if (!q46) return;
+        setData(prev => ({ ...prev, cover: { ...prev.cover, complianceStatus: q46 } }));
+    }, [data.sectionE.q46OverallCompliance]);
+
+    // ─── Autofill: cover.siteStatus → sectionC.q15Activity ────────
+    // Q15 asks the same question as the cover sheet site status — keep in sync.
+    useEffect(() => {
+        const status = data.cover.siteStatus;
+        if (!status) return;
+        setData(prev => ({ ...prev, sectionC: { ...prev.sectionC, q15Activity: status } }));
+    }, [data.cover.siteStatus]);
+
     // ─── Load / Save ───────────────────────────────────────────────
 
     const processLoadedData = (projectData: any) => {
-        setData({ ...emptyData, ...projectData });
+        setData({ ...emptyData, ...projectData, sectionF: { ...emptySectionF, ...(projectData.sectionF ?? {}) } });
     };
 
     const prepareStateForStorage = () => ({ ...data });
@@ -217,7 +448,7 @@ const IogcLeaseAudit = ({ onBack, initialData }: Props): ReactElement => {
             const state = prepareStateForStorage();
             const fd = formatDateForRecentProject(pd.cover?.auditDate || pd.date);
             const name = `${pd.projectName || 'Untitled IOGC Audit'}${fd ? ` - ${fd}` : ''}`;
-            await addRecentProject(state, { type: 'iogcLeaseAudit', name, projectNumber: pd.projectNumber });
+            await addRecentProject(state, { type: 'iogcLeaseAudit', name, projectNumber: pd.projectNumber, proponent: pd.proponent, date: pd.cover?.auditDate || pd.date });
         } catch { alert('Error parsing project file.'); }
     };
 
@@ -274,7 +505,7 @@ const IogcLeaseAudit = ({ onBack, initialData }: Props): ReactElement => {
         const state = prepareStateForStorage();
         const fd = formatDateForRecentProject(data.cover.auditDate || data.date);
         const name = `${data.projectName || 'Untitled IOGC Audit'}${fd ? ` - ${fd}` : ''}`;
-        await addRecentProject(state, { type: 'iogcLeaseAudit', name, projectNumber: data.projectNumber });
+        await addRecentProject(state, { type: 'iogcLeaseAudit', name, projectNumber: data.projectNumber, proponent: data.proponent, date: data.cover?.auditDate || data.date });
 
         const exportData = { ...data };
         const sanitize = (n: string) => n.replace(/[^a-z0-9_]/gi, '-').toLowerCase();
@@ -298,7 +529,7 @@ const IogcLeaseAudit = ({ onBack, initialData }: Props): ReactElement => {
             const state = prepareStateForStorage();
             const fd = formatDateForRecentProject(data.cover.auditDate || data.date);
             const name = `${data.projectName || 'Untitled IOGC Audit'}${fd ? ` - ${fd}` : ''}`;
-            await addRecentProject(state, { type: 'iogcLeaseAudit', name, projectNumber: data.projectNumber });
+            await addRecentProject(state, { type: 'iogcLeaseAudit', name, projectNumber: data.projectNumber, proponent: data.proponent, date: data.cover?.auditDate || data.date });
 
             const { blob, filename } = await generateIogcPdf(data, setStatusMessage);
             const pdfUrl = URL.createObjectURL(blob);
@@ -314,6 +545,22 @@ const IogcLeaseAudit = ({ onBack, initialData }: Props): ReactElement => {
         return () => { api?.removeSaveProjectShortcutListener?.(); api?.removeExportPdfShortcutListener?.(); };
     }, [data]);
 
+    // Project packaging — respond to Package Project… menu action
+    useEffect(() => {
+        const handlePackageRequest = () => {
+            window.dispatchEvent(new CustomEvent('xtec-project-data-response', {
+                detail: {
+                    projectData: { ...data },
+                    projectType: 'iogc',
+                    projectName: data.projectName || 'Untitled IOGC Audit',
+                    photos: [],
+                },
+            }));
+        };
+        window.addEventListener('xtec-request-project-data', handlePackageRequest);
+        return () => window.removeEventListener('xtec-request-project-data', handlePackageRequest);
+    }, [data]);
+
     const handleOpenProject = async () => {
         // @ts-ignore
         if (window.electronAPI) { const c = await window.electronAPI.loadProject('iogc'); if (c) await parseAndLoadProject(c); }
@@ -326,6 +573,8 @@ const IogcLeaseAudit = ({ onBack, initialData }: Props): ReactElement => {
     };
 
     // ─── Render ────────────────────────────────────────────────────
+
+    const hasAnyInlineComments = allComments.length > 0;
 
     return (
         <div className="bg-gray-100 dark:bg-gray-900 min-h-screen transition-colors duration-200">
@@ -359,10 +608,18 @@ const IogcLeaseAudit = ({ onBack, initialData }: Props): ReactElement => {
                         <IogcCoverSection
                             cover={data.cover}
                             topLevel={data}
+                            derivedComplianceStatus={data.sectionE.q46OverallCompliance}
                             onChange={(f, v) => handleSectionChange('cover', f as string, v)}
                             onTopChange={handleTopChange}
                             onToggleArray={(f, item) => handleToggleArray('cover', f as string, item)}
                             errors={errors}
+                            highlights={data.cover.highlights}
+                            inlineComments={data.cover.inlineComments}
+                            onHighlightsChange={(field, h) => handleSectionHighlightsChange('cover', field, h)}
+                            onInlineCommentsChange={(field, c) => handleSectionInlineCommentsChange('cover', field, c)}
+                            onAnchorPositionsChange={handleAnchorPositionsChange}
+                            hoveredCommentId={hoveredCommentId}
+                            sectionKey="cover"
                         />
 
                         {/* Section A - only for 1st Year */}
@@ -371,22 +628,98 @@ const IogcLeaseAudit = ({ onBack, initialData }: Props): ReactElement => {
                                 data={data.sectionA}
                                 onChange={(f, v) => handleSectionChange('sectionA', f as string, v)}
                                 onToggleArray={(f, item) => handleToggleArray('sectionA', f as string, item)}
+                                highlights={data.sectionA.highlights}
+                                inlineComments={data.sectionA.inlineComments}
+                                onHighlightsChange={(field, h) => handleSectionHighlightsChange('sectionA', field, h)}
+                                onInlineCommentsChange={(field, c) => handleSectionInlineCommentsChange('sectionA', field, c)}
+                                onAnchorPositionsChange={handleAnchorPositionsChange}
+                                hoveredCommentId={hoveredCommentId}
+                                sectionKey="a"
                             />
                         )}
 
                         {/* Section B */}
-                        <IogcSectionBPanel data={data.sectionB} onChange={(f, v) => handleSectionChange('sectionB', f as string, v)} />
+                        <IogcSectionBPanel
+                            data={data.sectionB}
+                            onChange={(f, v) => handleSectionChange('sectionB', f as string, v)}
+                            onToggleArray={(f, item) => handleToggleArray('sectionB', f as string, item)}
+                            highlights={data.sectionB.highlights}
+                            inlineComments={data.sectionB.inlineComments}
+                            onHighlightsChange={(field, h) => handleSectionHighlightsChange('sectionB', field, h)}
+                            onInlineCommentsChange={(field, c) => handleSectionInlineCommentsChange('sectionB', field, c)}
+                            onAnchorPositionsChange={handleAnchorPositionsChange}
+                            hoveredCommentId={hoveredCommentId}
+                            sectionKey="b"
+                        />
 
                         {/* Section C */}
-                        <IogcSectionCPanel data={data.sectionC} onChange={(f, v) => handleSectionChange('sectionC', f as string, v)} />
+                        <IogcSectionCPanel
+                            data={data.sectionC}
+                            onChange={(f, v) => handleSectionChange('sectionC', f as string, v)}
+                            highlights={data.sectionC.highlights}
+                            inlineComments={data.sectionC.inlineComments}
+                            onHighlightsChange={(field, h) => handleSectionHighlightsChange('sectionC', field, h)}
+                            onInlineCommentsChange={(field, c) => handleSectionInlineCommentsChange('sectionC', field, c)}
+                            onAnchorPositionsChange={handleAnchorPositionsChange}
+                            hoveredCommentId={hoveredCommentId}
+                            sectionKey="c"
+                        />
 
                         {/* Section D */}
-                        <IogcSectionDPanel data={data.sectionD} onChange={(f, v) => handleSectionChange('sectionD', f as string, v)} />
+                        <IogcSectionDPanel
+                            data={data.sectionD}
+                            onChange={(f, v) => handleSectionChange('sectionD', f as string, v)}
+                            highlights={data.sectionD.highlights}
+                            inlineComments={data.sectionD.inlineComments}
+                            onHighlightsChange={(field, h) => handleSectionHighlightsChange('sectionD', field, h)}
+                            onInlineCommentsChange={(field, c) => handleSectionInlineCommentsChange('sectionD', field, c)}
+                            onAnchorPositionsChange={handleAnchorPositionsChange}
+                            hoveredCommentId={hoveredCommentId}
+                            sectionKey="d"
+                        />
 
                         {/* Section E */}
-                        <IogcSectionEPanel data={data.sectionE} onChange={(f, v) => handleSectionChange('sectionE', f as string, v)} errors={errors} />
+                        <IogcSectionEPanel
+                            data={data.sectionE}
+                            onChange={(f, v) => handleSectionChange('sectionE', f as string, v)}
+                            errors={errors}
+                            highlights={data.sectionE.highlights}
+                            inlineComments={data.sectionE.inlineComments}
+                            onHighlightsChange={(field, h) => handleSectionHighlightsChange('sectionE', field, h)}
+                            onInlineCommentsChange={(field, c) => handleSectionInlineCommentsChange('sectionE', field, c)}
+                            onAnchorPositionsChange={handleAnchorPositionsChange}
+                            hoveredCommentId={hoveredCommentId}
+                            sectionKey="e"
+                        />
+
+                        {/* Section F: Attachments */}
+                        <IogcSectionFPanel
+                            data={data.sectionF ?? emptySectionF}
+                            onChange={handleAttachmentChange}
+                        />
                     </div>
                 </div>
+
+                {/* Comments rail */}
+                {hasAnyInlineComments && (
+                    <div className="hidden lg:block flex-shrink-0 sticky top-4 self-start">
+                        <CommentsRail
+                            comments={allComments}
+                            anchors={commentAnchors}
+                            isCollapsed={commentsCollapsed}
+                            onToggleCollapsed={() => setCommentsCollapsed(!commentsCollapsed)}
+                            onDeleteComment={handleDeleteComment}
+                            onResolveComment={handleResolveComment}
+                            onUpdateComment={handleUpdateComment}
+                            onAddReply={handleAddReply}
+                            onDeleteReply={handleDeleteReply}
+                            onHoverComment={setHoveredCommentId}
+                            onFocusComment={handleFocusComment}
+                            contentShiftAmount={160}
+                            railWidth={300}
+                        />
+                    </div>
+                )}
             </div>
 
             {/* Modals */}

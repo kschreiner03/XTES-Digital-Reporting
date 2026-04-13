@@ -1,15 +1,17 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import type { PhotoData, TextComment, TextHighlight } from '../types';
 import { TrashIcon, CameraIcon, ArrowsPointingOutIcon, GripVerticalIcon } from './icons';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import BulletPointEditor, { CommentAnchorPosition } from './BulletPointEditor';
 
+// ─── Updated interface: all callbacks include the photo id so parents can
+// pass stable useCallback references without wrapping in inline arrows ────────
 interface PhotoEntryProps {
   data: PhotoData;
-  onDataChange: (field: keyof Omit<PhotoData, 'id' | 'imageUrl' | 'imageId'>, value: string) => void;
-  onImageChange: (file: File) => void;
-  onRemove: () => void;
+  onDataChange: (id: number, field: keyof Omit<PhotoData, 'id' | 'imageUrl' | 'imageId'>, value: string) => void;
+  onImageChange: (id: number, file: File) => void;
+  onRemove: (id: number) => void;
   printable?: boolean;
   errors?: Set<keyof PhotoData>;
   showDirectionField?: boolean;
@@ -18,26 +20,35 @@ interface PhotoEntryProps {
 
   headerDate?: string;
   headerLocation?: string;
-  onAutoFill?: (field: "date" | "location", value: string) => void;
 
   inlineComments?: TextComment[];
-  onInlineCommentsChange?: (comments: TextComment[]) => void;
+  onInlineCommentsChange?: (id: number, comments: TextComment[]) => void;
   highlights?: TextHighlight[];
-  onHighlightsChange?: (highlights: TextHighlight[]) => void;
-  onAnchorPositionsChange?: (anchors: CommentAnchorPosition[]) => void;
+  onHighlightsChange?: (id: number, highlights: TextHighlight[]) => void;
+  onAnchorPositionsChange?: (id: number, anchors: CommentAnchorPosition[]) => void;
   hoveredCommentId?: string | null;
 }
 
-const EditableField: React.FC<{ 
-  label: string; 
-  value: string; 
-  onChange: (value: string) => void; 
-  isTextArea?: boolean; 
-  printable?: boolean; 
-  isInvalid?: boolean; 
-  readOnly?: boolean; 
-  placeholder?: string; 
+// ─── Fix 2: Local state in fields — parent state only updates on blur ─────────
+// This means typing never triggers a parent re-render; only committing does.
+const EditableField: React.FC<{
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  isTextArea?: boolean;
+  printable?: boolean;
+  isInvalid?: boolean;
+  readOnly?: boolean;
+  placeholder?: string;
 }> = ({ label, value, onChange, isTextArea = false, printable = false, isInvalid = false, readOnly = false, placeholder = '' }) => {
+
+  const [localValue, setLocalValue] = useState(value);
+  const focusedRef = useRef(false);
+
+  // Sync from parent when not focused (e.g. autofill, load from file)
+  useEffect(() => {
+    if (!focusedRef.current) setLocalValue(value);
+  }, [value]);
 
   const commonClasses = "p-1 w-full bg-transparent focus:outline-none transition text-base min-w-0 placeholder-gray-400 dark:placeholder-gray-500";
   const labelClasses = "block text-base font-bold text-black dark:text-gray-200 whitespace-nowrap";
@@ -66,8 +77,10 @@ const EditableField: React.FC<{
         <label className={labelClasses}>{label}:</label>
         <textarea
           rows={4}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
+          value={localValue}
+          onChange={(e) => setLocalValue(e.target.value)}
+          onBlur={() => { focusedRef.current = false; onChange(localValue); }}
+          onFocus={() => { focusedRef.current = true; }}
           className={`mt-1 ${commonClasses} border-b ${
             isInvalid ? "border-red-500" : "border-gray-300 dark:border-gray-600 focus:border-[#007D8C]"
           }`}
@@ -83,8 +96,10 @@ const EditableField: React.FC<{
       <label className={labelClasses}>{label}:</label>
       <input
         type="text"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
+        value={localValue}
+        onChange={(e) => setLocalValue(e.target.value)}
+        onBlur={() => { focusedRef.current = false; onChange(localValue); }}
+        onFocus={() => { focusedRef.current = true; }}
         className={`${commonClasses} border-b ${
           isInvalid ? "border-red-500" : "border-gray-300 dark:border-gray-600 focus:border-[#007D8C]"
         }`}
@@ -134,7 +149,7 @@ const PhotoEntry: React.FC<PhotoEntryProps> = ({
   const [isDragging, setIsDragging] = useState(false);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) onImageChange(e.target.files[0]);
+    if (e.target.files && e.target.files[0]) onImageChange(data.id, e.target.files[0]);
   };
 
   const dropZoneClasses = isDragging
@@ -174,7 +189,7 @@ const PhotoEntry: React.FC<PhotoEntryProps> = ({
 
             {!printable && (
               <div className="flex items-center space-x-2">
-                <button onClick={onRemove} className="p-1 text-red-500 hover:text-red-700">
+                <button onClick={() => onRemove(data.id)} className="p-1 text-red-500 hover:text-red-700">
                   <TrashIcon className="h-7 w-7" />
                 </button>
               </div>
@@ -186,7 +201,7 @@ const PhotoEntry: React.FC<PhotoEntryProps> = ({
             <EditableField
               label="Direction"
               value={data.direction || ""}
-              onChange={(v) => onDataChange("direction", v)}
+              onChange={(v) => onDataChange(data.id, "direction", v)}
               printable={printable}
               isInvalid={errors?.has('direction')}
             />
@@ -197,14 +212,14 @@ const PhotoEntry: React.FC<PhotoEntryProps> = ({
             <EditableField
               label="Date"
               value={data.date}
-              onChange={(v) => onDataChange("date", v)}
+              onChange={(v) => onDataChange(data.id, "date", v)}
               printable={printable}
             />
 
             {!printable && (
               <button
                 className="px-2 py-1 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 rounded text-xs"
-                onClick={() => headerDate && onDataChange("date", headerDate)}
+                onClick={() => headerDate && onDataChange(data.id, "date", headerDate)}
               >
                 ⎙
               </button>
@@ -217,14 +232,14 @@ const PhotoEntry: React.FC<PhotoEntryProps> = ({
               label="Location"
               value={data.location}
               readOnly={isLocationLocked}
-              onChange={(v) => onDataChange("location", v)}
+              onChange={(v) => onDataChange(data.id, "location", v)}
               printable={printable}
             />
 
             {!printable && (
               <button
                 className="px-2 py-1 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 rounded text-xs"
-                onClick={() => headerLocation && onDataChange("location", headerLocation)}
+                onClick={() => headerLocation && onDataChange(data.id, "location", headerLocation)}
               >
                 ⎙
               </button>
@@ -245,12 +260,12 @@ const PhotoEntry: React.FC<PhotoEntryProps> = ({
               label="Description"
               fieldId={`photo-${data.id}-description`}
               value={data.description}
-              onChange={(v) => onDataChange("description", v)}
+              onChange={(v) => onDataChange(data.id, "description", v)}
               inlineComments={inlineComments}
-              onInlineCommentsChange={onInlineCommentsChange}
+              onInlineCommentsChange={onInlineCommentsChange ? (comments) => onInlineCommentsChange(data.id, comments) : undefined}
               highlights={highlights}
-              onHighlightsChange={onHighlightsChange}
-              onAnchorPositionsChange={onAnchorPositionsChange}
+              onHighlightsChange={onHighlightsChange ? (h) => onHighlightsChange(data.id, h) : undefined}
+              onAnchorPositionsChange={onAnchorPositionsChange ? (anchors) => onAnchorPositionsChange(data.id, anchors) : undefined}
               hoveredCommentId={hoveredCommentId}
               rows={4}
             />
@@ -267,7 +282,7 @@ const PhotoEntry: React.FC<PhotoEntryProps> = ({
             onDrop={(e) => {
               e.preventDefault();
               setIsDragging(false);
-              if (e.dataTransfer.files?.length) onImageChange(e.dataTransfer.files[0]);
+              if (e.dataTransfer.files?.length) onImageChange(data.id, e.dataTransfer.files[0]);
             }}
           >
 
@@ -281,10 +296,14 @@ const PhotoEntry: React.FC<PhotoEntryProps> = ({
               />
             )}
 
-            {/* Image */}
+            {/* Fix 3: decoding="async" — browser decodes off the main thread */}
             {data.imageUrl ? (
               <>
-                <img src={data.imageUrl} className="absolute inset-0 w-full h-full object-contain pointer-events-none" />
+                <img
+                  src={data.imageUrl}
+                  decoding="async"
+                  className="absolute inset-0 w-full h-full object-contain pointer-events-none"
+                />
 
                 {/* Expand button (bottom-right, does NOT trigger upload) */}
                 {!printable && onImageClick && (
@@ -314,5 +333,7 @@ const PhotoEntry: React.FC<PhotoEntryProps> = ({
   );
 };
 
-export default PhotoEntry;
-
+// Fix 1: React.memo — PhotoEntry only re-renders when its own data/props change.
+// Combined with stable parent callbacks (useCallback in each parent component),
+// this prevents all-photo re-renders on every keystroke.
+export default React.memo(PhotoEntry);

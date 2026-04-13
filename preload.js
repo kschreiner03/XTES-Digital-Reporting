@@ -18,6 +18,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
   loadMultipleProjects: () =>
     ipcRenderer.invoke("load-multiple-projects"),
 
+  printPdf: (data) =>
+    ipcRenderer.invoke("print-pdf", data),
+
   savePdf: (data, defaultPath) =>
     ipcRenderer.invoke("save-pdf", data, defaultPath),
 
@@ -128,11 +131,52 @@ contextBridge.exposeInMainWorld("electronAPI", {
   },
 
   /* -----------------------------
+     PROJECT PACKAGING
+  ----------------------------- */
+
+  onPackageProject: (callback) => {
+    ipcRenderer.on("package-project", () => callback());
+  },
+
+  removePackageProjectListener: () => {
+    ipcRenderer.removeAllListeners("package-project");
+  },
+
+  onOpenPackage: (callback) => {
+    ipcRenderer.on("open-package", () => callback());
+  },
+
+  removeOpenPackageListener: () => {
+    ipcRenderer.removeAllListeners("open-package");
+  },
+
+  openPackageFile: () =>
+    ipcRenderer.invoke("open-package-file"),
+
+  selectExtractFolder: () =>
+    ipcRenderer.invoke("select-extract-folder"),
+
+  extractPackageToFolder: (folderPath, files) =>
+    ipcRenderer.invoke("extract-package-to-folder", folderPath, files),
+
+  /* -----------------------------
      ASSETS
   ----------------------------- */
 
   getAssetPath: (filename) =>
     ipcRenderer.invoke("get-asset-path", filename),
+
+  generateIogcPdf: (data) =>
+    ipcRenderer.invoke("generate-iogc-pdf", data),
+
+  getMediaInfo: () =>
+    ipcRenderer.invoke("get-media-info"),
+
+  mediaKey: (key) =>
+    ipcRenderer.invoke("media-key", key),
+
+  getAlbumArt: (title, artist) =>
+    ipcRenderer.invoke("get-album-art", title, artist),
 
   /* -----------------------------
      THEME CONTROL (FIXED)

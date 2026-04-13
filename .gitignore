@@ -25,3 +25,18 @@ build/
 *.njsproj
 *.sln
 *.sw?
+
+# Generated build artifacts
+IogcPdfGeneratorNode.bundle.js
+
+# Test / user data files
+*.iogc
+*.pdf
+nul
+
+# Temp scripts
+get-media.ps1
+media-key.ps1
+
+# Claude Code local memory
+.claude/

@@ -8,6 +8,7 @@ module.exports = {
     executableName: isNisis ? 'NISIS Digital Reporting' : 'X-TES Digital Reporting',
     extraResource: [
       'assets',
+      'IogcPdfGeneratorNode.bundle.js',
     ],
     fileAssociations: [
       {

@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { StandardDfrIcon, CameraIcon, SaskPowerIcon, SearchIcon, FolderOpenIcon, EllipsisVerticalIcon, DocumentDuplicateIcon } from './icons';
+import { StandardDfrIcon, CameraIcon, SaskPowerIcon, SearchIcon, FolderOpenIcon, EllipsisVerticalIcon, DocumentDuplicateIcon, ClipboardDocumentListIcon } from './icons';
 import ConfirmModal from './ConfirmModal';
 import { AppType } from '../App';
 import { deleteImage, deleteProject, deleteThumbnail, retrieveProject } from './db';
@@ -35,6 +35,8 @@ export interface RecentProject {
     timestamp: number; // Used as project ID
     folder?: string;
     status?: ProjectStatus;
+    proponent?: string;
+    date?: string;
 }
 
 interface LandingPageProps {
@@ -68,7 +70,7 @@ function getEffectiveScale(stored: string | null): number {
 }
 
 
-const VALID_APP_TYPES = new Set<string>(['photoLog', 'dfrSaskpower', 'dfrStandard', 'combinedLog']);
+const VALID_APP_TYPES = new Set<string>(['photoLog', 'dfrSaskpower', 'dfrStandard', 'combinedLog', 'iogcLeaseAudit']);
 
 const isValidProject = (obj: unknown): obj is RecentProject =>
     typeof obj === 'object' && obj !== null &&
@@ -99,6 +101,8 @@ const getReportTypeName = (type: AppType): string => {
             return 'Sask Power Daily Field Report';
         case 'combinedLog':
             return 'Combine Logs';
+        case 'iogcLeaseAudit':
+            return 'IOGC Lease Audit';
         default:
             return 'Report';
     }
@@ -108,7 +112,7 @@ const getReportTypeName = (type: AppType): string => {
 const AppSelectionCard: React.FC<{ title: string; description: string; icon: React.ReactNode; onClick: () => void; keepIconColor?: boolean; isDark?: boolean; }> = ({ title, description, icon, onClick, isDark }) => (
     <button
         onClick={onClick}
-        className="p-3 sm:p-4 md:p-6 flex flex-col items-center text-center group h-full backdrop-blur-sm border border-[#007D8C] rounded-2xl xtec-card"
+        className="p-3 sm:p-4 md:p-6 flex flex-col items-center text-center group w-full h-full backdrop-blur-sm border border-[#007D8C] rounded-2xl xtec-card"
         style={isDark
             ? { background: 'rgba(28,32,36,0.75)', boxShadow: '0 0 24px rgba(0,125,140,0.10)' }
             : { background: 'rgba(255,255,255,0.75)', boxShadow: '0 0 24px rgba(0,125,140,0.18)' }
@@ -123,7 +127,7 @@ const AppSelectionCard: React.FC<{ title: string; description: string; icon: Rea
                 {icon}
             </div>
         </div>
-        <h3 className="text-base font-bold text-gray-900 dark:text-white mb-1 group-hover:text-[#007D8C] transition-colors duration-200">{title}</h3>
+        <h3 className="text-base font-bold text-gray-900 dark:text-white mb-1 group-hover:text-[#007D8C] transition-colors duration-200 min-h-[2.5rem] flex items-center justify-center">{title}</h3>
         <p className="text-gray-600 dark:text-slate-300 text-xs leading-relaxed">{description}</p>
     </button>
 );
@@ -334,9 +338,9 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSelectApp, onOpenProject, s
             <PhotoCredit fileName={localStorage.getItem('xtec_landing_photo_preset')} />
             {/* Invisible anchor for the menu bar */}
             <div className="h-0 w-full absolute top-0 left-0 z-0" />
-            <main className="max-w-6xl w-full mx-auto px-4 sm:px-6 lg:px-8 relative z-10 flex-1 min-h-0 flex flex-col py-8 sm:py-10 lg:py-14 justify-end overflow-y-auto" style={{ zoom: displayScale }}>
+            <main className="max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 relative z-10 flex-1 min-h-0 flex flex-col py-8 sm:py-10 lg:py-14 justify-end overflow-y-auto" style={{ zoom: displayScale }}>
                 <div
-                    className="rounded-3xl p-5 sm:p-6 md:p-8 lg:p-10 flex flex-col backdrop-blur-xl dark:backdrop-blur-none"
+                    className="rounded-3xl p-4 sm:p-5 md:p-6 flex flex-col backdrop-blur-xl dark:backdrop-blur-none"
                     style={isDark ? {
                         background: 'linear-gradient(180deg, rgba(24,28,32,0.92) 0%, rgba(18,22,26,0.95) 100%)',
                         border: '1px solid rgba(255,255,255,0.07)',
@@ -369,7 +373,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSelectApp, onOpenProject, s
                         <div style={{ width: 80, height: 2, background: 'linear-gradient(90deg, #007D8C, rgba(0,125,140,0.25))', margin: '10px auto 0', borderRadius: 1 }} />
                     </div>
 
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3 md:gap-4 flex-shrink-0">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 flex-shrink-0 items-stretch">
                         <div className="h-full">
                             <AppSelectionCard
                                 title="Photo Log"
@@ -407,6 +411,16 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSelectApp, onOpenProject, s
                                 isDark={isDark}
                             />
                         </div>
+                        {/* IOGC Lease Audit hidden until ready for release */}
+                        {false && <div className="h-full">
+                            <AppSelectionCard
+                                title="IOGC Lease Audit"
+                                description="Surface lease audit reports for IOGC."
+                                icon={<ClipboardDocumentListIcon className="h-7 w-7" />}
+                                onClick={() => onSelectApp('iogcLeaseAudit')}
+                                isDark={isDark}
+                            />
+                        </div>}
                     </div>
 
                     {/* Recent Projects - collapsible section */}

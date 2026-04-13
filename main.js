@@ -1,8 +1,16 @@
 
 const { app, BrowserWindow, ipcMain, dialog, Menu, shell, autoUpdater, nativeTheme, session } = require('electron');
-const { spawn } = require('child_process');
+const { spawn, execFile, exec } = require('child_process');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
+
+// In packaged builds the self-contained bundle (with jspdf inlined) lives in resources/.
+// In development the raw source file is loaded directly (jspdf resolved from node_modules).
+const generatorPath = app.isPackaged
+  ? path.join(process.resourcesPath, 'IogcPdfGeneratorNode.bundle.js')
+  : path.resolve(__dirname, '..', '..', 'IogcPdfGeneratorNode.js');
+const { generateIogcPdf } = require(generatorPath);
 
 let mainWindow;
 let helpWindow;
@@ -117,9 +125,10 @@ function createHelpWindow() {
   // Handle dev vs. production paths
   if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
     const helpUrl = new URL('help.html', MAIN_WINDOW_VITE_DEV_SERVER_URL);
-    helpWindow.loadURL(helpUrl.href);
+    helpWindow.loadURL(helpUrl.href).catch(err => console.error('Failed to load help window URL:', err));
   } else {
-    helpWindow.loadFile(path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/help.html`));
+    helpWindow.loadFile(path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/help.html`))
+      .catch(err => console.error('Failed to load help window file:', err));
   }
 
   // Security: Prevent new windows from being created from within the help window
@@ -193,6 +202,23 @@ const menuTemplate = [
             accelerator: 'CmdOrCtrl+D'
         },
         { type: 'separator' },
+        {
+            label: 'Package Project…',
+            click: () => {
+                if (mainWindow) {
+                    mainWindow.webContents.send('package-project');
+                }
+            },
+        },
+        {
+            label: 'Open Package…',
+            click: () => {
+                if (mainWindow) {
+                    mainWindow.webContents.send('open-package');
+                }
+            },
+        },
+        { type: 'separator' },
         process.platform === 'darwin' ? { role: 'close' } : { role: 'quit' }
     ],
   },
@@ -219,20 +245,6 @@ const menuTemplate = [
             }
         },
         accelerator: 'CmdOrCtrl+,'
-      }
-    ]
-  },
-  {
-    label: 'View',
-    submenu: [
-      {
-        label: 'All Projects',
-        click: () => {
-          if (mainWindow) {
-            mainWindow.webContents.send('open-projects-view');
-          }
-        },
-        accelerator: 'CmdOrCtrl+Shift+P'
       }
     ]
   },
@@ -289,15 +301,17 @@ function createWindow() {
   });
 
   if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
-    mainWindow.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL);
+    mainWindow.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL)
+      .catch(err => console.error('Failed to load main window URL:', err));
   } else {
-    mainWindow.loadFile(path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`));
+    mainWindow.loadFile(path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`))
+      .catch(err => console.error('Failed to load main window file:', err));
   }
 
   // Security: Handle external links (e.g. from help docs)
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith('https:')) {
-      shell.openExternal(url);
+      shell.openExternal(url).catch(err => console.error('Failed to open external URL:', err));
     }
     return { action: 'deny' };
   });
@@ -382,6 +396,13 @@ const allowedPdfs = [
 
 // --- Handle file operations ---
 app.whenReady().then(() => {
+  process.on('uncaughtException', (err) => {
+    console.error('Uncaught exception in main process:', err);
+    dialog.showErrorBox('Unexpected Error', `An unexpected error occurred:\n\n${err.message}`);
+  });
+  process.on('unhandledRejection', (reason) => {
+    console.error('Unhandled promise rejection in main process:', reason);
+  });
   // Squirrel events are handled entirely in showInstallScreen() — skip normal startup
   if (isSquirrelEvent) return;
 
@@ -406,8 +427,8 @@ app.whenReady().then(() => {
   }
 
   // Check for updates shortly after startup, then every hour
-  setTimeout(() => autoUpdater.checkForUpdates(), 5000);
-  setInterval(() => autoUpdater.checkForUpdates(), 60 * 60 * 1000);
+  setTimeout(() => autoUpdater.checkForUpdates().catch(err => console.error('Update check failed:', err)), 5000);
+  setInterval(() => autoUpdater.checkForUpdates().catch(err => console.error('Update check failed:', err)), 60 * 60 * 1000);
 
   // Notify renderer when an update is available (download starts automatically)
   autoUpdater.on('update-available', () => {
@@ -509,6 +530,19 @@ app.whenReady().then(() => {
     }
   });
 
+  ipcMain.handle('generate-iogc-pdf', async (event, data) => {
+    const assetsDir = app.isPackaged
+      ? path.join(process.resourcesPath, 'assets')
+      : path.join(app.getAppPath(), 'assets');
+    try {
+      const result = await generateIogcPdf(data, assetsDir);
+      return { success: true, buffer: result.buffer, filename: result.filename };
+    } catch (err) {
+      console.error('IOGC PDF generation failed:', err);
+      return { success: false, error: err.message };
+    }
+  });
+
   ipcMain.handle('save-project', async (event, data, defaultPath) => {
     const window = BrowserWindow.getFocusedWindow();
     let filters = [{ name: 'Project Files', extensions: ['json'] }];
@@ -600,6 +634,20 @@ app.whenReady().then(() => {
     }
   });
 
+  ipcMain.handle('print-pdf', async (event, data) => {
+    try {
+      const tempPath = path.join(os.tmpdir(), `xtec_print_${Date.now()}.pdf`);
+      fs.writeFileSync(tempPath, Buffer.from(data));
+      await shell.openPath(tempPath);
+      // Clean up temp file after a delay to give the viewer time to load it
+      setTimeout(() => { try { fs.unlinkSync(tempPath); } catch {} }, 30000);
+      return { success: true };
+    } catch (err) {
+      console.error('Failed to open PDF for printing:', err);
+      return { success: false, error: err.message };
+    }
+  });
+
   ipcMain.handle('save-pdf', async (event, data, defaultPath) => {
     const window = BrowserWindow.getFocusedWindow();
     const { filePath } = await dialog.showSaveDialog(window, {
@@ -674,6 +722,173 @@ app.whenReady().then(() => {
     return { success: false, data: [] };
   });
 
+  // --- Project Packaging ---
+
+  ipcMain.handle('open-package-file', async (event) => {
+    const window = BrowserWindow.getFocusedWindow();
+    const { filePaths } = await dialog.showOpenDialog(window, {
+      title: 'Open Project Package',
+      properties: ['openFile'],
+      filters: [
+        { name: 'X-TEC Project Package', extensions: ['zip'] },
+        { name: 'All Files', extensions: ['*'] },
+      ],
+    });
+    if (filePaths && filePaths.length > 0) {
+      try {
+        const buf = fs.readFileSync(filePaths[0]);
+        return { success: true, data: buf.toString('base64'), path: filePaths[0] };
+      } catch (err) {
+        console.error('Failed to read package file:', err);
+        return { success: false, error: err.message };
+      }
+    }
+    return { success: false };
+  });
+
+  ipcMain.handle('select-extract-folder', async (event) => {
+    const window = BrowserWindow.getFocusedWindow();
+    const { filePaths } = await dialog.showOpenDialog(window, {
+      title: 'Choose Extraction Folder',
+      properties: ['openDirectory', 'createDirectory'],
+    });
+    if (filePaths && filePaths.length > 0) {
+      return { success: true, path: filePaths[0] };
+    }
+    return { success: false };
+  });
+
+  ipcMain.handle('extract-package-to-folder', async (event, folderPath, files) => {
+    // Security: require absolute path
+    if (!folderPath || typeof folderPath !== 'string' || !path.isAbsolute(folderPath)) {
+      return { success: false, error: 'Invalid destination folder path.' };
+    }
+    if (!Array.isArray(files)) {
+      return { success: false, error: 'Invalid files list.' };
+    }
+    const normalizedFolder = path.normalize(folderPath);
+    try {
+      for (const file of files) {
+        if (!file.relativePath || typeof file.relativePath !== 'string') continue;
+        // Security: prevent path traversal
+        const destPath = path.normalize(path.join(normalizedFolder, file.relativePath));
+        if (!destPath.startsWith(normalizedFolder + path.sep) && destPath !== normalizedFolder) {
+          console.warn('[security] extract-package: blocked traversal attempt:', file.relativePath);
+          continue;
+        }
+        const destDir = path.dirname(destPath);
+        fs.mkdirSync(destDir, { recursive: true });
+        const data = Buffer.from(file.dataBase64, 'base64');
+        fs.writeFileSync(destPath, data);
+      }
+      return { success: true };
+    } catch (err) {
+      console.error('Failed to extract package:', err);
+      return { success: false, error: err.message };
+    }
+  });
+
+  // ── System Media (window title polling via tasklist) ─────────────
+
+  const MEDIA_PATTERNS = [
+    { proc: 'Spotify',        re: /^(.+?) - (.+)$/,                   swap: true  },
+    { proc: 'TIDAL',          re: /^(.+?) - (.+?) \| TIDAL$/,         swap: false },
+    { proc: 'foobar2000',     re: /^\[(.+?)\] (.+?) - foobar2000/,    swap: true  },
+    { proc: 'vlc',            re: /^(.+?) - VLC media player$/,        swap: false, noArtist: true },
+    { proc: 'iTunes',         re: /^(.+?) - iTunes$/,                  swap: false, noArtist: true },
+    { proc: 'chrome',         re: /^(.+?) - YouTube/,                  swap: false, artist: 'YouTube' },
+    { proc: 'msedge',         re: /^(.+?) - YouTube/,                  swap: false, artist: 'YouTube' },
+    { proc: 'firefox',        re: /^(.+?) - YouTube/,                  swap: false, artist: 'YouTube' },
+  ];
+
+  function parseTasklist(csv) {
+    // tasklist /V /FO CSV /NH columns:
+    // "ImageName","PID","Session","#","Mem Usage","Status","User","CPU Time","Window Title"
+    for (const line of csv.split('\n')) {
+      const parts = line.trim().match(/^"([^"]+)","[^"]*","[^"]*","[^"]*","[^"]*","[^"]*","[^"]*","[^"]*","([^"]+)"/);
+      if (!parts) continue;
+      const [, procName, title] = parts;
+      if (!title || title === 'N/A') continue;
+      for (const p of MEDIA_PATTERNS) {
+        if (!procName.toLowerCase().startsWith(p.proc.toLowerCase())) continue;
+        const m = title.match(p.re);
+        if (!m) continue;
+        let t, a;
+        if (p.artist) { t = m[1]; a = p.artist; }
+        else if (p.noArtist) { t = m[1]; a = ''; }
+        else if (p.swap) { a = m[1]; t = m[2]; }
+        else { t = m[1]; a = m[2]; }
+        return { active: true, isPlaying: true, title: t.trim(), artist: a.trim(), appId: procName, thumbnail: '' };
+      }
+    }
+    return null;
+  }
+
+  ipcMain.handle('get-media-info', () => new Promise((resolve) => {
+    const ps = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
+    const cmd = [
+      `$r=$null;$paused=$false`,
+      // Check dedicated media apps — match title for playing, detect process-exists for paused
+      `foreach($n in @('Spotify','TIDAL','vlc','foobar2000','iTunes')){$procs=Get-Process -Name $n -EA 0;if($procs){$p=$procs|Where-Object{$_.MainWindowTitle}|Select-Object -First 1;if($p){$r=[PSCustomObject]@{name=$p.ProcessName;title=$p.MainWindowTitle};break}else{$paused=$true;$r=[PSCustomObject]@{name=$n;title=''};break}}}`,
+      // Browser YouTube
+      `if(-not $r){foreach($n in @('chrome','msedge','firefox')){$p=Get-Process -Name $n -EA 0|Where-Object{$_.MainWindowTitle -match 'YouTube'}|Select-Object -First 1;if($p){$r=[PSCustomObject]@{name=$p.ProcessName;title=$p.MainWindowTitle};break}}}`,
+      `if($r){ConvertTo-Json -Compress ([PSCustomObject]@{name=$r.name;title=$r.title;paused=$paused})}else{Write-Output '{"active":false}'}`
+    ].join(';');
+    execFile(ps, ['-NonInteractive', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', cmd],
+      { timeout: 5000, windowsHide: true },
+      (err, stdout) => {
+        if (err) { resolve({ active: false }); return; }
+        const raw = stdout.trim();
+        if (!raw) { resolve({ active: false }); return; }
+        try {
+          const obj = JSON.parse(raw);
+          if (obj.active === false) { resolve({ active: false }); return; }
+          if (obj.paused) { resolve({ active: true, isPlaying: false, paused: true }); return; }
+          const parsed = parseTasklist(`"${obj.name}","","","","","","","","${obj.title}"`);
+          if (parsed) { resolve(parsed); return; }
+          // Title exists but didn't match a playing pattern — app open but paused (e.g. Spotify shows "Spotify")
+          const KNOWN_MEDIA = ['spotify','tidal','vlc','foobar2000','itunes'];
+          if (KNOWN_MEDIA.some(n => obj.name.toLowerCase().includes(n))) {
+            resolve({ active: true, isPlaying: false, paused: true });
+          } else {
+            resolve({ active: false });
+          }
+        } catch { resolve({ active: false }); }
+      }
+    );
+  }));
+
+  // ── Album art lookup (iTunes Search API, no CORS in main process) ─
+  ipcMain.handle('get-album-art', async (event, title, artist) => {
+    try {
+      const q = encodeURIComponent(`${title} ${artist}`);
+      const json = await fetch(`https://itunes.apple.com/search?term=${q}&media=music&limit=1`).then(r => r.json());
+      const artUrl = json?.results?.[0]?.artworkUrl100;
+      if (!artUrl) return null;
+      const highRes = artUrl.replace('100x100bb', '300x300bb');
+      // Fetch image bytes and return as base64 data URL so canvas can read it (no CORS taint)
+      const imgRes = await fetch(highRes);
+      const arrayBuf = await imgRes.arrayBuffer();
+      const b64 = Buffer.from(arrayBuf).toString('base64');
+      const mime = imgRes.headers.get('content-type') || 'image/jpeg';
+      return `data:${mime};base64,${b64}`;
+    } catch (e) { console.error('[art] error:', e.message); return null; }
+  });
+
+  // Media keys via SendKeys VBScript — instant, no PS needed
+  const VK = { playpause: 0xB3, next: 0xB0, prev: 0xB1 };
+  ipcMain.handle('media-key', (event, key) => new Promise((resolve) => {
+    if (!VK[key]) { resolve(false); return; }
+    const vbs = `
+      Dim WshShell : Set WshShell = CreateObject("WScript.Shell")
+      WshShell.SendKeys Chr(${VK[key]})
+    `;
+    const tmp = path.join(os.tmpdir(), 'xtec_mediakey.vbs');
+    try { fs.writeFileSync(tmp, vbs); } catch { resolve(false); return; }
+    const cscript = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'cscript.exe');
+    execFile(cscript, ['//NoLogo', tmp], { windowsHide: true, timeout: 2000 }, () => resolve(true));
+  }));
+
   ipcMain.handle('set-theme-source', (event, theme) => {
     nativeTheme.themeSource = theme;
   });
@@ -718,6 +933,8 @@ app.whenReady().then(() => {
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
+}).catch(err => {
+  console.error('Fatal error during app startup:', err);
 });
 
 app.on('window-all-closed', () => {

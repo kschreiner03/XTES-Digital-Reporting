@@ -2,6 +2,10 @@ export interface IElectronAPI {
     saveProject: (data: string, defaultPath: string) => Promise<{ success: boolean; path?: string; error?: string }>;
     loadProject: (fileType: 'plog' | 'dfr' | 'spdfr' | 'clog') => Promise<string | null>;
     loadMultipleProjects: () => Promise<{ success: boolean; data?: string[]; error?: string }>;
+    printPdf: (data: ArrayBuffer) => Promise<{ success: boolean; error?: string }>;
+    getMediaInfo: () => Promise<{ active: boolean; isPlaying?: boolean; title?: string; artist?: string; album?: string; appId?: string; thumbnail?: string }>;
+    mediaKey: (key: 'playpause' | 'next' | 'prev') => Promise<boolean>;
+    getAlbumArt: (title: string, artist: string) => Promise<string | null>;
     savePdf: (data: ArrayBuffer, defaultPath: string) => Promise<{ success: boolean; path?: string; error?: string }>;
     readFile: (filePath: string) => Promise<{ success: boolean; data?: string; path?: string; error?: string }>;
     onOpenFile: (callback: (filePath: string) => void) => void;
@@ -44,6 +48,18 @@ export interface IElectronAPI {
 
     // User info
     getUserInfo: () => { username: string; homedir: string };
+
+    // IOGC PDF generation (PDFKit via main process)
+    generateIogcPdf: (data: unknown) => Promise<{ success: boolean; buffer?: Uint8Array; filename?: string; error?: string }>;
+
+    // Project packaging
+    onPackageProject: (callback: () => void) => void;
+    removePackageProjectListener: () => void;
+    onOpenPackage: (callback: () => void) => void;
+    removeOpenPackageListener: () => void;
+    openPackageFile: () => Promise<{ success: boolean; data?: string; error?: string }>;
+    selectExtractFolder: () => Promise<{ success: boolean; path?: string; error?: string }>;
+    extractPackageToFolder: (folderPath: string, files: unknown) => Promise<{ success: boolean; error?: string }>;
 }
 
 declare global {

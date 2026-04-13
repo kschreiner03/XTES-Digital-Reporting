@@ -16,6 +16,7 @@ function getShortTypeName(type: AppType): string {
         case 'dfrStandard': return 'DFR';
         case 'dfrSaskpower': return 'SP-DFR';
         case 'combinedLog': return 'COMBINED';
+        case 'iogcLeaseAudit': return 'IOGC';
         default: return 'REPORT';
     }
 }

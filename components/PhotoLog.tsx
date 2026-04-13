@@ -28,6 +28,8 @@ interface RecentProjectMetadata {
     name: string;
     projectNumber: string;
     timestamp: number;
+    proponent?: string;
+    date?: string;
 }
 
 const getRecentProjects = (): RecentProjectMetadata[] => {
@@ -42,7 +44,7 @@ const getRecentProjects = (): RecentProjectMetadata[] => {
 
 const addRecentProject = async (
     projectData: any,
-    projectInfo: { type: AppType; name: string; projectNumber: string }
+    projectInfo: { type: AppType; name: string; projectNumber: string; proponent?: string; date?: string }
 ) => {
     const timestamp = Date.now();
 
@@ -300,7 +302,10 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, onBackDirect, initialData }
     const autosaveEnabledRef = useRef(autosaveEnabled);
     autosaveEnabledRef.current = autosaveEnabled;
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const batchInputRef = useRef<HTMLInputElement>(null);
     const isDownloadingRef = useRef(false);
+    const [batchProgress, setBatchProgress] = useState<{ current: number; total: number } | null>(null);
+    const [isDroppingFiles, setIsDroppingFiles] = useState(false);
 
     // --- Inline Comments State ---
     const [commentsCollapsed, setCommentsCollapsed] = useState(false);
@@ -335,6 +340,10 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, onBackDirect, initialData }
         setPhotosData(prev => prev.map(p => p.id === photoId ? { ...p, highlights } : p));
         setIsDirty(true);
     }, []);
+
+    const handlePhotoAnchorPositionsChange = useCallback((id: number, anchors: CommentAnchorPosition[]) => {
+        handleAnchorPositionsChange(`photo-${id}-description`, anchors);
+    }, [handleAnchorPositionsChange]);
 
     // Parse photo ID from fieldId like "photo-123-description"
     const getPhotoIdFromFieldId = (fieldId: string): number | null => {
@@ -483,6 +492,8 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, onBackDirect, initialData }
                     type: 'photoLog',
                     name: projectName,
                     projectNumber: loadedHeader.projectNumber,
+                    proponent: loadedHeader.proponent,
+                    date: loadedHeader.date,
                 });
             } else {
                 alert('Invalid project file format.');
@@ -573,10 +584,10 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, onBackDirect, initialData }
         setIsDirty(true);
     };
 
-    const handlePhotoDataChange = (id: number, field: keyof Omit<PhotoData, 'id' | 'imageUrl' | 'imageId'>, value: string) => {
+    const handlePhotoDataChange = useCallback((id: number, field: keyof Omit<PhotoData, 'id' | 'imageUrl' | 'imageId'>, value: string) => {
         setPhotosData(prev => prev.map(photo => photo.id === id ? { ...photo, [field]: value } : photo));
         setIsDirty(true);
-    };
+    }, []);
     
     const autoCropImage = (imageUrl: string): Promise<string> => {
         return new Promise((resolve) => {
@@ -623,7 +634,7 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, onBackDirect, initialData }
         });
     };
     
-    const handleImageChange = (id: number, file: File) => {
+    const handleImageChange = useCallback((id: number, file: File) => {
         const allowedTypes = ['image/jpeg', 'image/png'];
         if (!allowedTypes.includes(file.type)) {
             setShowUnsupportedFileModal(true);
@@ -648,10 +659,77 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, onBackDirect, initialData }
             img.src = dataUrl;
         };
         reader.readAsDataURL(file);
-    };
+    }, []);
 
     const renumberPhotos = (photos: PhotoData[]) => {
         return photos.map((photo, index) => ({ ...photo, photoNumber: String(index + 1) }));
+    };
+
+    const handleBatchImport = async (files: FileList | File[]) => {
+        const fileArray = Array.from(files);
+        const valid = fileArray.filter(f =>
+            f.type === 'image/jpeg' || f.type === 'image/png' ||
+            f.name.toLowerCase().endsWith('.jpg') || f.name.toLowerCase().endsWith('.jpeg') || f.name.toLowerCase().endsWith('.png')
+        );
+        const skipped = fileArray.length - valid.length;
+        if (valid.length === 0) { setShowUnsupportedFileModal(true); return; }
+        const nextId = photosData.length > 0 ? Math.max(...photosData.map(p => p.id)) + 1 : 1;
+        const placeholders: PhotoData[] = valid.map((_, i) => ({
+            id: nextId + i,
+            photoNumber: '',
+            date: headerData.date || '',
+            location: '',
+            description: '',
+            imageUrl: null,
+            direction: '',
+        }));
+        setPhotosData(prev => renumberPhotos([...prev, ...placeholders]));
+        setBatchProgress({ current: 0, total: valid.length });
+        for (let i = 0; i < valid.length; i++) {
+            const targetId = nextId + i;
+            await new Promise<void>(resolve => {
+                const reader = new FileReader();
+                reader.onload = async e => {
+                    const dataUrl = e.target?.result as string;
+                    const cropped = await autoCropImage(dataUrl).catch(() => dataUrl);
+                    setPhotosData(prev => prev.map(p => p.id === targetId ? { ...p, imageUrl: cropped } : p));
+                    setBatchProgress({ current: i + 1, total: valid.length });
+                    resolve();
+                };
+                reader.readAsDataURL(valid[i]);
+            });
+        }
+        setBatchProgress(null);
+        setIsDirty(true);
+        toast(
+            skipped > 0
+                ? `${valid.length} photo${valid.length !== 1 ? 's' : ''} added · ${skipped} skipped (unsupported format)`
+                : `${valid.length} photo${valid.length !== 1 ? 's' : ''} added`,
+            skipped > 0 ? 'info' : 'success'
+        );
+    };
+
+    const handleFileDragOver = (e: React.DragEvent) => {
+        if (e.dataTransfer.types.includes('Files')) {
+            e.preventDefault();
+            e.stopPropagation();
+            setIsDroppingFiles(true);
+        }
+    };
+
+    const handleFileDragLeave = (e: React.DragEvent) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+            setIsDroppingFiles(false);
+        }
+    };
+
+    const handleFileDrop = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDroppingFiles(false);
+        if (e.dataTransfer.files.length > 0) {
+            handleBatchImport(e.dataTransfer.files);
+        }
     };
 
     const addPhoto = (insertAtIndex?: number) => {
@@ -679,7 +757,7 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, onBackDirect, initialData }
         setIsDirty(true);
     };
 
-    const removePhoto = (id: number) => {
+    const removePhoto = useCallback((id: number) => {
         setPhotosData(prev => {
             const photoToRemove = prev.find(p => p.id === id);
             if (photoToRemove && photoToRemove.imageId) {
@@ -688,7 +766,7 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, onBackDirect, initialData }
             return renumberPhotos(prev.filter(photo => photo.id !== id));
         });
         setIsDirty(true);
-    };
+    }, []);
 
     const handlePhotoDragEnd = (event: DragEndEvent) => {
         const { active, over } = event;
@@ -733,6 +811,8 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, onBackDirect, initialData }
             type: 'photoLog',
             name: projectName,
             projectNumber: headerData.projectNumber,
+            proponent: headerData.proponent,
+            date: headerData.date,
         });
         setIsDirty(false);
         toast('Saved ✓');
@@ -805,6 +885,8 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, onBackDirect, initialData }
             type: 'photoLog',
             name: projectName,
             projectNumber: headerData.projectNumber,
+            proponent: headerData.proponent,
+            date: headerData.date,
         });
 
         perfMark('pdf-gen-start');
@@ -975,7 +1057,7 @@ const calculatePhotoEntryHeight = async (docInstance: any, photo: PhotoData): Pr
             textHeight += measureField("Date", photo.date);
             textHeight += measureField("Location", photo.location);
             textHeight += 5;
-            const descLines = docInstance.splitTextToSize(photo.description || ' ', textBlockWidth);
+            const descLines = docInstance.splitTextToSize(photo.description || ' ', textBlockWidth - 10);
             textHeight += docInstance.getTextDimensions(descLines).h;
 
             let imageH = 0;
@@ -1020,7 +1102,7 @@ const calculatePhotoEntryHeight = async (docInstance: any, photo: PhotoData): Pr
             docInstance.text(`Description:`, xStart, textY);
             textY += 5;
             docInstance.setFont('times', 'normal');
-            const descLines = docInstance.splitTextToSize(photo.description || ' ', textBlockWidth);
+            const descLines = docInstance.splitTextToSize(photo.description || ' ', textBlockWidth - 10);
             docInstance.text(descLines, xStart, textY);
         };
         
@@ -1321,6 +1403,31 @@ Description: ${photo.description || 'N/A'}
         };
     }, [headerData, photosData]);
 
+    // Project packaging — respond to Package Project… menu action
+    useEffect(() => {
+        const handlePackageRequest = () => {
+            const photos = photosData
+                .filter(p => p.imageUrl)
+                .map((p, i) => ({
+                    imageUrl: p.imageUrl!,
+                    filename: `photo_${String(p.photoNumber ?? i + 1).padStart(3, '0')}.jpg`,
+                    description: p.description ?? '',
+                }));
+            // Keep imageUrl so PackageProjectModal can map it to assetPath; strip only imageId
+            const exportPhotos = photosData.map(({ imageId, ...rest }) => rest);
+            window.dispatchEvent(new CustomEvent('xtec-project-data-response', {
+                detail: {
+                    projectData: { headerData, photosData: exportPhotos },
+                    projectType: 'plog',
+                    projectName: headerData.projectName || 'Untitled Photo Log',
+                    photos,
+                },
+            }));
+        };
+        window.addEventListener('xtec-request-project-data', handlePackageRequest);
+        return () => window.removeEventListener('xtec-request-project-data', handlePackageRequest);
+    }, [headerData, photosData]);
+
     // Autosave at configured interval when dirty
     useEffect(() => {
         const interval = setInterval(() => {
@@ -1397,7 +1504,21 @@ Description: ${photo.description || 'N/A'}
     };
 
     return (
-        <div className="bg-gray-100 dark:bg-gray-900 min-h-screen transition-colors duration-200">
+        <div
+            className="bg-gray-100 dark:bg-gray-900 min-h-screen transition-colors duration-200 relative"
+            onDragOver={handleFileDragOver}
+            onDragLeave={handleFileDragLeave}
+            onDrop={handleFileDrop}
+        >
+            {isDroppingFiles && (
+                <div className="fixed inset-0 z-[999] bg-[#007D8C]/20 border-4 border-dashed border-[#007D8C] pointer-events-none flex items-center justify-center">
+                    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl px-10 py-8 flex flex-col items-center gap-3">
+                        <svg className="w-16 h-16 text-[#007D8C]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" /></svg>
+                        <p className="text-2xl font-bold text-[#007D8C]">Drop photos to add</p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">JPEG and PNG files supported</p>
+                    </div>
+                </div>
+            )}
             {pdfPreview && (
                 <PdfPreviewModal 
                     url={pdfPreview.url} 
@@ -1481,20 +1602,19 @@ Description: ${photo.description || 'N/A'}
                              <div key={photo.id}>
                                 <PhotoEntry
                                     data={photo}
-                                    onDataChange={(field, value) => handlePhotoDataChange(photo.id, field, value)}
-                                    onImageChange={(file) => handleImageChange(photo.id, file)}
-                                    onRemove={() => removePhoto(photo.id)}
+                                    onDataChange={handlePhotoDataChange}
+                                    onImageChange={handleImageChange}
+                                    onRemove={removePhoto}
                                     onImageClick={setEnlargedImageUrl}
                                     errors={getPhotoErrors(photo.id)}
                                     showDirectionField={!photo.isMap}
                                     headerDate={headerData.date}
                                     headerLocation={headerData.location}
-                                    onAutoFill={(f, val) => handlePhotoDataChange(photo.id, f, val)}
                                     inlineComments={photo.inlineComments}
-                                    onInlineCommentsChange={(comments) => handlePhotoCommentsChange(photo.id, comments)}
+                                    onInlineCommentsChange={handlePhotoCommentsChange}
                                     highlights={photo.highlights}
-                                    onHighlightsChange={(highlights) => handlePhotoHighlightsChange(photo.id, highlights)}
-                                    onAnchorPositionsChange={(anchors) => handleAnchorPositionsChange(`photo-${photo.id}-description`, anchors)}
+                                    onHighlightsChange={handlePhotoHighlightsChange}
+                                    onAnchorPositionsChange={handlePhotoAnchorPositionsChange}
                                     hoveredCommentId={hoveredCommentId}
                                 />
 
@@ -1520,14 +1640,38 @@ Description: ${photo.description || 'N/A'}
                       </DndContext>
                     </div>
 
-                    <div className="mt-8 flex justify-center">
-                        <button
-                            onClick={() => addPhoto()}
-                            className="bg-[#007D8C] hover:bg-[#006b7a] text-white font-bold py-3 px-6 rounded-lg shadow-md inline-flex items-center gap-2 transition duration-200 text-lg"
-                        >
-                            <PlusIcon />
-                            <span>Add Photo</span>
-                        </button>
+                    <div className="mt-8 flex flex-col items-center gap-3">
+                        <div className="flex items-center gap-3">
+                            <button
+                                onClick={() => addPhoto()}
+                                className="bg-[#007D8C] hover:bg-[#006b7a] text-white font-bold py-3 px-6 rounded-lg shadow-md inline-flex items-center gap-2 transition duration-200 text-lg"
+                            >
+                                <PlusIcon />
+                                <span>Add Photo</span>
+                            </button>
+                            <button
+                                onClick={() => batchInputRef.current?.click()}
+                                disabled={!!batchProgress}
+                                className="bg-white hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 text-[#007D8C] font-bold py-3 px-6 rounded-lg shadow-md border-2 border-[#007D8C] inline-flex items-center gap-2 transition duration-200 text-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                <FolderArrowDownIcon />
+                                <span>Import Photos</span>
+                            </button>
+                            <input
+                                type="file"
+                                ref={batchInputRef}
+                                multiple
+                                accept="image/jpeg,image/png,.jpg,.jpeg,.png"
+                                style={{ display: 'none' }}
+                                onChange={e => { if (e.target.files?.length) { handleBatchImport(e.target.files); e.target.value = ''; } }}
+                            />
+                        </div>
+                        {batchProgress && (
+                            <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                                <svg className="animate-spin h-4 w-4 text-[#007D8C]" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
+                                <span>Processing {batchProgress.current} of {batchProgress.total}…</span>
+                            </div>
+                        )}
                     </div>
                 </div>
                 {photosData.length > 0 && <div className="border-t-4 border-[#007D8C] my-8" />}

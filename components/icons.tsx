@@ -23,7 +23,8 @@ import {
   ZoomIn,
   ZoomOut,
   GripVertical,
-  ChevronDown
+  ChevronDown,
+  Printer
 } from "lucide-react";
 
 /* ============================================================
@@ -140,4 +141,8 @@ export const GripVerticalIcon = (p: any) => (
 
 export const ChevronDownIcon = (p: any) => (
   <ChevronDown strokeWidth={2} {...p} />
+);
+
+export const PrintIcon = (p: any) => (
+  <Printer strokeWidth={1.5} {...p} />
 );

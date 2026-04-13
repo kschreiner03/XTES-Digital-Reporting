@@ -33,17 +33,102 @@ body {
     font-family: Calibri, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
 }
 
-/* Hide scrollbars globally while keeping scroll functionality */
+/* ── Custom scrollbar — slim teal, light + dark ── */
+
+/* Firefox */
 * {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(0, 125, 140, 0.45) transparent;
 }
-*::-webkit-scrollbar {
-    display: none;
+html.dark * {
+    scrollbar-color: rgba(0, 125, 140, 0.55) rgba(255, 255, 255, 0.04);
 }
+
+/* WebKit / Electron (Chromium) */
+::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+}
+::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.06);
+    border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb {
+    border-radius: 9999px;
+    /* Radial gradient: bright cyan core fading to transparent — creates real glow illusion */
+    background: radial-gradient(
+        ellipse at center,
+        rgba(0, 230, 250, 1.00)  0%,
+        rgba(0, 195, 220, 0.85) 45%,
+        rgba(0, 155, 185, 0.40) 75%,
+        transparent             100%
+    );
+    box-shadow: inset 0 0 4px rgba(180, 250, 255, 0.50);
+    transition: background 150ms ease, box-shadow 150ms ease;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: radial-gradient(
+        ellipse at center,
+        rgba(160, 250, 255, 1.00)  0%,
+        rgba(0, 225, 248, 0.95)   40%,
+        rgba(0, 185, 215, 0.55)   72%,
+        transparent               100%
+    );
+    box-shadow: inset 0 0 6px rgba(220, 255, 255, 0.70);
+}
+::-webkit-scrollbar-thumb:active {
+    background: radial-gradient(
+        ellipse at center,
+        rgba(220, 255, 255, 1.00)  0%,
+        rgba(0, 240, 255, 1.00)   35%,
+        rgba(0, 200, 230, 0.65)   68%,
+        transparent               100%
+    );
+    box-shadow: inset 0 0 8px rgba(255, 255, 255, 0.80);
+}
+::-webkit-scrollbar-corner {
+    background: transparent;
+}
+
+/* Dark mode — darker track so the glow pops */
+html.dark ::-webkit-scrollbar-track {
+    background: rgba(0, 10, 15, 0.55);
+}
+html.dark ::-webkit-scrollbar-thumb {
+    background: radial-gradient(
+        ellipse at center,
+        rgba(120, 250, 255, 1.00)  0%,
+        rgba(0, 225, 250, 0.95)   40%,
+        rgba(0, 180, 215, 0.55)   70%,
+        transparent               100%
+    );
+    box-shadow: inset 0 0 5px rgba(200, 255, 255, 0.65);
+}
+html.dark ::-webkit-scrollbar-thumb:hover {
+    background: radial-gradient(
+        ellipse at center,
+        rgba(200, 255, 255, 1.00)  0%,
+        rgba(60, 240, 255, 1.00)  35%,
+        rgba(0, 205, 240, 0.65)   65%,
+        transparent               100%
+    );
+    box-shadow: inset 0 0 7px rgba(230, 255, 255, 0.80);
+}
+html.dark ::-webkit-scrollbar-thumb:active {
+    background: radial-gradient(
+        ellipse at center,
+        rgba(255, 255, 255, 1.00)  0%,
+        rgba(150, 255, 255, 1.00) 25%,
+        rgba(0, 230, 255, 0.80)   55%,
+        transparent               100%
+    );
+    box-shadow: inset 0 0 10px rgba(255, 255, 255, 0.90);
+}
+
+/* Explicit hide class still available for places that shouldn't scroll */
 .scrollbar-hide {
-    -ms-overflow-style: none;
     scrollbar-width: none;
+    -ms-overflow-style: none;
 }
 .scrollbar-hide::-webkit-scrollbar {
     display: none;
@@ -714,37 +799,6 @@ html.dark .group:hover .xtec-card-icon {
    because the page background shows through naturally.
    ============================================================ */
 
-/* Report enter: instant feel, subtle fade only */
-@keyframes xtec-report-enter-kf {
-    from { opacity: 0; }
-    to   { opacity: 1; }
-}
-
-/* Report exit: fast fade out */
-@keyframes xtec-report-exit-kf {
-    from { opacity: 1; }
-    to   { opacity: 0; }
-}
-
-/* Landing return: quick fade in */
-@keyframes xtec-landing-return-kf {
-    from { opacity: 0; }
-    to   { opacity: 1; }
-}
-
-.xtec-report-enter {
-    animation: xtec-report-enter-kf 120ms ease-out backwards;
-}
-
-.xtec-report-exit {
-    animation: xtec-report-exit-kf 100ms ease-in forwards;
-    pointer-events: none;
-}
-
-.xtec-landing-return {
-    animation: xtec-landing-return-kf 150ms ease-out backwards;
-}
-
 /* --- Recent project row — left teal accent on hover (no layout shift) --- */
 .xtec-project-row {
     transition: box-shadow 0.15s ease;
@@ -755,7 +809,6 @@ html.dark .group:hover .xtec-card-icon {
 
 /* ============================================================
    MODAL ENTRANCE ANIMATION
-   Applied to the inner dialog panel (not the backdrop)
    ============================================================ */
 @keyframes xtec-modal-in {
     from { opacity: 0; transform: scale(0.97) translateY(6px); }
@@ -766,19 +819,3 @@ html.dark .group:hover .xtec-card-icon {
     animation: xtec-modal-in 160ms ease-out forwards;
 }
 
-/* ============================================================
-   TOAST NOTIFICATIONS
-   ============================================================ */
-@keyframes xtec-toast-in {
-    from { opacity: 0; transform: translateY(6px) scale(0.97); }
-    to   { opacity: 1; transform: translateY(0)   scale(1);    }
-}
-
-@keyframes xtec-toast-out {
-    from { opacity: 1; transform: translateY(0)   scale(1);    }
-    to   { opacity: 0; transform: translateY(4px)  scale(0.97); }
-}
-
-.xtec-toast {
-    animation: xtec-toast-in 180ms ease-out forwards;
-}

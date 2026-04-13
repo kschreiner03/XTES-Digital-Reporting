@@ -73,6 +73,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
     const profileInputRef = useRef<HTMLInputElement>(null);
     const { theme, setTheme } = useTheme();
     const [displayScaleSetting, setDisplayScaleSetting] = useState<string>(() => localStorage.getItem('xtec_display_scale') || 'auto');
+    const [mediaPlayerEnabled, setMediaPlayerEnabled] = useState<boolean>(() => localStorage.getItem('xtec_media_player_enabled') !== 'false');
+    const [mediaPlayerPosition, setMediaPlayerPosition] = useState<string>(() => localStorage.getItem('xtec_media_player_position') || 'bottom-left');
 
     const handleDisplayScaleChange = (value: string) => {
         setDisplayScaleSetting(value);
@@ -565,6 +567,48 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
                                         >
                                             Reset to Default
                                         </button>
+                                    )}
+                                </div>
+                                <div>
+                                    <h3 className="text-xl font-bold text-gray-800 dark:text-white mb-4 border-b dark:border-gray-700 pb-2">Media Player</h3>
+                                    <div className="flex items-center justify-between mb-4">
+                                        <div>
+                                            <span className="block text-base font-medium text-gray-700 dark:text-gray-300">Show Media Player</span>
+                                            <span className="text-sm text-gray-500 dark:text-gray-400">Display the now-playing widget while using the app.</span>
+                                        </div>
+                                        <button
+                                            onClick={() => {
+                                                const next = !mediaPlayerEnabled;
+                                                setMediaPlayerEnabled(next);
+                                                localStorage.setItem('xtec_media_player_enabled', String(next));
+                                                window.dispatchEvent(new CustomEvent('xtec-media-player-changed'));
+                                            }}
+                                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${mediaPlayerEnabled ? 'bg-[#007D8C]' : 'bg-gray-300 dark:bg-gray-600'}`}
+                                        >
+                                            <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${mediaPlayerEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                                        </button>
+                                    </div>
+                                    {mediaPlayerEnabled && (
+                                        <div className="flex items-center justify-between">
+                                            <div>
+                                                <span className="block text-base font-medium text-gray-700 dark:text-gray-300">Position</span>
+                                                <span className="text-sm text-gray-500 dark:text-gray-400">Where the widget appears on screen.</span>
+                                            </div>
+                                            <select
+                                                value={mediaPlayerPosition}
+                                                onChange={(e) => {
+                                                    setMediaPlayerPosition(e.target.value);
+                                                    localStorage.setItem('xtec_media_player_position', e.target.value);
+                                                    window.dispatchEvent(new CustomEvent('xtec-media-player-changed'));
+                                                }}
+                                                className="px-3 py-1.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#007D8C]"
+                                            >
+                                                <option value="bottom-left">Bottom Left</option>
+                                                <option value="bottom-right">Bottom Right</option>
+                                                <option value="top-left">Top Left</option>
+                                                <option value="top-right">Top Right</option>
+                                            </select>
+                                        </div>
                                     )}
                                 </div>
                             </div>
