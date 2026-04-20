@@ -4,7 +4,25 @@ All notable changes to X-TEC Digital Reporting are documented here.
 
 ---
 
-## [1.1.5] — Upcoming
+## [1.1.5] — April 2026
+
+### Added
+
+- Bulk photo import — drag and drop multiple photos into any report at once with a polished full-screen drop indicator
+- First-save modal — the first time you save a new report, a prompt confirms project details before autosave activates
+- Contest wallpaper — Trinity Berry's 2024 X-TEC Photo Contest photo added to the wallpaper picker
+
+### Changed
+
+- Autosave is now off by default for new reports; it activates automatically after the first confirmed save
+- Toggling autosave on with no saved project triggers the first-save modal instead of saving immediately
+
+### Fixed
+
+- Consistent photo sizes in PDF — all photos now render at the same fixed size regardless of original pixel dimensions
+- Scroll bar restored — report scroll bar is back for easier navigation through long reports
+- App close freeze — clicking X no longer occasionally freezes the window
+- Crash on installed app — `electron-devtools-installer` no longer causes an error in the packaged build
 
 ---
 
