@@ -4,7 +4,6 @@ const { spawn, execFile, exec } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
-const { default: installExtension, REACT_DEVELOPER_TOOLS } = require('electron-devtools-installer');
 
 // Suppress Electron's CSP dev warning — unsafe-eval is only present in dev
 // for Vite HMR; it is never included in the packaged build's CSP.
@@ -974,10 +973,17 @@ app.whenReady().then(() => {
     }
   });
 
-  // Install React DevTools for component/state inspection
-  installExtension(REACT_DEVELOPER_TOOLS, { loadExtensionOptions: { allowFileAccess: true } })
-    .then(name => console.log(`[devtools] Installed: ${name}`))
-    .catch(err => console.warn('[devtools] Could not install React DevTools:', err.message));
+  // Install React DevTools in dev mode only
+  if (!app.isPackaged) {
+    try {
+      const { default: installExtension, REACT_DEVELOPER_TOOLS } = require('electron-devtools-installer');
+      installExtension(REACT_DEVELOPER_TOOLS, { loadExtensionOptions: { allowFileAccess: true } })
+        .then(name => console.log(`[devtools] Installed: ${name}`))
+        .catch(err => console.warn('[devtools] Could not install React DevTools:', err.message));
+    } catch (e) {
+      console.warn('[devtools] electron-devtools-installer not available:', e.message);
+    }
+  }
 
   // Production-only: override CSP via session headers to drop unsafe-eval.
   // Only registered when packaged — never touches the Vite dev server.
