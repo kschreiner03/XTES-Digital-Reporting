@@ -45,6 +45,7 @@ const PRESET_WALLPAPERS: PresetWallpaper[] = [
     { fileName: 'wallpaper/IMG_0009_CL.jpg', label: 'Wildflowers' },
     { fileName: 'wallpaper/IMG_0283.JPG', label: 'Sinkhole' },
     { fileName: 'wallpaper/Owl.jpg', label: 'Great Grey Owl' },
+    { fileName: 'wallpaper/Berry, Trinity - Scenery (June 21, 2024).jpg', label: 'Scenery' },
 ];
 
 const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {

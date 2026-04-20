@@ -10,8 +10,7 @@ import { safeSet } from './safeStorage';
 
 // Photo contest credits — only contest-winning photos get credit overlays
 const PHOTO_CREDITS: Record<string, { photographer: string; caption: string }> = {
-    // Add entries here as contest photos are added to the preset wallpapers
-    // e.g. 'wallpaper/contest-2026.jpg': { photographer: 'Sarah Jimmy – Thunderchild FN', caption: '2026 X-TEC Photo Contest Winner' },
+    'wallpaper/Berry, Trinity - Scenery (June 21, 2024).jpg': { photographer: 'Trinity Berry', caption: '2024 X-TEC Photo Contest' },
 };
 
 const PhotoCredit: React.FC<{ fileName: string | null }> = ({ fileName }) => {
