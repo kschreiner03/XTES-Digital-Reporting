@@ -1,5 +1,6 @@
 import React from 'react';
 import { CloseIcon } from './icons';
+import SafeImage from './SafeImage';
 
 const APP_VERSION = '1.1.5';
 const LAST_SEEN_VERSION_KEY = 'xtec_last_seen_version';
@@ -15,11 +16,11 @@ const RELEASE_NOTES: ReleaseNote[] = [
         version: '1.1.5',
         date: 'April 2026',
         highlights: [
-            'Save prompt — the first time you save a new report you\'ll be asked to confirm the project details before autosave activates',
-            'Autosave off by default — autosave now turns on automatically after your first save, keeping your project list clean',
+            'Bulk photo import — drag and drop multiple photos into any report at once with a polished full-screen drop indicator',
+            'Scroll bar restored — the report scroll bar is back for easier navigation through long reports',
+            'Autosave fix — autosave is now off by default for new reports; your first save confirms project details before enabling it',
             'Consistent photo sizes in PDF — all photos now render at the same fixed size in generated reports regardless of original dimensions',
-            'Improved drop overlay — dragging photos into a report now shows a polished full-screen drop indicator',
-            'App close freeze fix — clicking X no longer occasionally freezes the window',
+            'Various bug fixes and performance improvements',
         ],
     },
     {
@@ -46,7 +47,6 @@ const RELEASE_NOTES: ReleaseNote[] = [
 export function shouldShowWhatsNew(): boolean {
     const lastSeen = localStorage.getItem(LAST_SEEN_VERSION_KEY);
     if (lastSeen === null) {
-        // First install — store the version silently, don't show popup
         localStorage.setItem(LAST_SEEN_VERSION_KEY, APP_VERSION);
         return false;
     }
@@ -78,6 +78,8 @@ const WhatsNewModal: React.FC<WhatsNewModalProps> = ({ onClose }) => {
                 {/* Header */}
                 <div className="px-6 pt-6 pb-4 border-b border-gray-200 dark:border-gray-700 flex items-start justify-between">
                     <div>
+                        <SafeImage fileName="xterra-logo.png" alt="X-TERRA Logo" className="h-7 w-auto mb-2 dark:hidden" />
+                        <SafeImage fileName="Xterra-White.png" alt="X-TERRA Logo" className="h-7 w-auto mb-2 hidden dark:block" />
                         <h2 className="text-2xl font-bold text-gray-900 dark:text-white">What's New</h2>
                         {currentRelease && (
                             <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">v{currentRelease.version} — {currentRelease.date}</p>
