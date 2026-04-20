@@ -120,6 +120,11 @@ export const getAllThumbnails = async (): Promise<Map<number, string>> => {
     return map;
 };
 
+export const getAllProjectKeys = async (): Promise<number[]> => {
+    const db = await initDB();
+    return db.getAllKeys(PROJECT_STORE_NAME);
+};
+
 export const clearDatabase = async (): Promise<void> => {
     const db = await initDB();
     const tx = db.transaction([IMAGE_STORE_NAME, PROJECT_STORE_NAME, THUMBNAIL_STORE_NAME], 'readwrite');

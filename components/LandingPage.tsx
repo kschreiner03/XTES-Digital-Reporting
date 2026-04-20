@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { StandardDfrIcon, CameraIcon, SaskPowerIcon, SearchIcon, FolderOpenIcon, EllipsisVerticalIcon, DocumentDuplicateIcon, ClipboardDocumentListIcon } from './icons';
 import ConfirmModal from './ConfirmModal';
 import { AppType } from '../App';
-import { deleteImage, deleteProject, deleteThumbnail, retrieveProject } from './db';
+import { deleteImage, deleteProject, deleteThumbnail, retrieveProject, getAllProjectKeys } from './db';
 import SafeImage, { getAssetUrl } from './SafeImage';
 import WhatsNewModal from './WhatsNewModal';
 import { safeSet } from './safeStorage';
@@ -164,7 +164,26 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSelectApp, onOpenProject, s
             localStorage.removeItem(RECENT_PROJECTS_KEY);
             localStorage.setItem('xtec_fake_seed_cleared_v1', '1');
         }
-        setRecentProjects(getRecentProjects());
+        const known = getRecentProjects();
+        setRecentProjects(known);
+
+        // Purge any IndexedDB project/thumbnail entries not referenced by the recent projects list.
+        // This cleans up data left behind by crashes, discarded sessions, or old bugs.
+        const cleanupOrphanedEntries = async () => {
+            try {
+                const knownTimestamps = new Set(known.map(p => p.timestamp));
+                const dbKeys = await getAllProjectKeys();
+                for (const key of dbKeys) {
+                    if (!knownTimestamps.has(key)) {
+                        deleteProject(key).catch(() => {});
+                        deleteThumbnail(key).catch(() => {});
+                    }
+                }
+            } catch (e) {
+                console.warn('Orphan cleanup failed:', e);
+            }
+        };
+        cleanupOrphanedEntries();
 
         // Load preset wallpaper
         const savedPreset = localStorage.getItem('xtec_landing_photo_preset');

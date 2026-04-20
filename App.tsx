@@ -73,10 +73,6 @@ const App: React.FC = () => {
         }
     };
 
-    useEffect(() => {
-        const t = setTimeout(() => toast('X-TEC Digital Reporting is ready'), 600);
-        return () => clearTimeout(t);
-    }, []);
 
     useEffect(() => {
         perfMark('app-render-complete');
@@ -177,22 +173,22 @@ const App: React.FC = () => {
         return () => clearTimeout(t);
     }, []);
 
-    // When on landing page (no report open), allow window close immediately
+    // Always register a close handler. Landing page: confirm immediately.
+    // Report open: register a fallback that confirms close (the report component will override
+    // this with its own handler that shows the unsaved-changes modal instead).
+    // This prevents the window from freezing if close-attempted fires before the lazy report mounts.
     useEffect(() => {
-        if (!selectedApp) {
+        // @ts-ignore
+        const api = window.electronAPI;
+        if (!api?.onCloseAttempted) return;
+        api.removeCloseAttemptedListener?.();
+        api.onCloseAttempted(() => {
+            api.confirmClose();
+        });
+        return () => {
             // @ts-ignore
-            const api = window.electronAPI;
-            if (api?.onCloseAttempted) {
-                api.removeCloseAttemptedListener?.();
-                api.onCloseAttempted(() => {
-                    api.confirmClose();
-                });
-            }
-            return () => {
-                // @ts-ignore
-                window.electronAPI?.removeCloseAttemptedListener?.();
-            };
-        }
+            window.electronAPI?.removeCloseAttemptedListener?.();
+        };
     }, [selectedApp]);
 
 

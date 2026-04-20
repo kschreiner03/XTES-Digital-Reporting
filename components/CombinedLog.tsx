@@ -43,18 +43,18 @@ const getRecentProjects = (): RecentProjectMetadata[] => {
 
 const addRecentProject = async (
     projectData: any,
-    projectInfo: { type: AppType; name: string; projectNumber: string; proponent?: string; date?: string }
-): Promise<number> => {
-    const timestamp = Date.now();
+    projectInfo: { type: AppType; name: string; projectNumber: string; proponent?: string; date?: string },
+    existingTimestamp?: number
+): Promise<number | null> => {
+    const timestamp = existingTimestamp ?? Date.now();
 
     try {
         await storeProject(timestamp, projectData);
     } catch (e) {
         console.error('Failed to save project to IndexedDB:', e);
-        return timestamp;
+        return null;
     }
 
-    // Generate and store thumbnail
     try {
         const firstPhoto = projectData.photosData?.find(
             (p: any) => p.imageUrl && !p.isMap
@@ -70,53 +70,31 @@ const addRecentProject = async (
     }
 
     const recentProjects = getRecentProjects();
-    const identifier = `${projectInfo.type}-${projectInfo.name}-${projectInfo.projectNumber}`;
 
-    const existingProject = recentProjects.find(
-        p => `${p.type}-${p.name}-${p.projectNumber}` === identifier
-    );
+    const filteredProjects = existingTimestamp
+        ? recentProjects.filter(p => p.timestamp !== existingTimestamp)
+        : (() => {
+            const identifier = `${projectInfo.type}-${projectInfo.name}-${projectInfo.projectNumber}`;
+            const old = recentProjects.find(p => `${p.type}-${p.name}-${p.projectNumber}` === identifier);
+            if (old) {
+                deleteProject(old.timestamp).catch(() => {});
+                deleteThumbnail(old.timestamp).catch(() => {});
+            }
+            return recentProjects.filter(p => `${p.type}-${p.name}-${p.projectNumber}` !== identifier);
+        })();
 
-    const filteredProjects = recentProjects.filter(
-        p => `${p.type}-${p.name}-${p.projectNumber}` !== identifier
-    );
-
-    if (existingProject) {
-        try {
-            await deleteProject(existingProject.timestamp);
-            await deleteThumbnail(existingProject.timestamp);
-        } catch (e) {
-            console.error(
-                `Failed to clean up old project version (${existingProject.timestamp}):`,
-                e
-            );
-        }
-    }
-
-    const newProjectMetadata: RecentProjectMetadata = {
-        ...projectInfo,
-        timestamp
-    };
-
-    let updatedProjects = [newProjectMetadata, ...filteredProjects];
+    let updatedProjects = [{ ...projectInfo, timestamp }, ...filteredProjects];
 
     const MAX_RECENT_PROJECTS_IN_LIST = 50;
     if (updatedProjects.length > MAX_RECENT_PROJECTS_IN_LIST) {
-        const projectsToDelete = updatedProjects.splice(MAX_RECENT_PROJECTS_IN_LIST);
-        for (const proj of projectsToDelete) {
-            try {
-                await deleteProject(proj.timestamp);
-                await deleteThumbnail(proj.timestamp);
-            } catch (e) {
-                console.error(
-                    `Failed to cleanup old project from list (${proj.timestamp}):`,
-                    e
-                );
-            }
+        const toDelete = updatedProjects.splice(MAX_RECENT_PROJECTS_IN_LIST);
+        for (const proj of toDelete) {
+            deleteProject(proj.timestamp).catch(() => {});
+            deleteThumbnail(proj.timestamp).catch(() => {});
         }
     }
 
     safeSet(RECENT_PROJECTS_KEY, JSON.stringify(updatedProjects));
-
     return timestamp;
 };
 
@@ -354,7 +332,7 @@ const CombinedLog: React.FC<CombinedLogProps> = ({ onBack, onBackDirect, initial
     });
 
     const [photosData, setPhotosData] = useState<PhotoData[]>([]);
-    const [projectTimestamp, setProjectTimestamp] = useState<number | null>(null);
+    const [projectTimestamp, setProjectTimestamp] = useState<number | null>(initialData?.timestamp ?? null);
     
     const [errors, setErrors] = useState(new Set<string>());
     const [showUnsupportedFileModal, setShowUnsupportedFileModal] = useState<boolean>(false);
@@ -369,13 +347,15 @@ const CombinedLog: React.FC<CombinedLogProps> = ({ onBack, onBackDirect, initial
     const importMenuRef = useRef<HTMLDivElement>(null);
     const [isDirty, setIsDirty] = useState(false);
     const [showUnsavedModal, setShowUnsavedModal] = useState(false);
-    const AUTOSAVE_KEY = 'xtec_autosave_enabled';
+    const [showFirstSaveModal, setShowFirstSaveModal] = useState(false);
+    const [firstSaveHeader, setFirstSaveHeader] = useState({ proponent: '', projectName: '', location: '', date: '', projectNumber: '' });
     const AUTOSAVE_INTERVAL_KEY = 'xtec_autosave_interval';
-    const [autosaveEnabled, setAutosaveEnabled] = useState(() => localStorage.getItem(AUTOSAVE_KEY) !== 'false');
+    const [autosaveEnabled, setAutosaveEnabled] = useState(initialData?.timestamp != null);
     const [autosaveIntervalMs, setAutosaveIntervalMs] = useState(() => parseInt(localStorage.getItem(AUTOSAVE_INTERVAL_KEY) || '30') * 1000);
     const [showSaveAsMenu, setShowSaveAsMenu] = useState(false);
     const saveAsMenuRef = useRef<HTMLDivElement>(null);
     const quickSaveRef = useRef<() => Promise<void>>();
+    const isSavingRef = useRef(false);
     const isDirtyRef = useRef(isDirty);
     isDirtyRef.current = isDirty;
     const autosaveEnabledRef = useRef(autosaveEnabled);
@@ -886,20 +866,66 @@ const CombinedLog: React.FC<CombinedLogProps> = ({ onBack, onBackDirect, initial
     };
 
     const handleQuickSave = async () => {
-        const stateForRecentProjects = await prepareStateForRecentProjectStorage(headerData, photosData);
-        const formattedDate = formatDateForRecentProject(headerData.date);
-        const dateSuffix = formattedDate ? ` - ${formattedDate}` : '';
-        const projectName = `${headerData.projectName || 'Untitled Combine Logs'}${dateSuffix}`;
-        const newTimestamp = await addRecentProject(stateForRecentProjects, {
-            type: 'combinedLog',
-            name: projectName,
-            projectNumber: headerData.projectNumber,
-            proponent: headerData.proponent,
-            date: headerData.date,
-        });
-        setProjectTimestamp(newTimestamp);
-        setIsDirty(false);
-        toast('Saved ✓');
+        if (isSavingRef.current) return;
+        if (projectTimestamp === null) {
+            setFirstSaveHeader({ proponent: headerData.proponent, projectName: headerData.projectName, location: headerData.location, date: headerData.date, projectNumber: headerData.projectNumber });
+            setShowFirstSaveModal(true);
+            return;
+        }
+        isSavingRef.current = true;
+        try {
+            const stateForRecentProjects = await prepareStateForRecentProjectStorage(headerData, photosData);
+            const formattedDate = formatDateForRecentProject(headerData.date);
+            const dateSuffix = formattedDate ? ` - ${formattedDate}` : '';
+            const projectName = `${headerData.projectName || 'Untitled Combine Logs'}${dateSuffix}`;
+            const savedTs = await addRecentProject(stateForRecentProjects, {
+                type: 'combinedLog',
+                name: projectName,
+                projectNumber: headerData.projectNumber,
+                proponent: headerData.proponent,
+                date: headerData.date,
+            }, projectTimestamp ?? undefined);
+            if (savedTs) {
+                setProjectTimestamp(savedTs);
+                setIsDirty(false);
+                toast('Saved ✓');
+            } else {
+                toast('Save failed — please try again.', 'error');
+            }
+        } finally {
+            isSavingRef.current = false;
+        }
+    };
+
+    const handleConfirmFirstSave = async () => {
+        setShowFirstSaveModal(false);
+        setHeaderData(h => ({ ...h, ...firstSaveHeader }));
+        if (isSavingRef.current) return;
+        isSavingRef.current = true;
+        try {
+            const mergedHeader = { ...headerData, ...firstSaveHeader };
+            const stateForRecentProjects = await prepareStateForRecentProjectStorage(mergedHeader, photosData);
+            const formattedDate = formatDateForRecentProject(firstSaveHeader.date);
+            const dateSuffix = formattedDate ? ` - ${formattedDate}` : '';
+            const projectName = `${firstSaveHeader.projectName || 'Untitled Combine Logs'}${dateSuffix}`;
+            const savedTs = await addRecentProject(stateForRecentProjects, {
+                type: 'combinedLog',
+                name: projectName,
+                projectNumber: firstSaveHeader.projectNumber,
+                proponent: firstSaveHeader.proponent,
+                date: firstSaveHeader.date,
+            });
+            if (savedTs) {
+                setProjectTimestamp(savedTs);
+                setIsDirty(false);
+                setAutosaveEnabled(true);
+                toast('Saved ✓');
+            } else {
+                toast('Save failed — please try again.', 'error');
+            }
+        } finally {
+            isSavingRef.current = false;
+        }
     };
     quickSaveRef.current = handleQuickSave;
 
@@ -1080,7 +1106,7 @@ const CombinedLog: React.FC<CombinedLogProps> = ({ onBack, onBackDirect, initial
         const PHOTO_ASPECT_RATIO = 3 / 4; 
         const PHOTO_X_NUDGE = -5;
 
-        const calculatePhotoEntryHeight = async (docInstance: any, photo: PhotoData): Promise<number> => {
+        const calculatePhotoEntryHeight = (docInstance: any, photo: PhotoData): number => {
             const gap = 5;
             const availableWidth = contentWidth - gap;
             const textBlockWidth = availableWidth * 0.33;
@@ -1141,7 +1167,7 @@ const CombinedLog: React.FC<CombinedLogProps> = ({ onBack, onBackDirect, initial
             docInstance.text(descLines, xStart, textY);
         };
         
-        const drawPhotoEntry = async (docInstance: any, photo: PhotoData, yStart: number) => {
+        const drawPhotoEntry = (docInstance: any, photo: PhotoData, yStart: number) => {
             const gap = 5;
             const availableWidth = contentWidth - gap;
             const textBlockWidth = availableWidth * 0.33;
@@ -1158,7 +1184,7 @@ const CombinedLog: React.FC<CombinedLogProps> = ({ onBack, onBackDirect, initial
 
         const sitePhotos = photosData.filter(p => p.imageUrl);
         if (sitePhotos.length > 0) {
-            const entryHeights = await Promise.all(sitePhotos.map(p => calculatePhotoEntryHeight(doc, p)));
+            const entryHeights = sitePhotos.map(p => calculatePhotoEntryHeight(doc, p));
             const dummyDoc = new jsPDF({ format: 'letter', unit: 'mm' });
             const yAfterHeader = await drawPhotoPageHeader(dummyDoc);
             const pageContentHeight = maxYPos - yAfterHeader;
@@ -1204,7 +1230,7 @@ const CombinedLog: React.FC<CombinedLogProps> = ({ onBack, onBackDirect, initial
                 const availableHeight = maxYPos - yPos;
 
                 if (photosOnPage.length === 1) {
-                    await drawPhotoEntry(doc, photosOnPage[0], yPos);
+                    drawPhotoEntry(doc, photosOnPage[0], yPos);
                 } else {
                     const totalContentHeight = heightsOnPage.reduce((sum, h) => sum + h, 0);
                     const tightGap = 4; 
@@ -1212,7 +1238,7 @@ const CombinedLog: React.FC<CombinedLogProps> = ({ onBack, onBackDirect, initial
                     const largeGap = totalRemainingSpace > 0 ? totalRemainingSpace / 2 : 2;
 
                     yPos += tightGap;
-                    await drawPhotoEntry(doc, photosOnPage[0], yPos);
+                    drawPhotoEntry(doc, photosOnPage[0], yPos);
                     yPos += heightsOnPage[0];
 
                     yPos += largeGap;
@@ -1222,7 +1248,7 @@ const CombinedLog: React.FC<CombinedLogProps> = ({ onBack, onBackDirect, initial
                     doc.line(borderMargin, yPos - TEAL_LINE_NUDGE_UP, pageWidth - borderMargin, yPos - TEAL_LINE_NUDGE_UP);
 
                     yPos += tightGap;
-                    await drawPhotoEntry(doc, photosOnPage[1], yPos);
+                    drawPhotoEntry(doc, photosOnPage[1], yPos);
                 }
                 drawPageBorder(doc);
             }
@@ -1506,11 +1532,15 @@ Description: ${photo.description || 'N/A'}
             onDrop={handleFileDrop}
         >
             {isDroppingFiles && (
-                <div className="fixed inset-0 z-[999] bg-[#007D8C]/20 border-4 border-dashed border-[#007D8C] pointer-events-none flex items-center justify-center">
-                    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl px-10 py-8 flex flex-col items-center gap-3">
-                        <svg className="w-16 h-16 text-[#007D8C]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" /></svg>
-                        <p className="text-2xl font-bold text-[#007D8C]">Drop photos to add</p>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">JPEG and PNG files supported</p>
+                <div className="fixed inset-0 z-[999] bg-black/50 backdrop-blur-sm pointer-events-none flex items-center justify-center">
+                    <div className="bg-white dark:bg-gray-900 border-2 border-[#007D8C] ring-8 ring-[#007D8C]/10 rounded-3xl px-16 py-12 flex flex-col items-center gap-5 shadow-2xl">
+                        <div className="w-20 h-20 rounded-2xl bg-[#007D8C]/10 flex items-center justify-center">
+                            <svg className="w-10 h-10 text-[#007D8C]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" /></svg>
+                        </div>
+                        <div className="text-center">
+                            <p className="text-2xl font-bold tracking-tight text-gray-900 dark:text-white">Drop photos here</p>
+                            <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">JPEG and PNG supported</p>
+                        </div>
                     </div>
                 </div>
             )}
@@ -1544,7 +1574,14 @@ Description: ${photo.description || 'N/A'}
                         <div className="flex items-center gap-1.5">
                             <span className="text-xs text-gray-500 dark:text-gray-400">Autosave</span>
                             <button
-                                onClick={() => { const v = !autosaveEnabled; setAutosaveEnabled(v); localStorage.setItem(AUTOSAVE_KEY, String(v)); }}
+                                onClick={() => {
+                                    if (!autosaveEnabled && projectTimestamp === null) {
+                                        setFirstSaveHeader({ proponent: headerData.proponent, projectName: headerData.projectName, location: headerData.location, date: headerData.date, projectNumber: headerData.projectNumber });
+                                        setShowFirstSaveModal(true);
+                                    } else {
+                                        setAutosaveEnabled(v => !v);
+                                    }
+                                }}
                                 className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ${autosaveEnabled ? 'bg-[#007D8C]' : 'bg-gray-300 dark:bg-gray-600'}`}
                                 title={autosaveEnabled ? 'Autosave on — click to disable' : 'Autosave off — click to enable'}
                             >
@@ -1765,6 +1802,41 @@ Description: ${photo.description || 'N/A'}
                         <p className="text-gray-600 dark:text-gray-300">
                             An internet connection is required to save the PDF. Please connect to the internet and try again.
                         </p>
+                    </div>
+                </div>
+            )}
+
+            {showFirstSaveModal && (
+                <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[200]">
+                    <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-2xl relative max-w-lg w-full">
+                        <h3 className="text-lg font-bold mb-1 text-gray-800 dark:text-white">Save Project</h3>
+                        <p className="text-gray-500 dark:text-gray-400 text-xs mb-4">Confirm project details before saving. Autosave will activate after this.</p>
+                        <div className="grid grid-cols-2 gap-3 mb-5">
+                            <div>
+                                <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Proponent</label>
+                                <input type="text" value={firstSaveHeader.proponent} onChange={e => setFirstSaveHeader(h => ({...h, proponent: e.target.value}))} className="w-full border border-gray-300 dark:border-gray-600 rounded px-2 py-1.5 text-sm text-gray-800 dark:text-white bg-white dark:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-[#007D8C]" />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Project #</label>
+                                <input type="text" value={firstSaveHeader.projectNumber} onChange={e => setFirstSaveHeader(h => ({...h, projectNumber: e.target.value}))} className="w-full border border-gray-300 dark:border-gray-600 rounded px-2 py-1.5 text-sm text-gray-800 dark:text-white bg-white dark:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-[#007D8C]" />
+                            </div>
+                            <div className="col-span-2">
+                                <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Project Name</label>
+                                <input type="text" value={firstSaveHeader.projectName} onChange={e => setFirstSaveHeader(h => ({...h, projectName: e.target.value}))} className="w-full border border-gray-300 dark:border-gray-600 rounded px-2 py-1.5 text-sm text-gray-800 dark:text-white bg-white dark:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-[#007D8C]" />
+                            </div>
+                            <div className="col-span-2">
+                                <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Location</label>
+                                <input type="text" value={firstSaveHeader.location} onChange={e => setFirstSaveHeader(h => ({...h, location: e.target.value}))} className="w-full border border-gray-300 dark:border-gray-600 rounded px-2 py-1.5 text-sm text-gray-800 dark:text-white bg-white dark:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-[#007D8C]" />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Date</label>
+                                <input type="text" placeholder="e.g. October 1, 2025" value={firstSaveHeader.date} onChange={e => setFirstSaveHeader(h => ({...h, date: e.target.value}))} className="w-full border border-gray-300 dark:border-gray-600 rounded px-2 py-1.5 text-sm text-gray-800 dark:text-white bg-white dark:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-[#007D8C]" />
+                            </div>
+                        </div>
+                        <div className="flex justify-end gap-3">
+                            <button onClick={() => setShowFirstSaveModal(false)} className="px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-white text-sm font-semibold rounded-lg transition">Cancel</button>
+                            <button onClick={handleConfirmFirstSave} disabled={!firstSaveHeader.projectName.trim()} className="px-4 py-2 bg-[#007D8C] hover:bg-[#006b7a] disabled:opacity-50 text-white text-sm font-semibold rounded-lg transition">Save</button>
+                        </div>
                     </div>
                 </div>
             )}

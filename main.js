@@ -4,6 +4,11 @@ const { spawn, execFile, exec } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
+const { default: installExtension, REACT_DEVELOPER_TOOLS } = require('electron-devtools-installer');
+
+// Suppress Electron's CSP dev warning — unsafe-eval is only present in dev
+// for Vite HMR; it is never included in the packaged build's CSP.
+if (!app.isPackaged) process.env['ELECTRON_DISABLE_SECURITY_WARNINGS'] = 'true';
 
 // In packaged builds the self-contained bundle (with jspdf inlined) lives in resources/.
 // In development the raw source file is loaded directly (jspdf resolved from node_modules).
@@ -16,6 +21,7 @@ let mainWindow;
 let helpWindow;
 let forceClose = false;
 let pendingUpdate = false; // true when update downloaded but user chose "Later"
+let closeTimeout = null;
 
 // --- Configuration / Secrets ---
 // Prefer environment variables for sensitive or environment-specific URLs
@@ -308,6 +314,24 @@ function createWindow() {
       .catch(err => console.error('Failed to load main window file:', err));
   }
 
+  // F12 / Ctrl+Shift+I → toggle DevTools
+  mainWindow.webContents.on('before-input-event', (event, input) => {
+    if (input.type !== 'keyDown') return;
+    const isF12 = input.key === 'F12';
+    const isCtrlShiftI = (input.control || input.meta) && input.shift && input.key === 'I';
+    if (isF12 || isCtrlShiftI) {
+      if (mainWindow.webContents.isDevToolsOpened()) {
+        mainWindow.webContents.closeDevTools();
+      } else {
+        mainWindow.webContents.openDevTools({ mode: 'detach' });
+      }
+    }
+    // Block Ctrl+P — prevent Chromium from printing the raw HTML app.
+    // Reports handle printing themselves by generating a PDF first.
+    const isCtrlP = (input.control || input.meta) && input.key === 'p';
+    if (isCtrlP) event.preventDefault();
+  });
+
   // Security: Handle external links (e.g. from help docs)
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith('https:')) {
@@ -363,23 +387,30 @@ function createWindow() {
     }
   });
 
-  // Intercept window close to allow renderer to show unsaved changes modal
+  // Intercept window close to allow renderer to show unsaved changes modal.
+  // If the renderer never responds (e.g. race condition during lazy-load), force-close after 10s.
   mainWindow.on('close', (e) => {
     if (!forceClose) {
       e.preventDefault();
       mainWindow.webContents.send('close-attempted');
+      if (closeTimeout) clearTimeout(closeTimeout);
+      closeTimeout = setTimeout(() => {
+        closeTimeout = null;
+        forceClose = true;
+        mainWindow?.destroy();
+      }, 10000);
     }
   });
 
   ipcMain.removeAllListeners('confirm-close');
   ipcMain.on('confirm-close', () => {
+    if (closeTimeout) { clearTimeout(closeTimeout); closeTimeout = null; }
     forceClose = true;
-    if (mainWindow) {
-      mainWindow.destroy();
-    }
+    if (mainWindow) mainWindow.destroy();
   });
 
   mainWindow.on('closed', () => {
+    if (closeTimeout) { clearTimeout(closeTimeout); closeTimeout = null; }
     mainWindow = null;
     forceClose = false;
   });
@@ -416,56 +447,46 @@ app.whenReady().then(() => {
   // Enable spell checker
   session.defaultSession.setSpellCheckerEnabled(true);
 
-  // --- Auto-updater Logic ---
-  const server = 'https://update.electronjs.org';
-  const feedUrl = `${server}/${REPO_URL}/${process.platform}-${process.arch}/${app.getVersion()}`;
+  // --- Auto-updater Logic (packaged builds only — Squirrel is not present in dev) ---
+  if (app.isPackaged) {
+    const server = 'https://update.electronjs.org';
+    const feedUrl = `${server}/${REPO_URL}/${process.platform}-${process.arch}/${app.getVersion()}`;
 
-  try {
-    autoUpdater.setFeedURL(feedUrl);
-  } catch (error) {
-    console.error('Failed to set auto-updater feed URL:', error);
-  }
-
-  // Check for updates shortly after startup, then every hour
-  setTimeout(() => autoUpdater.checkForUpdates().catch(err => console.error('Update check failed:', err)), 5000);
-  setInterval(() => autoUpdater.checkForUpdates().catch(err => console.error('Update check failed:', err)), 60 * 60 * 1000);
-
-  // Notify renderer when an update is available (download starts automatically)
-  autoUpdater.on('update-available', () => {
-    if (mainWindow) {
-      mainWindow.webContents.send('update-available');
+    try {
+      autoUpdater.setFeedURL(feedUrl);
+    } catch (error) {
+      console.error('Failed to set auto-updater feed URL:', error);
     }
-  });
 
-  // Notify renderer when download is complete (no native dialog)
-  autoUpdater.on('update-downloaded', () => {
-    if (mainWindow) {
-      mainWindow.webContents.send('update-downloaded');
-    }
-  });
+    // Check for updates shortly after startup, then every hour
+    setTimeout(() => autoUpdater.checkForUpdates().catch(err => console.error('Update check failed:', err)), 5000);
+    setInterval(() => autoUpdater.checkForUpdates().catch(err => console.error('Update check failed:', err)), 60 * 60 * 1000);
 
-  // Renderer requests immediate install + restart
-  ipcMain.on('install-update-now', () => {
-    forceClose = true;
-    autoUpdater.quitAndInstall();
-  });
+    autoUpdater.on('update-available', () => {
+      if (mainWindow) mainWindow.webContents.send('update-available');
+    });
 
-  // Renderer requests deferred install — will apply on next quit
-  ipcMain.on('install-update-later', () => {
-    pendingUpdate = true;
-  });
+    autoUpdater.on('update-downloaded', () => {
+      if (mainWindow) mainWindow.webContents.send('update-downloaded');
+    });
 
-  // When the app is about to quit, apply deferred update if one is pending
-  app.on('before-quit', () => {
-    if (pendingUpdate) {
+    ipcMain.on('install-update-now', () => {
+      forceClose = true;
       autoUpdater.quitAndInstall();
-    }
-  });
+    });
 
-  autoUpdater.on('error', (error) => {
-    console.error('There was a problem updating the application');
-    console.error(error);
-  });
+    ipcMain.on('install-update-later', () => {
+      pendingUpdate = true;
+    });
+
+    app.on('before-quit', () => {
+      if (pendingUpdate) autoUpdater.quitAndInstall();
+    });
+
+    autoUpdater.on('error', (error) => {
+      console.error('Auto-updater error:', error);
+    });
+  }
   // --- End Auto-updater Logic ---
 
   ipcMain.handle('open-pdf', async (event, filename) => {
@@ -638,12 +659,37 @@ app.whenReady().then(() => {
     try {
       const tempPath = path.join(os.tmpdir(), `xtec_print_${Date.now()}.pdf`);
       fs.writeFileSync(tempPath, Buffer.from(data));
-      await shell.openPath(tempPath);
-      // Clean up temp file after a delay to give the viewer time to load it
-      setTimeout(() => { try { fs.unlinkSync(tempPath); } catch {} }, 30000);
+
+      const printWindow = new BrowserWindow({
+        width: 1000,
+        height: 800,
+        title: 'Print Preview',
+        parent: mainWindow,
+        webPreferences: {
+          nodeIntegration: false,
+          contextIsolation: true,
+          sandbox: false,
+          plugins: true,
+        },
+      });
+
+      // Block navigation away from the PDF
+      printWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+
+      const fileUrl = 'file:///' + tempPath.replace(/\\/g, '/');
+      await printWindow.loadURL(fileUrl);
+
+      // Show the window — user prints from the PDF viewer's own toolbar print button,
+      // which correctly shows print preview (webContents.print() does not for PDF plugin content).
+      printWindow.show();
+
+      printWindow.on('closed', () => {
+        try { fs.unlinkSync(tempPath); } catch {}
+      });
+
       return { success: true };
     } catch (err) {
-      console.error('Failed to open PDF for printing:', err);
+      console.error('Failed to open print preview:', err);
       return { success: false, error: err.message };
     }
   });
@@ -927,6 +973,41 @@ app.whenReady().then(() => {
       return { success: false, error: error.message };
     }
   });
+
+  // Install React DevTools for component/state inspection
+  installExtension(REACT_DEVELOPER_TOOLS, { loadExtensionOptions: { allowFileAccess: true } })
+    .then(name => console.log(`[devtools] Installed: ${name}`))
+    .catch(err => console.warn('[devtools] Could not install React DevTools:', err.message));
+
+  // Production-only: override CSP via session headers to drop unsafe-eval.
+  // Only registered when packaged — never touches the Vite dev server.
+  if (app.isPackaged) {
+    const PROD_CSP = [
+      "default-src 'none'",
+      "script-src 'self'",
+      "style-src 'self' 'unsafe-inline'",
+      "img-src 'self' data: blob:",
+      "font-src 'self' data:",
+      "connect-src 'self' blob:",
+      "frame-src blob:",
+      "worker-src blob: 'self'",
+      "object-src 'none'",
+      "media-src 'none'",
+      "base-uri 'self'",
+      "form-action 'none'",
+      "frame-ancestors 'none'",
+      "manifest-src 'self'",
+    ].join('; ');
+
+    session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+      callback({
+        responseHeaders: {
+          ...(details.responseHeaders ?? {}),
+          'Content-Security-Policy': [PROD_CSP],
+        },
+      });
+    });
+  }
 
   createWindow();
 
