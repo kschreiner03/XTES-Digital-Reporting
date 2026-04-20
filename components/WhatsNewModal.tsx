@@ -1,7 +1,7 @@
 import React from 'react';
 import { CloseIcon } from './icons';
 
-const APP_VERSION = '1.1.4';
+const APP_VERSION = '1.1.5';
 const LAST_SEEN_VERSION_KEY = 'xtec_last_seen_version';
 
 interface ReleaseNote {
@@ -11,6 +11,17 @@ interface ReleaseNote {
 }
 
 const RELEASE_NOTES: ReleaseNote[] = [
+    {
+        version: '1.1.5',
+        date: 'April 2026',
+        highlights: [
+            'Save prompt — the first time you save a new report you\'ll be asked to confirm the project details before autosave activates',
+            'Autosave off by default — autosave now turns on automatically after your first save, keeping your project list clean',
+            'Consistent photo sizes in PDF — all photos now render at the same fixed size in generated reports regardless of original dimensions',
+            'Improved drop overlay — dragging photos into a report now shows a polished full-screen drop indicator',
+            'App close freeze fix — clicking X no longer occasionally freezes the window',
+        ],
+    },
     {
         version: '1.1.4',
         date: 'March 2026',
