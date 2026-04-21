@@ -305,8 +305,7 @@ const App: React.FC = () => {
                     </div>
                 </div>
             )}
-            {/* Media player hidden until ready for release */}
-            {false && <MediaWidget />}
+            <MediaWidget />
         </TooltipProvider>
     );
 };
