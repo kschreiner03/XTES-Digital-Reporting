@@ -4,6 +4,11 @@ const { contextBridge, ipcRenderer } = require("electron");
 const path = require("path");
 const os = require("os");
 
+// Single permanent close listener — callback is swappable with no async gap.
+// Default: confirm immediately (landing page behaviour).
+let _closeCallback = () => ipcRenderer.send("confirm-close");
+ipcRenderer.on("close-attempted", () => _closeCallback());
+
 contextBridge.exposeInMainWorld("electronAPI", {
   /* -----------------------------
      FILE / PROJECT OPERATIONS
@@ -119,11 +124,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
   },
 
   onCloseAttempted: (callback) => {
-    ipcRenderer.on("close-attempted", () => callback());
+    _closeCallback = callback;
   },
 
   removeCloseAttemptedListener: () => {
-    ipcRenderer.removeAllListeners("close-attempted");
+    _closeCallback = () => ipcRenderer.send("confirm-close");
   },
 
   confirmClose: () => {
