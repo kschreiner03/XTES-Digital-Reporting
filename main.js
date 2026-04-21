@@ -542,12 +542,11 @@ app.whenReady().then(() => {
     // URL-encode each path segment (handles spaces, commas, etc.) but preserve /
     const encodedName = normalized.split('/').map(s => encodeURIComponent(s)).join('/');
 
-    if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
-      return `${MAIN_WINDOW_VITE_DEV_SERVER_URL}/assets/${encodedName}`;
-    } else {
-      const assetPath = path.join(process.resourcesPath, 'assets', ...normalized.split('/'));
-      return encodeURI(`file://${assetPath.replace(/\\/g, '/')}`);
-    }
+    const assetsRoot = app.isPackaged
+      ? path.join(process.resourcesPath, 'assets')
+      : path.join(app.getAppPath(), 'assets');
+    const assetPath = path.join(assetsRoot, ...normalized.split('/'));
+    return encodeURI(`file://${assetPath.replace(/\\/g, '/')}`);
   });
 
   ipcMain.handle('generate-iogc-pdf', async (event, data) => {
