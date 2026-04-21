@@ -693,6 +693,29 @@ app.whenReady().then(() => {
     }
   });
 
+  ipcMain.handle('write-pdf-temp', async (event, data) => {
+    try {
+      const tempPath = path.join(os.tmpdir(), `xtec_preview_${Date.now()}.pdf`);
+      fs.writeFileSync(tempPath, Buffer.from(data));
+      return 'file:///' + tempPath.replace(/\\/g, '/');
+    } catch (err) {
+      console.error('Failed to write temp PDF:', err);
+      return null;
+    }
+  });
+
+  ipcMain.handle('delete-pdf-temp', async (event, fileUrl) => {
+    try {
+      if (typeof fileUrl !== 'string') return;
+      const filePath = fileUrl.replace(/^file:\/\/\//, '').replace(/\//g, path.sep);
+      const resolved = path.resolve(filePath);
+      const tmpDir = os.tmpdir();
+      if (resolved.startsWith(tmpDir) && path.basename(resolved).startsWith('xtec_preview_')) {
+        fs.unlinkSync(resolved);
+      }
+    } catch {}
+  });
+
   ipcMain.handle('save-pdf', async (event, data, defaultPath) => {
     const window = BrowserWindow.getFocusedWindow();
     const { filePath } = await dialog.showSaveDialog(window, {
@@ -995,7 +1018,7 @@ app.whenReady().then(() => {
       "img-src 'self' data: blob:",
       "font-src 'self' data:",
       "connect-src 'self' blob:",
-      "frame-src blob:",
+      "frame-src blob: file:",
       "worker-src blob: 'self'",
       "object-src 'none'",
       "media-src 'none'",

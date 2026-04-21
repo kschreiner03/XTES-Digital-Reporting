@@ -29,6 +29,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
   savePdf: (data, defaultPath) =>
     ipcRenderer.invoke("save-pdf", data, defaultPath),
 
+  writePdfTemp: (data) =>
+    ipcRenderer.invoke("write-pdf-temp", data),
+
+  deletePdfTemp: (fileUrl) =>
+    ipcRenderer.invoke("delete-pdf-temp", fileUrl),
+
   saveZipFile: (data, defaultPath) =>
     ipcRenderer.invoke("save-zip-file", data, defaultPath),
 

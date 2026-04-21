@@ -195,6 +195,9 @@ const autoCropImage = (imageUrl: string): Promise<string> => {
 };
 
 const PdfPreviewModal: React.FC<{ url: string; filename: string; onClose: () => void; pdfBlob?: Blob; }> = ({ url, filename, onClose, pdfBlob }) => {
+    const [displayUrl, setDisplayUrl] = useState<string>('');
+    const tempFileUrlRef = useRef<string | null>(null);
+
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
             if (e.key === 'Escape') {
@@ -204,14 +207,31 @@ const PdfPreviewModal: React.FC<{ url: string; filename: string; onClose: () => 
         window.addEventListener('keydown', handleKeyDown);
         document.body.style.overflow = 'hidden';
 
+        const init = async () => {
+            // @ts-ignore
+            if (pdfBlob && window.electronAPI?.writePdfTemp) {
+                try {
+                    const ab = await pdfBlob.arrayBuffer();
+                    // @ts-ignore
+                    const fileUrl = await window.electronAPI.writePdfTemp(ab);
+                    if (fileUrl) { tempFileUrlRef.current = fileUrl; setDisplayUrl(fileUrl); return; }
+                } catch {}
+            }
+            setDisplayUrl(url);
+        };
+        init();
+
         return () => {
             window.removeEventListener('keydown', handleKeyDown);
             document.body.style.overflow = 'auto';
-            if (url && url.startsWith('blob:')) {
-                URL.revokeObjectURL(url);
+            if (tempFileUrlRef.current) {
+                // @ts-ignore
+                window.electronAPI?.deletePdfTemp?.(tempFileUrlRef.current);
+                tempFileUrlRef.current = null;
             }
+            if (url && url.startsWith('blob:')) URL.revokeObjectURL(url);
         };
-    }, [onClose, url]);
+    }, [onClose, url, pdfBlob]);
 
     const handleDownload = async () => {
         // @ts-ignore
@@ -263,7 +283,7 @@ const PdfPreviewModal: React.FC<{ url: string; filename: string; onClose: () => 
                     </div>
                 </div>
                 <div className="flex-grow bg-gray-200 dark:bg-gray-900 relative">
-                    <iframe src={url} className="w-full h-full" style={{ border: 'none' }} title="PDF Preview" />
+                    <iframe src={displayUrl} className="w-full h-full" style={{ border: 'none' }} title="PDF Preview" />
                 </div>
             </div>
         </div>
