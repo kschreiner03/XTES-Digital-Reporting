@@ -8,6 +8,15 @@ const IMAGE_STORE_NAME = 'images';
 const PROJECT_STORE_NAME = 'projects';
 const THUMBNAIL_STORE_NAME = 'thumbnails';
 
+function dataUrlToBlob(dataUrl: string): Blob {
+    const [header, data] = dataUrl.split(',');
+    const mime = header.match(/:(.*?);/)?.[1] ?? 'image/jpeg';
+    const binary = atob(data);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return new Blob([bytes], { type: mime });
+}
+
 const initDB = () => {
   if (!dbPromise) {
     dbPromise = openDB(DB_NAME, 3, {
@@ -31,24 +40,24 @@ const initDB = () => {
   return dbPromise;
 };
 
-/**
- * Stores image data (base64 string) in IndexedDB.
- * @param id A unique key for the image.
- * @param imageData The base64 string of the image.
- */
 export const storeImage = async (id: string, imageData: string): Promise<void> => {
-  const db = await initDB();
-  await perfTime('DB storeImage', () => db.put(IMAGE_STORE_NAME, imageData, id));
+    const db = await initDB();
+    const blob = dataUrlToBlob(imageData);
+    await perfTime('DB storeImage', () => db.put(IMAGE_STORE_NAME, blob, id));
 };
 
-/**
- * Retrieves image data from IndexedDB.
- * @param id The unique key of the image to retrieve.
- * @returns The base64 string of the image, or undefined if not found.
- */
 export const retrieveImage = async (id: string): Promise<string | undefined> => {
-  const db = await initDB();
-  return perfTime('DB retrieveImage', () => db.get(IMAGE_STORE_NAME, id));
+    const db = await initDB();
+    const stored = await perfTime('DB retrieveImage', () => db.get(IMAGE_STORE_NAME, id));
+    if (!stored) return undefined;
+    // Legacy: old saves stored raw base64 strings — return as-is
+    if (typeof stored === 'string') return stored;
+    // New: stored as Blob — create a lightweight object URL
+    return URL.createObjectURL(stored);
+};
+
+export const revokeImageUrl = (url: string): void => {
+    if (url.startsWith('blob:')) URL.revokeObjectURL(url);
 };
 
 /**

@@ -5,7 +5,7 @@ import { DndContext, closestCenter, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
 import { AppType } from '../App';
 import PhotoEntry from './PhotoEntry';
-import { storeImage, retrieveImage, deleteImage, storeProject, deleteProject, deleteThumbnail, storeThumbnail, retrieveProject } from './db';
+import { storeImage, retrieveImage, deleteImage, revokeImageUrl, storeProject, deleteProject, deleteThumbnail, storeThumbnail, retrieveProject } from './db';
 import { generateProjectThumbnail } from './thumbnailUtils';
 import { safeSet } from './safeStorage';
 import { SpecialCharacterPalette } from './SpecialCharacterPalette';
@@ -980,6 +980,7 @@ const DfrSaskpower = ({ onBack, onBackDirect, initialData }: DfrSaskpowerProps):
             const photoToRemove = prev.find(p => p.id === id);
             if (photoToRemove && photoToRemove.imageId) {
                 deleteImage(photoToRemove.imageId).catch(err => console.error("Failed to delete image from DB", err));
+                if (photoToRemove.imageUrl) revokeImageUrl(photoToRemove.imageUrl);
             }
             return renumberPhotos(prev.filter(photo => photo.id !== id));
         });
@@ -1934,6 +1935,12 @@ Description: ${photo.description || 'N/A'}
         document.title = prefix ? `${prefix} | X-TEC` : 'X-TEC Digital Reporting';
         return () => { document.title = 'X-TEC Digital Reporting'; };
     }, [data.projectName, data.projectNumber]);
+
+    useEffect(() => {
+        return () => {
+            photosData.forEach(p => { if (p.imageUrl) revokeImageUrl(p.imageUrl); });
+        };
+    }, []);
 
     const handleOpenProject = async () => {
         // @ts-ignore
