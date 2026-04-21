@@ -175,7 +175,7 @@ const autoCropImage = (imageUrl: string): Promise<string> => {
                 drawX = (canvas.width - drawWidth) / 2;
             }
             ctx.drawImage(img, drawX, drawY, drawWidth, drawHeight);
-            resolve(canvas.toDataURL('image/jpeg'));
+            resolve(canvas.toDataURL('image/jpeg', 0.8));
         };
         img.src = imageUrl;
     });

@@ -603,8 +603,8 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, onBackDirect, initialData }
                 }
     
                 ctx.drawImage(img, drawX, drawY, drawWidth, drawHeight);
-    
-                resolve(canvas.toDataURL('image/jpeg'));
+
+                resolve(canvas.toDataURL('image/jpeg', 0.8));
             };
             img.src = imageUrl;
         });
