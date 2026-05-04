@@ -299,11 +299,16 @@ function createWindow() {
 
   mainWindow.once('ready-to-show', () => {
     if (process.argv.includes('--squirrel-firstrun') && process.platform === 'win32') {
-      // Kill the Squirrel installer process so its loading GIF window closes,
-      // then show the app a beat later so there's no overlap.
-      spawn('taskkill', ['/F', '/IM', 'x-tec-digital-reporting-webSetup.exe'],
-        { detached: true, stdio: 'ignore' }).unref();
-      setTimeout(() => { mainWindow.maximize(); mainWindow.show(); }, 300);
+      // Show the app immediately, then kill the installer GIF window after a
+      // delay — Squirrel needs ~2-3 s to finish post-install cleanup inside
+      // setup.exe before it's safe to kill it. Force-killing too early leaves
+      // stale lock files that cause "Setup Error" on the next install attempt.
+      mainWindow.maximize();
+      mainWindow.show();
+      setTimeout(() => {
+        spawn('taskkill', ['/F', '/IM', 'x-tec-digital-reporting-webSetup.exe'],
+          { detached: true, stdio: 'ignore' }).unref();
+      }, 3000);
     } else {
       mainWindow.maximize();
       mainWindow.show();
