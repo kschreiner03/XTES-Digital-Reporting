@@ -1,35 +1,46 @@
 const isNisis = process.env.NISIS_BUILD === 'true';
+const isMac = process.platform === 'darwin';
+const isWindows = process.platform === 'win32';
+
+// Electron Forge resolves icon extension automatically per platform:
+//   Windows → .ico, macOS → .icns, Linux → .png
+// Pass the path without extension so Forge picks the right one.
+const ICON_BASE = 'assets/icon';
 
 module.exports = {
   packagerConfig: {
     asar: true,
     name: isNisis ? 'NISIS Digital Reporting' : 'X-TES Digital Reporting',
-    icon: 'assets/icon.ico',
+    icon: ICON_BASE,
     executableName: isNisis ? 'NISIS Digital Reporting' : 'X-TES Digital Reporting',
     extraResource: [
       'assets',
       'IogcPdfGeneratorNode.bundle.js',
     ],
+    ...(isMac && {
+      osxSign: {},
+      darwinDarkModeSupport: true,
+    }),
     fileAssociations: [
       {
         ext: 'spdfr',
         name: 'SaskPower DFR Project',
-        icon: 'assets/SASKPOWERICON.ico'
+        icon: 'assets/SASKPOWERICON',
       },
       {
         ext: 'dfr',
         name: 'X-TES DFR Project',
-        icon: 'assets/XTERRAICON.ico'
+        icon: 'assets/XTERRAICON',
       },
       {
         ext: 'plog',
         name: 'X-TES Photo Log',
-        icon: 'assets/PHOTOLOGICON.ico'
+        icon: 'assets/PHOTOLOGICON',
       },
       {
         ext: 'clog',
         name: 'X-TES Combine Logs',
-        icon: 'assets/COMBINEDLOGICON.ico'
+        icon: 'assets/COMBINEDLOGICON',
       }
     ]
   },
@@ -43,6 +54,20 @@ module.exports = {
             createDesktopShortcut: true,
             createStartMenuShortcut: true,
           },
+        },
+      ]
+    : isMac
+    ? [
+        {
+          name: '@electron-forge/maker-dmg',
+          config: {
+            icon: 'assets/icon.icns',
+            format: 'ULFO',
+          },
+        },
+        {
+          name: '@electron-forge/maker-zip',
+          platforms: ['darwin'],
         },
       ]
     : [
