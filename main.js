@@ -693,6 +693,39 @@ app.whenReady().then(() => {
     }
   });
 
+  ipcMain.handle('open-pdf-preview', async (event, data) => {
+    try {
+      const tempPath = path.join(os.tmpdir(), `xtec_preview_${Date.now()}.pdf`);
+      fs.writeFileSync(tempPath, Buffer.from(data));
+
+      const previewWindow = new BrowserWindow({
+        width: 1000,
+        height: 800,
+        title: 'PDF Preview',
+        parent: mainWindow,
+        webPreferences: {
+          nodeIntegration: false,
+          contextIsolation: true,
+          sandbox: false,
+          plugins: true,
+        },
+      });
+
+      previewWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+      await previewWindow.loadURL('file:///' + tempPath.replace(/\\/g, '/'));
+      previewWindow.show();
+
+      previewWindow.on('closed', () => {
+        try { fs.unlinkSync(tempPath); } catch {}
+      });
+
+      return { success: true };
+    } catch (err) {
+      console.error('Failed to open PDF preview:', err);
+      return { success: false, error: err.message };
+    }
+  });
+
   ipcMain.handle('write-pdf-temp', async (event, data) => {
     try {
       const tempPath = path.join(os.tmpdir(), `xtec_preview_${Date.now()}.pdf`);

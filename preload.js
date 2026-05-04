@@ -26,6 +26,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
   printPdf: (data) =>
     ipcRenderer.invoke("print-pdf", data),
 
+  openPdfPreview: (data) =>
+    ipcRenderer.invoke("open-pdf-preview", data),
+
   savePdf: (data, defaultPath) =>
     ipcRenderer.invoke("save-pdf", data, defaultPath),
 
