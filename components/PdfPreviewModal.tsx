@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, FileText } from 'lucide-react';
 import { ZoomInIcon, ZoomOutIcon, DownloadIcon, CloseIcon } from './icons';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
@@ -36,7 +36,6 @@ const PdfPreviewModal: React.FC<PdfPreviewModalProps> = ({ pdfBlob, filename, on
         };
     }, [onClose, numPages]);
 
-    // Load PDF document from blob
     useEffect(() => {
         let cancelled = false;
         setIsLoading(true);
@@ -65,7 +64,6 @@ const PdfPreviewModal: React.FC<PdfPreviewModalProps> = ({ pdfBlob, filename, on
         };
     }, [pdfBlob]);
 
-    // Render the current page onto the canvas
     useEffect(() => {
         if (isLoading || !pdfDocRef.current) return;
         let cancelled = false;
@@ -91,7 +89,6 @@ const PdfPreviewModal: React.FC<PdfPreviewModalProps> = ({ pdfBlob, filename, on
 
                 const task = page.render({ canvasContext: ctx, viewport });
                 renderTaskRef.current = task;
-
                 try {
                     await task.promise;
                 } catch (e: any) {
@@ -100,7 +97,7 @@ const PdfPreviewModal: React.FC<PdfPreviewModalProps> = ({ pdfBlob, filename, on
                     page.cleanup();
                 }
             } catch {
-                // render cancelled or failed — ignore
+                // cancelled or failed — ignore
             }
         };
         render();
@@ -118,8 +115,7 @@ const PdfPreviewModal: React.FC<PdfPreviewModalProps> = ({ pdfBlob, filename, on
             if (window.electronAPI?.savePdf) {
                 const ab = await pdfBlob.arrayBuffer();
                 // @ts-ignore
-                const result = await window.electronAPI.savePdf(ab, filename);
-                if (result?.error) alert(`Failed to save PDF: ${result.error}`);
+                await window.electronAPI.savePdf(ab, filename);
             } else {
                 const url = URL.createObjectURL(pdfBlob);
                 const a = document.createElement('a');
@@ -135,33 +131,50 @@ const PdfPreviewModal: React.FC<PdfPreviewModalProps> = ({ pdfBlob, filename, on
     const zoomIn  = () => setScale(s => Math.min(+(s + 0.25).toFixed(2), 3.0));
     const zoomOut = () => setScale(s => Math.max(+(s - 0.25).toFixed(2), 0.5));
 
+    // Short display name for the header
+    const displayName = filename.replace(/\.pdf$/i, '');
+
     return (
-        <div className="fixed inset-0 bg-black/50 flex flex-col items-center justify-center z-[100] p-4" role="dialog" aria-modal="true">
-            <div className="xtec-modal-enter bg-white dark:bg-gray-800 rounded-lg shadow-2xl w-full h-full flex flex-col overflow-hidden">
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[100] p-4" role="dialog" aria-modal="true">
+            <div className="xtec-modal-enter bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full h-full flex flex-col overflow-hidden border border-gray-200 dark:border-gray-700">
+
+                {/* ── Teal accent bar ── */}
+                <div className="h-1 w-full bg-gradient-to-r from-[#007D8C] via-[#00a0b0] to-[#007D8C] shrink-0" />
 
                 {/* ── Header ── */}
-                <div className="flex justify-between items-center px-4 py-3 border-b border-gray-200 bg-gray-50 dark:bg-gray-700 dark:border-gray-600 shrink-0">
-                    <h3 className="text-lg font-bold text-gray-800 dark:text-white">PDF Preview</h3>
+                <div className="flex items-center justify-between px-5 py-3 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 shrink-0">
+                    {/* Title + filename */}
+                    <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-8 h-8 rounded-lg bg-[#007D8C]/10 dark:bg-[#007D8C]/20 border border-[#007D8C]/20 flex items-center justify-center shrink-0">
+                            <FileText className="h-4 w-4 text-[#007D8C]" />
+                        </div>
+                        <div className="min-w-0">
+                            <p className="text-sm font-semibold text-gray-800 dark:text-gray-100 leading-tight">PDF Preview</p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-[280px]" title={filename}>{displayName}</p>
+                        </div>
+                    </div>
 
-                    <div className="flex items-center gap-3">
-                        {/* Page navigation */}
-                        {numPages > 1 && (
-                            <div className="flex items-center gap-1 bg-white dark:bg-gray-600 border border-gray-200 dark:border-gray-500 rounded-lg px-2 py-1">
+                    {/* Controls */}
+                    <div className="flex items-center gap-2 shrink-0">
+
+                        {/* Page navigation — only shown for multi-page PDFs */}
+                        {!isLoading && numPages > 1 && (
+                            <div className="flex items-center gap-0.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg overflow-hidden shadow-sm">
                                 <button
                                     onClick={() => setCurrentPage(p => Math.max(p - 1, 1))}
                                     disabled={currentPage <= 1}
-                                    className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-500 disabled:opacity-40 disabled:cursor-not-allowed text-gray-700 dark:text-gray-200 transition-colors"
+                                    className="p-2 hover:bg-[#007D8C]/8 dark:hover:bg-[#007D8C]/15 disabled:opacity-35 disabled:cursor-not-allowed text-gray-600 dark:text-gray-300 hover:text-[#007D8C] transition-colors"
                                     aria-label="Previous page"
                                 >
                                     <ChevronLeft className="h-4 w-4" />
                                 </button>
-                                <span className="text-sm text-gray-700 dark:text-gray-200 min-w-[5rem] text-center select-none">
+                                <span className="text-xs font-medium text-gray-600 dark:text-gray-300 min-w-[4.5rem] text-center select-none px-1 border-x border-gray-200 dark:border-gray-600">
                                     {currentPage} / {numPages}
                                 </span>
                                 <button
                                     onClick={() => setCurrentPage(p => Math.min(p + 1, numPages))}
                                     disabled={currentPage >= numPages}
-                                    className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-500 disabled:opacity-40 disabled:cursor-not-allowed text-gray-700 dark:text-gray-200 transition-colors"
+                                    className="p-2 hover:bg-[#007D8C]/8 dark:hover:bg-[#007D8C]/15 disabled:opacity-35 disabled:cursor-not-allowed text-gray-600 dark:text-gray-300 hover:text-[#007D8C] transition-colors"
                                     aria-label="Next page"
                                 >
                                     <ChevronRight className="h-4 w-4" />
@@ -169,33 +182,38 @@ const PdfPreviewModal: React.FC<PdfPreviewModalProps> = ({ pdfBlob, filename, on
                             </div>
                         )}
 
-                        {/* Zoom controls */}
-                        <div className="flex items-center gap-1 bg-white dark:bg-gray-600 border border-gray-200 dark:border-gray-500 rounded-lg px-2 py-1">
-                            <button
-                                onClick={zoomOut}
-                                disabled={scale <= 0.5}
-                                className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-500 disabled:opacity-40 disabled:cursor-not-allowed text-gray-700 dark:text-gray-200 transition-colors"
-                                aria-label="Zoom out"
-                            >
-                                <ZoomOutIcon className="h-4 w-4" />
-                            </button>
-                            <span className="text-sm text-gray-700 dark:text-gray-200 min-w-[3.5rem] text-center select-none">
-                                {Math.round(scale * 100)}%
-                            </span>
-                            <button
-                                onClick={zoomIn}
-                                disabled={scale >= 3.0}
-                                className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-500 disabled:opacity-40 disabled:cursor-not-allowed text-gray-700 dark:text-gray-200 transition-colors"
-                                aria-label="Zoom in"
-                            >
-                                <ZoomInIcon className="h-4 w-4" />
-                            </button>
-                        </div>
+                        {/* Zoom */}
+                        {!isLoading && (
+                            <div className="flex items-center gap-0.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg overflow-hidden shadow-sm">
+                                <button
+                                    onClick={zoomOut}
+                                    disabled={scale <= 0.5}
+                                    className="p-2 hover:bg-[#007D8C]/8 dark:hover:bg-[#007D8C]/15 disabled:opacity-35 disabled:cursor-not-allowed text-gray-600 dark:text-gray-300 hover:text-[#007D8C] transition-colors"
+                                    aria-label="Zoom out"
+                                >
+                                    <ZoomOutIcon className="h-4 w-4" />
+                                </button>
+                                <span className="text-xs font-medium text-gray-600 dark:text-gray-300 min-w-[3rem] text-center select-none border-x border-gray-200 dark:border-gray-600 px-1">
+                                    {Math.round(scale * 100)}%
+                                </span>
+                                <button
+                                    onClick={zoomIn}
+                                    disabled={scale >= 3.0}
+                                    className="p-2 hover:bg-[#007D8C]/8 dark:hover:bg-[#007D8C]/15 disabled:opacity-35 disabled:cursor-not-allowed text-gray-600 dark:text-gray-300 hover:text-[#007D8C] transition-colors"
+                                    aria-label="Zoom in"
+                                >
+                                    <ZoomInIcon className="h-4 w-4" />
+                                </button>
+                            </div>
+                        )}
+
+                        {/* Divider */}
+                        <div className="h-6 w-px bg-gray-200 dark:bg-gray-600 mx-1" />
 
                         {/* Save PDF */}
                         <button
                             onClick={handleDownload}
-                            className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200"
+                            className="bg-[#007D8C] hover:bg-[#006b7a] active:bg-[#005f6b] text-white text-sm font-semibold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition-colors shadow-sm"
                         >
                             <DownloadIcon className="h-4 w-4" />
                             <span>Save PDF</span>
@@ -204,30 +222,64 @@ const PdfPreviewModal: React.FC<PdfPreviewModalProps> = ({ pdfBlob, filename, on
                         {/* Close */}
                         <button
                             onClick={onClose}
-                            className="text-gray-500 hover:text-gray-800 dark:text-gray-300 dark:hover:text-white transition-colors"
+                            className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                             aria-label="Close preview"
                         >
-                            <CloseIcon className="h-8 w-8" />
+                            <CloseIcon className="h-5 w-5" />
                         </button>
                     </div>
                 </div>
 
                 {/* ── PDF canvas area ── */}
-                <div className="flex-grow overflow-auto bg-gray-300 dark:bg-gray-900 flex items-start justify-center p-6">
+                <div
+                    className="flex-grow overflow-auto flex items-start justify-center p-8"
+                    style={{ background: 'var(--pdf-bg, #e5e7eb)' }}
+                    // inline CSS var so dark mode override works cleanly
+                    ref={el => {
+                        if (el) {
+                            const isDark = document.documentElement.classList.contains('dark');
+                            el.style.setProperty('--pdf-bg', isDark ? '#111827' : '#e5e7eb');
+                        }
+                    }}
+                >
                     {isLoading && (
-                        <div className="flex items-center justify-center w-full h-full text-gray-600 dark:text-gray-400">
-                            <span className="text-lg animate-pulse">Loading PDF…</span>
+                        <div className="flex flex-col items-center justify-center w-full h-full gap-3">
+                            {/* Teal spinner */}
+                            <svg className="h-10 w-10 animate-spin text-[#007D8C]" viewBox="0 0 24 24" fill="none">
+                                <circle className="opacity-20" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+                                <path className="opacity-80" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                            </svg>
+                            <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">Rendering PDF…</p>
                         </div>
                     )}
                     {error && (
-                        <div className="flex items-center justify-center w-full h-full text-red-600 dark:text-red-400">
-                            <span>{error}</span>
+                        <div className="flex flex-col items-center justify-center w-full h-full gap-3 text-red-500 dark:text-red-400">
+                            <FileText className="h-10 w-10 opacity-40" />
+                            <p className="text-sm font-medium">{error}</p>
                         </div>
                     )}
                     {!isLoading && !error && (
-                        <canvas ref={canvasRef} className="shadow-2xl rounded" style={{ maxWidth: '100%' }} />
+                        <canvas
+                            ref={canvasRef}
+                            className="rounded shadow-2xl"
+                            style={{ maxWidth: '100%', display: 'block' }}
+                        />
                     )}
                 </div>
+
+                {/* ── Footer status bar ── */}
+                {!isLoading && !error && (
+                    <div className="shrink-0 px-5 py-2 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 flex items-center justify-between">
+                        <span className="text-xs text-gray-400 dark:text-gray-500 select-none">
+                            {numPages === 1 ? '1 page' : `${numPages} pages`}
+                            {' · '}
+                            {Math.round(scale * 100)}% zoom
+                        </span>
+                        <span className="text-xs text-gray-400 dark:text-gray-500 select-none">
+                            ← → to navigate · Esc to close
+                        </span>
+                    </div>
+                )}
             </div>
         </div>
     );
