@@ -1,6 +1,8 @@
+const fs = require('fs');
 const isNisis = process.env.NISIS_BUILD === 'true';
 const isMac = process.platform === 'darwin';
 const isWindows = process.platform === 'win32';
+const hasIogcBundle = fs.existsSync('IogcPdfGeneratorNode.bundle.js');
 
 // Electron Forge resolves icon extension automatically per platform:
 //   Windows → .ico, macOS → .icns, Linux → .png
@@ -15,7 +17,7 @@ module.exports = {
     executableName: isNisis ? 'NISIS Digital Reporting' : 'X-TES Digital Reporting',
     extraResource: [
       'assets',
-      'IogcPdfGeneratorNode.bundle.js',
+      ...(hasIogcBundle ? ['IogcPdfGeneratorNode.bundle.js'] : []),
     ],
     ...(isMac && {
       osxSign: {},

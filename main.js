@@ -14,7 +14,12 @@ if (!app.isPackaged) process.env['ELECTRON_DISABLE_SECURITY_WARNINGS'] = 'true';
 const generatorPath = app.isPackaged
   ? path.join(process.resourcesPath, 'IogcPdfGeneratorNode.bundle.js')
   : path.resolve(__dirname, '..', '..', 'IogcPdfGeneratorNode.js');
-const { generateIogcPdf } = require(generatorPath);
+let generateIogcPdf = null;
+try {
+  ({ generateIogcPdf } = require(generatorPath));
+} catch {
+  // IOGC bundle not included in this build
+}
 
 let mainWindow;
 let helpWindow;
@@ -551,6 +556,7 @@ app.whenReady().then(() => {
   });
 
   ipcMain.handle('generate-iogc-pdf', async (event, data) => {
+    if (!generateIogcPdf) return { success: false, error: 'IOGC PDF generation is not available in this build.' };
     const assetsDir = app.isPackaged
       ? path.join(process.resourcesPath, 'assets')
       : path.join(app.getAppPath(), 'assets');
