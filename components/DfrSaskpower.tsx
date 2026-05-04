@@ -1682,8 +1682,14 @@ const renderTextSection = async (
             (onBackDirect ?? onBack)();
             return;
         }
-        const pdfUrl = URL.createObjectURL(pdfBlob);
-        setPdfPreview({ url: pdfUrl, filename, blob: pdfBlob });
+        // @ts-ignore
+        if (window.electronAPI?.openPdfPreview) {
+            const ab = await pdfBlob.arrayBuffer(); // @ts-ignore
+            await window.electronAPI.openPdfPreview(ab);
+        } else {
+            const pdfUrl = URL.createObjectURL(pdfBlob);
+            setPdfPreview({ url: pdfUrl, filename, blob: pdfBlob });
+        }
         } finally {
             setShowStatusModal(false);
         }
