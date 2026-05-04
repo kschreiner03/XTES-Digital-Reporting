@@ -11,7 +11,7 @@
     "bundle:iogc": "esbuild IogcPdfGeneratorNode.js --bundle --platform=node --outfile=IogcPdfGeneratorNode.bundle.js --external:electron --external:fs --external:path --external:os",
     "make": "npm run bundle:iogc && electron-forge make",
     "make:nisis": "npm run bundle:iogc && cross-env NISIS_BUILD=true electron-forge package && electron-builder --prepackaged \"out/NISIS Digital Reporting-win32-x64\" --config electron-builder.nisis.json",
-    "make:mac": "electron-forge make --platform=darwin",
+    "make:mac": "electron-forge make --platform=darwin --arch=universal",
     "publish": "electron-forge publish"
   },
   "repository": {
