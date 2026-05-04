@@ -472,9 +472,12 @@ app.whenReady().then(() => {
       console.error('Failed to set auto-updater feed URL:', error);
     }
 
-    // Check for updates shortly after startup, then every hour
-    setTimeout(() => autoUpdater.checkForUpdates().catch(err => console.error('Update check failed:', err)), 5000);
-    setInterval(() => autoUpdater.checkForUpdates().catch(err => console.error('Update check failed:', err)), 60 * 60 * 1000);
+    // Check for updates shortly after startup, then every hour.
+    // checkForUpdates() returns a Promise on Windows (Squirrel) but undefined on macOS,
+    // so use try/catch instead of .catch() to avoid a cross-platform crash.
+    const checkForUpdates = () => { try { autoUpdater.checkForUpdates(); } catch (err) { console.error('Update check failed:', err); } };
+    setTimeout(checkForUpdates, 5000);
+    setInterval(checkForUpdates, 60 * 60 * 1000);
 
     autoUpdater.on('update-available', () => {
       if (mainWindow) mainWindow.webContents.send('update-available');
