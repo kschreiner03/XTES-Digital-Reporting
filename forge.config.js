@@ -20,7 +20,9 @@ module.exports = {
       ...(hasIogcBundle ? ['IogcPdfGeneratorNode.bundle.js'] : []),
     ],
     ...(isMac && {
-      osxSign: {},
+      osxSign: {
+        identity: 'Developer ID Application: KOLE KRISTIAN SCHREINER (UUUUG5QGQ9)',
+      },
       darwinDarkModeSupport: true,
     }),
     fileAssociations: [
