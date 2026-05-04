@@ -693,6 +693,29 @@ app.whenReady().then(() => {
     }
   });
 
+  ipcMain.handle('write-pdf-temp', async (event, data) => {
+    try {
+      const tempPath = path.join(os.tmpdir(), `xtec_preview_${Date.now()}.pdf`);
+      fs.writeFileSync(tempPath, Buffer.from(data));
+      return 'file:///' + tempPath.replace(/\\/g, '/');
+    } catch (err) {
+      console.error('Failed to write temp PDF:', err);
+      return null;
+    }
+  });
+
+  ipcMain.handle('delete-pdf-temp', async (event, fileUrl) => {
+    try {
+      if (typeof fileUrl !== 'string') return;
+      const filePath = fileUrl.replace(/^file:\/\/\//, '').replace(/\//g, path.sep);
+      const resolved = path.resolve(filePath);
+      const tmpDir = os.tmpdir();
+      if (resolved.startsWith(tmpDir) && path.basename(resolved).startsWith('xtec_preview_')) {
+        fs.unlinkSync(resolved);
+      }
+    } catch {}
+  });
+
   ipcMain.handle('save-pdf', async (event, data, defaultPath) => {
     const window = BrowserWindow.getFocusedWindow();
     const { filePath } = await dialog.showSaveDialog(window, {
@@ -870,6 +893,45 @@ app.whenReady().then(() => {
   }
 
   ipcMain.handle('get-media-info', () => new Promise((resolve) => {
+    if (process.platform === 'darwin') {
+      // macOS: query Spotify and Music app via AppleScript
+      const script = [
+        'set output to "inactive"',
+        'try',
+        '  tell application "System Events"',
+        '    set running_apps to name of every process',
+        '  end tell',
+        '  if "Spotify" is in running_apps then',
+        '    tell application "Spotify"',
+        '      if player state is playing then',
+        '        set output to "spotify|" & current track\'s name & "|" & current track\'s artist',
+        '      else if player state is paused then',
+        '        set output to "spotify-paused||"',
+        '      end if',
+        '    end tell',
+        '  end if',
+        '  if output is "inactive" and "Music" is in running_apps then',
+        '    tell application "Music"',
+        '      if player state is playing then',
+        '        set output to "music|" & current track\'s name & "|" & current track\'s artist',
+        '      end if',
+        '    end tell',
+        '  end if',
+        'end try',
+        'return output',
+      ].join('\n');
+      execFile('osascript', ['-e', script], { timeout: 4000 }, (err, stdout) => {
+        if (err) { resolve({ active: false }); return; }
+        const raw = (stdout || '').trim();
+        if (!raw || raw === 'inactive') { resolve({ active: false }); return; }
+        if (raw.startsWith('spotify-paused')) { resolve({ active: true, isPlaying: false, paused: true }); return; }
+        const parts = raw.split('|');
+        resolve({ active: true, isPlaying: true, title: (parts[1] || '').trim(), artist: (parts[2] || '').trim() });
+      });
+      return;
+    }
+
+    // Windows: PowerShell window-title polling
     const ps = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
     const cmd = [
       `$r=$null;$paused=$false`,
@@ -920,9 +982,35 @@ app.whenReady().then(() => {
     } catch (e) { console.error('[art] error:', e.message); return null; }
   });
 
-  // Media keys via SendKeys VBScript — instant, no PS needed
+  // Media keys — platform-specific implementation
   const VK = { playpause: 0xB3, next: 0xB0, prev: 0xB1 };
   ipcMain.handle('media-key', (event, key) => new Promise((resolve) => {
+    if (process.platform === 'darwin') {
+      // macOS: control Spotify via AppleScript; fall back to Music app
+      const macActions = {
+        playpause: 'playpause',
+        next: 'next track',
+        prev: 'previous track',
+      };
+      const action = macActions[key];
+      if (!action) { resolve(false); return; }
+      const script = [
+        'try',
+        '  tell application "System Events"',
+        '    set running_apps to name of every process',
+        '  end tell',
+        '  if "Spotify" is in running_apps then',
+        `    tell application "Spotify" to ${action}`,
+        '  else if "Music" is in running_apps then',
+        `    tell application "Music" to ${action}`,
+        '  end if',
+        'end try',
+      ].join('\n');
+      execFile('osascript', ['-e', script], { timeout: 2000 }, () => resolve(true));
+      return;
+    }
+
+    // Windows: SendKeys VBScript
     if (!VK[key]) { resolve(false); return; }
     const vbs = `
       Dim WshShell : Set WshShell = CreateObject("WScript.Shell")
@@ -995,7 +1083,7 @@ app.whenReady().then(() => {
       "img-src 'self' data: blob:",
       "font-src 'self' data:",
       "connect-src 'self' blob:",
-      "frame-src blob:",
+      "frame-src blob: file:",
       "worker-src blob: 'self'",
       "object-src 'none'",
       "media-src 'none'",
