@@ -165,7 +165,7 @@ const PdfPreviewModal: React.FC<{ url: string; filename: string; onClose: () => 
 
         const init = async () => {
             // @ts-ignore
-            if (pdfBlob && window.electronAPI?.writePdfTemp) {
+            if (pdfBlob && window.location.protocol === 'file:' && window.electronAPI?.writePdfTemp) {
                 try {
                     const ab = await pdfBlob.arrayBuffer();
                     // @ts-ignore
