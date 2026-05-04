@@ -231,17 +231,7 @@ const PdfPreviewModal: React.FC<PdfPreviewModalProps> = ({ pdfBlob, filename, on
                 </div>
 
                 {/* ── PDF canvas area ── */}
-                <div
-                    className="flex-grow overflow-auto flex items-start justify-center p-8"
-                    style={{ background: 'var(--pdf-bg, #e5e7eb)' }}
-                    // inline CSS var so dark mode override works cleanly
-                    ref={el => {
-                        if (el) {
-                            const isDark = document.documentElement.classList.contains('dark');
-                            el.style.setProperty('--pdf-bg', isDark ? '#111827' : '#e5e7eb');
-                        }
-                    }}
-                >
+                <div className="flex-grow overflow-auto flex items-start justify-center p-8 bg-gray-200 dark:bg-gray-900">
                     {isLoading && (
                         <div className="flex flex-col items-center justify-center w-full h-full gap-3">
                             {/* Teal spinner */}
