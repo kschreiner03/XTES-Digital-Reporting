@@ -21,6 +21,12 @@ module.exports = {
     ],
     ...(isMac && {
       osxSign: {},
+      osxNotarize: {
+        tool: 'notarytool',
+        appleId: process.env.APPLE_ID,
+        appleIdPassword: process.env.APPLE_APP_SPECIFIC_PASSWORD,
+        teamId: 'UUUUG5QGQ9',
+      },
       darwinDarkModeSupport: true,
     }),
     fileAssociations: [
