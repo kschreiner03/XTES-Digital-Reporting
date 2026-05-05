@@ -91,22 +91,16 @@ module.exports = {
         },
       ],
   hooks: {
-    postMake: async (_forgeConfig, makeResults) => {
-      if (process.platform !== 'darwin') return makeResults;
+    postPackage: async (_forgeConfig, options) => {
+      if (process.platform !== 'darwin') return;
       const { execFileSync } = require('child_process');
-      for (const result of makeResults) {
-        for (const artifact of result.artifacts) {
-          if (artifact.endsWith('.dmg') || artifact.endsWith('.zip')) {
-            try {
-              execFileSync('xcrun', ['stapler', 'staple', artifact]);
-              console.log(`Stapled: ${artifact}`);
-            } catch (e) {
-              console.warn(`Staple failed for ${artifact}:`, e.message);
-            }
-          }
-        }
+      const appPath = require('path').join(options.outputPaths[0], 'X-TES Digital Reporting.app');
+      try {
+        execFileSync('xcrun', ['stapler', 'staple', appPath]);
+        console.log(`Stapled: ${appPath}`);
+      } catch (e) {
+        console.warn('Staple failed:', e.message);
       }
-      return makeResults;
     },
   },
   publishers: [
