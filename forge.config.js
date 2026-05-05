@@ -90,6 +90,25 @@ module.exports = {
           },
         },
       ],
+  hooks: {
+    postMake: async (_forgeConfig, makeResults) => {
+      if (process.platform !== 'darwin') return makeResults;
+      const { execFileSync } = require('child_process');
+      for (const result of makeResults) {
+        for (const artifact of result.artifacts) {
+          if (artifact.endsWith('.dmg') || artifact.endsWith('.zip')) {
+            try {
+              execFileSync('xcrun', ['stapler', 'staple', artifact]);
+              console.log(`Stapled: ${artifact}`);
+            } catch (e) {
+              console.warn(`Staple failed for ${artifact}:`, e.message);
+            }
+          }
+        }
+      }
+      return makeResults;
+    },
+  },
   publishers: [
     {
       name: '@electron-forge/publisher-electron-release-server',
