@@ -413,6 +413,11 @@ function createWindow() {
     if (mainWindow) mainWindow.destroy();
   });
 
+  ipcMain.removeAllListeners('cancel-close');
+  ipcMain.on('cancel-close', () => {
+    if (closeTimeout) { clearTimeout(closeTimeout); closeTimeout = null; }
+  });
+
   mainWindow.on('closed', () => {
     if (closeTimeout) { clearTimeout(closeTimeout); closeTimeout = null; }
     mainWindow = null;
