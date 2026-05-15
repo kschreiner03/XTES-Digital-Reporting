@@ -9,6 +9,35 @@ const os = require('os');
 // for Vite HMR; it is never included in the packaged build's CSP.
 if (!app.isPackaged) process.env['ELECTRON_DISABLE_SECURITY_WARNINGS'] = 'true';
 
+// --- Logger ---
+const LOG_DIR = path.join(app.getPath('userData'), 'logs');
+const LOG_FILE = path.join(LOG_DIR, `app-${new Date().toISOString().slice(0, 10)}.log`);
+
+function writeLog(level, message) {
+  try {
+    if (!fs.existsSync(LOG_DIR)) fs.mkdirSync(LOG_DIR, { recursive: true });
+    fs.appendFileSync(LOG_FILE, `[${new Date().toISOString()}] [${level}] ${message}\n`);
+  } catch {}
+}
+
+// Prune logs older than 7 days
+try {
+  if (fs.existsSync(LOG_DIR)) {
+    const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    fs.readdirSync(LOG_DIR).forEach(f => {
+      const fp = path.join(LOG_DIR, f);
+      if (fs.statSync(fp).mtimeMs < cutoff) fs.unlinkSync(fp);
+    });
+  }
+} catch {}
+
+process.on('uncaughtException', (err) => {
+  writeLog('FATAL', `Uncaught: ${err?.stack || err?.message || err}`);
+});
+process.on('unhandledRejection', (reason) => {
+  writeLog('ERROR', `Unhandled rejection: ${reason?.stack || reason}`);
+});
+
 // In packaged builds the self-contained bundle (with jspdf inlined) lives in resources/.
 // In development the raw source file is loaded directly (jspdf resolved from node_modules).
 const generatorPath = app.isPackaged
@@ -1077,6 +1106,17 @@ app.whenReady().then(() => {
   ipcMain.handle('set-theme-source', (event, theme) => {
     nativeTheme.themeSource = theme;
   });
+
+  // --- Logging ---
+  ipcMain.handle('log-renderer', (event, level, message) => {
+    writeLog(`RENDERER:${level}`, message);
+  });
+
+  ipcMain.handle('open-log-folder', () => {
+    shell.openPath(LOG_DIR);
+  });
+
+  ipcMain.handle('get-log-path', () => LOG_FILE);
 
   ipcMain.handle('set-spellcheck-languages', (event, languages) => {
     try {
