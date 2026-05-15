@@ -1778,7 +1778,14 @@ Description: ${photo.description || 'N/A'}
                         </p>
                         <div className="flex justify-center gap-3">
                             <button
-                                onClick={() => setShowUnsavedModal(false)}
+                                onClick={() => {
+                                    setShowUnsavedModal(false);
+                                    if (pendingCloseRef.current) {
+                                        pendingCloseRef.current = false;
+                                        // @ts-ignore
+                                        window.electronAPI?.cancelClose();
+                                    }
+                                }}
                                 className="px-5 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-white font-semibold rounded-lg transition"
                             >
                                 Cancel

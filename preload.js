@@ -144,6 +144,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.send("confirm-close");
   },
 
+  cancelClose: () => {
+    ipcRenderer.send("cancel-close");
+  },
+
   /* -----------------------------
      PROJECT PACKAGING
   ----------------------------- */
