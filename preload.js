@@ -204,6 +204,22 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("set-theme-source", theme),
 
   /* -----------------------------
+     LOGGING
+  ----------------------------- */
+
+  logError: (message) =>
+    ipcRenderer.invoke("log-renderer", "ERROR", message),
+
+  logWarn: (message) =>
+    ipcRenderer.invoke("log-renderer", "WARN", message),
+
+  openLogFolder: () =>
+    ipcRenderer.invoke("open-log-folder"),
+
+  getLogPath: () =>
+    ipcRenderer.invoke("get-log-path"),
+
+  /* -----------------------------
      SPELL CHECK
   ----------------------------- */
 
