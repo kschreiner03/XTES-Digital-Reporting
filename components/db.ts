@@ -35,9 +35,12 @@ const initDB = () => {
             }
         }
       },
+    }).catch(err => {
+      dbPromise = null; // allow retry on next call
+      throw err;
     });
   }
-  return dbPromise;
+  return dbPromise!;
 };
 
 export const storeImage = async (id: string, imageData: string): Promise<void> => {

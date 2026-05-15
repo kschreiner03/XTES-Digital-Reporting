@@ -52,6 +52,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.on("open-file-path", (_event, filePath) => callback(filePath));
   },
 
+  removeOpenFileListener: () => {
+    ipcRenderer.removeAllListeners("open-file-path");
+  },
+
   onOpenSettings: (callback) => {
     ipcRenderer.on("open-settings", () => callback());
   },
@@ -202,22 +206,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   setThemeSource: (theme) =>
     ipcRenderer.invoke("set-theme-source", theme),
-
-  /* -----------------------------
-     LOGGING
-  ----------------------------- */
-
-  logError: (message) =>
-    ipcRenderer.invoke("log-renderer", "ERROR", message),
-
-  logWarn: (message) =>
-    ipcRenderer.invoke("log-renderer", "WARN", message),
-
-  openLogFolder: () =>
-    ipcRenderer.invoke("open-log-folder"),
-
-  getLogPath: () =>
-    ipcRenderer.invoke("get-log-path"),
 
   /* -----------------------------
      SPELL CHECK
