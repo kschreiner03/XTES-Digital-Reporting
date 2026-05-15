@@ -139,7 +139,9 @@ const App: React.FC = () => {
         }
 
         return () => {
-             // @ts-ignore
+            // @ts-ignore
+            window.electronAPI?.removeOpenFileListener?.();
+            // @ts-ignore
             if (window.electronAPI?.removeUpdateAvailableListener) {
                 // @ts-ignore
                 window.electronAPI.removeUpdateAvailableListener();

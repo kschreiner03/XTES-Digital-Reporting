@@ -148,6 +148,7 @@ const getImageDimensions = (url: string): Promise<{ width: number; height: numbe
 const autoCropImage = (imageUrl: string): Promise<string> => {
     return new Promise((resolve) => {
         const img = new Image();
+        img.onerror = () => resolve(imageUrl);
         img.onload = () => {
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
@@ -1645,9 +1646,9 @@ const renderTextSection = async (
     quickSaveRef.current = handleQuickSave;
 
     useEffect(() => {
-        if (initialData?.autoPdfExport) {
-            setTimeout(() => handleSavePdf(), 400);
-        }
+        if (!initialData?.autoPdfExport) return;
+        const t = setTimeout(() => handleSavePdf(), 400);
+        return () => clearTimeout(t);
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
     const handleSaveProject = async () => {
