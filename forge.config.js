@@ -97,10 +97,34 @@ module.exports = {
       const appPath = require('path').join(options.outputPaths[0], 'X-TES Digital Reporting.app');
       try {
         execFileSync('xcrun', ['stapler', 'staple', appPath]);
-        console.log(`Stapled: ${appPath}`);
+        console.log(`Stapled app: ${appPath}`);
       } catch (e) {
-        console.warn('Staple failed:', e.message);
+        console.warn('App staple failed:', e.message);
       }
+    },
+    postMake: async (_forgeConfig, makeResults) => {
+      if (process.platform !== 'darwin') return makeResults;
+      const { execFileSync } = require('child_process');
+      for (const result of makeResults) {
+        for (const artifact of result.artifacts) {
+          if (!artifact.endsWith('.dmg')) continue;
+          try {
+            console.log(`Notarizing DMG: ${artifact}`);
+            execFileSync('xcrun', [
+              'notarytool', 'submit', artifact,
+              '--apple-id', process.env.APPLE_ID,
+              '--password', process.env.APPLE_APP_SPECIFIC_PASSWORD,
+              '--team-id', process.env.APPLE_TEAM_ID,
+              '--wait',
+            ], { stdio: 'inherit' });
+            execFileSync('xcrun', ['stapler', 'staple', artifact]);
+            console.log(`Stapled DMG: ${artifact}`);
+          } catch (e) {
+            console.warn(`DMG notarize/staple failed: ${e.message}`);
+          }
+        }
+      }
+      return makeResults;
     },
   },
   publishers: [
