@@ -2191,6 +2191,21 @@ Description: ${photo.description || 'N/A'}
         return photoErrors;
     };
 
+    const scrollToError = (elementId: string) => {
+        setShowValidationErrorModal(false);
+        setTimeout(() => {
+            document.getElementById(elementId)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 80);
+    };
+
+    const scrollToFirstError = () => {
+        const hasReportErrors = Array.from(errors).some(k => !k.startsWith('photo-'));
+        if (hasReportErrors) { scrollToError('report-fields-section'); return; }
+        const firstPhotoId = Array.from(errors).find(k => k.startsWith('photo-'))?.match(/^photo-(\d+)-/)?.[1];
+        if (firstPhotoId) scrollToError(`photo-entry-${firstPhotoId}`);
+        else setShowValidationErrorModal(false);
+    };
+
     return (
         <div
             className="bg-gray-100 dark:bg-gray-900 min-h-screen transition-colors duration-200 relative"
@@ -2324,7 +2339,7 @@ Description: ${photo.description || 'N/A'}
                 </div>
 
                 <div className="main-content space-y-8" style={{ overflow: 'visible', transform: `scale(${zoomLevel / 100})`, transformOrigin: 'top left', width: `${10000 / zoomLevel}%` }}>
-                    <DfrHeader data={headerData} onDataChange={handleHeaderChange} errors={getHeaderErrors()} placeholders={dfrPlaceholders.header} />
+                    <div id="report-fields-section"><DfrHeader data={headerData} onDataChange={handleHeaderChange} errors={getHeaderErrors()} placeholders={dfrPlaceholders.header} /></div>
                     
                     <Section title="Project Activities">
                         <div>
@@ -2437,7 +2452,7 @@ Description: ${photo.description || 'N/A'}
                     <DndContext collisionDetection={closestCenter} onDragEnd={handlePhotoDragEnd}>
                       <SortableContext items={photosData.map(p => p.id)} strategy={verticalListSortingStrategy}>
                         {photosData.map((photo, index) => (
-                           <div key={photo.id}>
+                           <div key={photo.id} id={`photo-entry-${photo.id}`}>
                                 <PhotoEntry
                                 data={photo}
                                 onDataChange={handlePhotoDataChange}
@@ -2584,16 +2599,17 @@ Description: ${photo.description || 'N/A'}
                     imageUrl: 'Image', direction: 'Direction',
                 };
                 const missingReport = Array.from(errors).filter(k => !k.startsWith('photo-')).map(k => reportLabels[k] || k);
-                const photoErrors: Record<string, string[]> = {};
+                const photoErrors: Record<string, { fields: string[]; elementId: string }> = {};
                 Array.from(errors).filter(k => k.startsWith('photo-')).forEach(k => {
                     const match = k.match(/^photo-(\d+)-(.+)$/);
                     if (match) {
                         const photo = photosData.find(p => p.id === Number(match[1]));
                         const label = photo ? `Photo ${photo.photoNumber}` : 'Photo';
-                        if (!photoErrors[label]) photoErrors[label] = [];
-                        photoErrors[label].push(photoFieldLabels[match[2]] || match[2]);
+                        if (!photoErrors[label]) photoErrors[label] = { fields: [], elementId: `photo-entry-${match[1]}` };
+                        photoErrors[label].fields.push(photoFieldLabels[match[2]] || match[2]);
                     }
                 });
+                const badgeClass = "inline-flex items-center gap-1.5 px-3 py-1 bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-full text-xs font-medium border border-red-200 dark:border-red-800 cursor-pointer hover:bg-red-100 dark:hover:bg-red-900/50 transition-colors";
                 return (
                     <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
                         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl relative max-w-md w-full mx-4 overflow-hidden">
@@ -2601,7 +2617,7 @@ Description: ${photo.description || 'N/A'}
                                 <SafeImage fileName="loading-error.gif" alt="Missing info" className="w-14 h-14 flex-shrink-0 rounded-lg" />
                                 <div className="flex-1 min-w-0">
                                     <h3 className="text-lg font-bold text-gray-800 dark:text-white">Missing Information</h3>
-                                    <p className="text-sm text-gray-500 dark:text-gray-400">Fields highlighted in red need to be filled in.</p>
+                                    <p className="text-sm text-gray-500 dark:text-gray-400">Click a field to jump to it.</p>
                                 </div>
                                 <button onClick={() => setShowValidationErrorModal(false)} className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 flex-shrink-0">
                                     <CloseIcon className="h-5 w-5" />
@@ -2613,31 +2629,31 @@ Description: ${photo.description || 'N/A'}
                                         <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-2">Report</p>
                                         <div className="flex flex-wrap gap-2">
                                             {missingReport.map(label => (
-                                                <span key={label} className="inline-flex items-center gap-1.5 px-3 py-1 bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-full text-xs font-medium border border-red-200 dark:border-red-800">
+                                                <button key={label} onClick={() => scrollToError('report-fields-section')} className={badgeClass}>
                                                     <span className="w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0" />
                                                     {label}
-                                                </span>
+                                                </button>
                                             ))}
                                         </div>
                                     </div>
                                 )}
-                                {Object.entries(photoErrors).map(([photoLabel, fields]) => (
+                                {Object.entries(photoErrors).map(([photoLabel, { fields, elementId }]) => (
                                     <div key={photoLabel}>
                                         <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-2">{photoLabel}</p>
                                         <div className="flex flex-wrap gap-2">
                                             {fields.map(f => (
-                                                <span key={f} className="inline-flex items-center gap-1.5 px-3 py-1 bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-full text-xs font-medium border border-red-200 dark:border-red-800">
+                                                <button key={f} onClick={() => scrollToError(elementId)} className={badgeClass}>
                                                     <span className="w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0" />
                                                     {f}
-                                                </span>
+                                                </button>
                                             ))}
                                         </div>
                                     </div>
                                 ))}
                             </div>
                             <div className="px-5 pb-5 pt-1">
-                                <button onClick={() => setShowValidationErrorModal(false)} className="w-full bg-[#007D8C] hover:bg-[#006270] text-white font-semibold py-2.5 px-4 rounded-lg transition-colors text-sm">
-                                    Review Fields
+                                <button onClick={scrollToFirstError} className="w-full bg-[#007D8C] hover:bg-[#006270] text-white font-semibold py-2.5 px-4 rounded-lg transition-colors text-sm">
+                                    Jump to First Issue
                                 </button>
                             </div>
                         </div>
