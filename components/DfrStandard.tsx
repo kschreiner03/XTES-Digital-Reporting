@@ -736,7 +736,7 @@ const DfrStandard = ({ onBack, onBackDirect, initialData }: DfrStandardProps): R
                         return photo;
                     })
                 );
-                setPhotosData(hydratedPhotos);
+                setPhotosData(hydratedPhotos.filter(p => p.imageUrl || p.imageId));
 
                 if (migrationOccurred) {
                     setShowMigrationNotice(true);
@@ -808,7 +808,7 @@ const DfrStandard = ({ onBack, onBackDirect, initialData }: DfrStandardProps): R
                             return photo;
                         })
                     );
-                    setPhotosData(hydratedPhotos);
+                    setPhotosData(hydratedPhotos.filter(p => p.imageUrl || p.imageId));
                 }
             } else {
                 // Load defaults for new projects
@@ -1512,7 +1512,7 @@ Description: ${photo.description || 'N/A'}
         });
 
         // Photo validation
-        photosData.forEach(photo => {
+        photosData.filter(p => p.imageUrl || p.imageId).forEach(photo => {
             const prefix = `photo-${photo.id}-`;
             if (!photo.date) newErrors.add(`${prefix}date`);
             if (!photo.location) newErrors.add(`${prefix}location`);

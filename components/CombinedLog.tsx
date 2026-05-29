@@ -338,7 +338,7 @@ const CombinedLog: React.FC<CombinedLogProps> = ({ onBack, onBackDirect, initial
                         return photo;
                     })
                 );
-                setPhotosData(hydratedPhotos);
+                setPhotosData(hydratedPhotos.filter(p => p.imageUrl || p.imageId));
 
                 const formattedDate = formatDateForRecentProject(loadedHeader.date);
                 const dateSuffix = formattedDate ? ` - ${formattedDate}` : '';
@@ -378,7 +378,7 @@ const CombinedLog: React.FC<CombinedLogProps> = ({ onBack, onBackDirect, initial
                             return photo;
                         })
                     );
-                    setPhotosData(hydratedPhotos);
+                    setPhotosData(hydratedPhotos.filter(p => p.imageUrl || p.imageId));
                 } else {
                     setPhotosData(initialData.photosData || []);
                 }
@@ -773,7 +773,7 @@ const CombinedLog: React.FC<CombinedLogProps> = ({ onBack, onBackDirect, initial
                 newErrors.add(key);
             }
         });
-        photosData.forEach(photo => {
+        photosData.filter(p => p.imageUrl || p.imageId).forEach(photo => {
             const prefix = `photo-${photo.id}-`;
             if (!photo.date) newErrors.add(`${prefix}date`);
             if (!photo.location) newErrors.add(`${prefix}location`);

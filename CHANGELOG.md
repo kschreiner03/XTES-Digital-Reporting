@@ -4,6 +4,14 @@ All notable changes to X-TEC Digital Reporting are documented here.
 
 ---
 
+## [1.1.6] — May 2026
+
+### Fixed
+
+- Phantom photo bug — a drag-and-drop photo upload that hung (e.g. after demoing the feature and restarting the app) could leave an invisible incomplete photo entry in the project data, causing a false "Missing Information" error on PDF export with nothing visibly highlighted. Phantom entries (no image and no stored image ID) are now stripped on project load and skipped during validation across all report types (Standard DFR, SaskPower DFR, Photo Log, Combined Log).
+
+---
+
 ## [1.1.5] — May 2026
 
 ### Added

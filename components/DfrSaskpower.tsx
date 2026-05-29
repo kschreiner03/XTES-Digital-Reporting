@@ -617,11 +617,11 @@ const DfrSaskpower = ({ onBack, onBackDirect, initialData }: DfrSaskpowerProps):
                     return photo;
                 })
             );
-            setPhotosData(hydratedPhotos);
+            setPhotosData(hydratedPhotos.filter(p => p.imageUrl || p.imageId));
         } else {
             setPhotosData([]);
         }
-        
+
         return finalData;
     };
 
@@ -969,7 +969,7 @@ const DfrSaskpower = ({ onBack, onBackDirect, initialData }: DfrSaskpowerProps):
             }
         });
 
-        photosData.forEach(photo => {
+        photosData.filter(p => p.imageUrl || p.imageId).forEach(photo => {
             const prefix = `photo-${photo.id}-`;
             if (!photo.date) newErrors.add(`${prefix}date`);
             if (!photo.location) newErrors.add(`${prefix}location`);

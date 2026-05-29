@@ -380,7 +380,7 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, onBackDirect, initialData }
                         return photo;
                     })
                 );
-                setPhotosData(hydratedPhotos);
+                setPhotosData(hydratedPhotos.filter(p => p.imageUrl || p.imageId));
 
                 const formattedDate = formatDateForRecentProject(loadedHeader.date);
                 const dateSuffix = formattedDate ? ` - ${formattedDate}` : '';
@@ -418,7 +418,7 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, onBackDirect, initialData }
                             return photo;
                         })
                     );
-                    setPhotosData(hydratedPhotos);
+                    setPhotosData(hydratedPhotos.filter(p => p.imageUrl || p.imageId));
                 } else {
                     setPhotosData(initialData.photosData || []);
                 }
@@ -686,7 +686,7 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, onBackDirect, initialData }
                 newErrors.add(key);
             }
         });
-        photosData.forEach(photo => {
+        photosData.filter(p => p.imageUrl || p.imageId).forEach(photo => {
             const prefix = `photo-${photo.id}-`;
             if (!photo.date) newErrors.add(`${prefix}date`);
             if (!photo.location) newErrors.add(`${prefix}location`);
