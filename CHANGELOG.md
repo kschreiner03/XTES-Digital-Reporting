@@ -4,25 +4,41 @@ All notable changes to X-TEC Digital Reporting are documented here.
 
 ---
 
-## [1.1.5] — April 2026
+## [1.1.6] — May 2026
+
+### Fixed
+
+- Phantom photo bug — a drag-and-drop photo upload that hung (e.g. after demoing the feature and restarting the app) could leave an invisible incomplete photo entry in the project data, causing a false "Missing Information" error on PDF export with nothing visibly highlighted. Phantom entries (no image and no stored image ID) are now stripped on project load and skipped during validation across all report types (Standard DFR, SaskPower DFR, Photo Log, Combined Log).
+
+---
+
+## [1.1.5] — May 2026
 
 ### Added
 
 - Bulk photo import — drag and drop multiple photos into any report at once with a polished full-screen drop indicator
 - First-save modal — the first time you save a new report, a prompt confirms project details before autosave activates
 - Contest wallpaper — Trinity Berry's 2024 X-TEC Photo Contest photo added to the wallpaper picker
+- **macOS support** — app now builds, runs, and auto-updates on macOS (Intel and Apple Silicon)
+- PDF preview modal — inline PDF preview using PDF.js canvas rendering; replaces the external window with a themed in-app modal including page navigation, zoom controls, and Save PDF
+- Photo storage optimisation — photos are now stored as Blobs in IndexedDB instead of base64 strings, reducing storage size by ~33%
 
 ### Changed
 
 - Autosave is now off by default for new reports; it activates automatically after the first confirmed save
 - Toggling autosave on with no saved project triggers the first-save modal instead of saving immediately
+- Photo JPEG quality reduced to 80% on import to cut storage size; existing saves are unaffected
+- macOS auto-update uses the ZIP artifact from GitHub releases via Squirrel.Mac; DMG remains available for first install
 
 ### Fixed
 
 - Consistent photo sizes in PDF — all photos now render at the same fixed size regardless of original pixel dimensions
 - Scroll bar restored — report scroll bar is back for easier navigation through long reports
-- App close freeze — clicking X no longer occasionally freezes the window
+- App close freeze — clicking X no longer occasionally freezes the window; single permanent listener replaces stackable IPC handlers
 - Crash on installed app — `electron-devtools-installer` no longer causes an error in the packaged build
+- PDF preview blank in packaged app — resolved Chromium cross-origin restriction that prevented PDFs rendering in iframes
+- Intermittent Setup Error on Windows install — delayed taskkill of setup.exe so Squirrel finishes post-install cleanup before the process is terminated
+- Object URL leak — blob URLs for photos are now revoked on delete and on component unmount
 
 ---
 

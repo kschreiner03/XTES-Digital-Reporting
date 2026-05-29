@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import PdfPreviewModal from './PdfPreviewModal';
 import Header from './Header';
 import PhotoEntry from './PhotoEntry';
 import type { HeaderData, PhotoData, TextComment, TextHighlight } from '../types';
@@ -6,7 +7,7 @@ import { PlusIcon, DownloadIcon, SaveIcon, FolderOpenIcon, CloseIcon, ArrowLeftI
 import { DndContext, closestCenter, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
 import { AppType } from '../App';
-import { storeImage, retrieveImage, deleteImage, storeProject, deleteProject, deleteThumbnail, storeThumbnail, retrieveProject } from './db';
+import { storeImage, retrieveImage, deleteImage, revokeImageUrl, storeProject, deleteProject, deleteThumbnail, storeThumbnail, retrieveProject } from './db';
 import { generateProjectThumbnail } from './thumbnailUtils';
 import { safeSet } from './safeStorage';
 import { SpecialCharacterPalette } from './SpecialCharacterPalette';
@@ -158,84 +159,6 @@ const formatDateForFilename = (dateString: string): string => {
     }
 };
 
-const PdfPreviewModal: React.FC<{ url: string; filename: string; onClose: () => void; pdfBlob?: Blob; }> = ({ url, filename, onClose, pdfBlob }) => {
-    useEffect(() => {
-        const handleKeyDown = (e: KeyboardEvent) => {
-            if (e.key === 'Escape') {
-                onClose();
-            }
-        };
-        window.addEventListener('keydown', handleKeyDown);
-        document.body.style.overflow = 'hidden';
-
-        return () => {
-            window.removeEventListener('keydown', handleKeyDown);
-            document.body.style.overflow = 'auto';
-            if (url && url.startsWith('blob:')) {
-                URL.revokeObjectURL(url);
-            }
-        };
-    }, [onClose, url]);
-
-    const handleDownload = async () => {
-        // @ts-ignore
-        if (window.electronAPI && window.electronAPI.savePdf) {
-            try {
-                let arrayBuffer;
-                if (pdfBlob) {
-                    arrayBuffer = await pdfBlob.arrayBuffer();
-                } else {
-                    const response = await fetch(url);
-                    const blob = await response.blob();
-                    arrayBuffer = await blob.arrayBuffer();
-                }
-                
-                // @ts-ignore
-                const result = await window.electronAPI.savePdf(arrayBuffer, filename);
-                
-                if (result.success) {
-                    alert('PDF saved successfully!');
-                } else if (result.error) {
-                    alert(`Failed to save PDF: ${result.error}`);
-                }
-            } catch (e) {
-                console.error("Error saving PDF via Electron:", e);
-                alert("An error occurred while saving the PDF.");
-            }
-        } else {
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = filename;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-        }
-    };
-
-    return (
-        <div className="fixed inset-0 bg-black bg-opacity-75 flex flex-col items-center justify-center z-50 p-4" role="dialog" aria-modal="true">
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl w-full h-full flex flex-col overflow-hidden">
-                <div className="flex justify-between items-center p-4 border-b bg-gray-50 dark:bg-gray-700 dark:border-gray-600">
-                    <h3 className="text-xl font-bold text-gray-800 dark:text-white">PDF Preview</h3>
-                    <div className="flex items-center gap-4">
-                        <button onClick={handleDownload} className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
-                            <DownloadIcon />
-                            <span>Download PDF</span>
-                        </button>
-                        <button onClick={onClose} className="text-gray-500 hover:text-gray-800 dark:text-gray-300 dark:hover:text-white transition-colors" aria-label="Close preview">
-                            <CloseIcon className="h-8 w-8" />
-                        </button>
-                    </div>
-                </div>
-                <div className="flex-grow bg-gray-200 dark:bg-gray-900 relative">
-                    <iframe src={url} className="w-full h-full" style={{ border: 'none' }} title="PDF Preview" />
-                </div>
-            </div>
-        </div>
-    );
-};
-
-
 interface PhotoLogProps {
   onBack: () => void;
   onBackDirect?: () => void;
@@ -258,7 +181,7 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, onBackDirect, initialData }
     const [showValidationErrorModal, setShowValidationErrorModal] = useState<boolean>(false);
     const [showNoInternetModal, setShowNoInternetModal] = useState<boolean>(false);
     const [enlargedImageUrl, setEnlargedImageUrl] = useState<string | null>(null);
-    const [pdfPreview, setPdfPreview] = useState<{ url: string; filename: string; blob?: Blob } | null>(null);
+    const [pdfPreview, setPdfPreview] = useState<{ blob: Blob; filename: string } | null>(null);
     const [showStatusModal, setShowStatusModal] = useState(false);
     const [statusMessage, setStatusMessage] = useState('');
     const [isDirty, setIsDirty] = useState(false);
@@ -457,7 +380,7 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, onBackDirect, initialData }
                         return photo;
                     })
                 );
-                setPhotosData(hydratedPhotos);
+                setPhotosData(hydratedPhotos.filter(p => p.imageUrl || p.imageId));
 
                 const formattedDate = formatDateForRecentProject(loadedHeader.date);
                 const dateSuffix = formattedDate ? ` - ${formattedDate}` : '';
@@ -495,7 +418,7 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, onBackDirect, initialData }
                             return photo;
                         })
                     );
-                    setPhotosData(hydratedPhotos);
+                    setPhotosData(hydratedPhotos.filter(p => p.imageUrl || p.imageId));
                 } else {
                     setPhotosData(initialData.photosData || []);
                 }
@@ -568,6 +491,7 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, onBackDirect, initialData }
     const autoCropImage = (imageUrl: string): Promise<string> => {
         return new Promise((resolve) => {
             const img = new Image();
+            img.onerror = () => resolve(imageUrl);
             img.onload = () => {
                 const canvas = document.createElement('canvas');
                 const ctx = canvas.getContext('2d');
@@ -603,8 +527,8 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, onBackDirect, initialData }
                 }
     
                 ctx.drawImage(img, drawX, drawY, drawWidth, drawHeight);
-    
-                resolve(canvas.toDataURL('image/jpeg'));
+
+                resolve(canvas.toDataURL('image/jpeg', 0.8));
             };
             img.src = imageUrl;
         });
@@ -738,6 +662,7 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, onBackDirect, initialData }
             const photoToRemove = prev.find(p => p.id === id);
             if (photoToRemove && photoToRemove.imageId) {
                 deleteImage(photoToRemove.imageId).catch(err => console.error("Failed to delete image from DB", err));
+                if (photoToRemove.imageUrl) revokeImageUrl(photoToRemove.imageUrl);
             }
             return renumberPhotos(prev.filter(photo => photo.id !== id));
         });
@@ -761,7 +686,7 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, onBackDirect, initialData }
                 newErrors.add(key);
             }
         });
-        photosData.forEach(photo => {
+        photosData.filter(p => p.imageUrl || p.imageId).forEach(photo => {
             const prefix = `photo-${photo.id}-`;
             if (!photo.date) newErrors.add(`${prefix}date`);
             if (!photo.location) newErrors.add(`${prefix}location`);
@@ -844,9 +769,9 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, onBackDirect, initialData }
 
     // Auto-export PDF when opened from Projects View with autoPdfExport flag
     useEffect(() => {
-        if (initialData?.autoPdfExport) {
-            setTimeout(() => handleSavePdf(), 400);
-        }
+        if (!initialData?.autoPdfExport) return;
+        const t = setTimeout(() => handleSavePdf(), 400);
+        return () => clearTimeout(t);
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
     const handleSaveProject = async () => {
@@ -1297,8 +1222,7 @@ const drawPhotoEntry = async (
             (onBackDirect ?? onBack)();
             return;
         }
-        const pdfUrl = URL.createObjectURL(pdfBlob);
-        setPdfPreview({ url: pdfUrl, filename, blob: pdfBlob });
+        setPdfPreview({ blob: pdfBlob, filename });
     };
 
     const handleDownloadPhotos = useCallback(async () => {
@@ -1480,6 +1404,12 @@ Description: ${photo.description || 'N/A'}
         return () => { document.title = 'X-TEC Digital Reporting'; };
     }, [headerData.projectName, headerData.projectNumber]);
 
+    useEffect(() => {
+        return () => {
+            photosData.forEach(p => { if (p.imageUrl) revokeImageUrl(p.imageUrl); });
+        };
+    }, []);
+
     const handleFileSelected = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
         if (!file) return;
@@ -1547,11 +1477,10 @@ Description: ${photo.description || 'N/A'}
                 </div>
             )}
             {pdfPreview && (
-                <PdfPreviewModal 
-                    url={pdfPreview.url} 
-                    filename={pdfPreview.filename} 
-                    onClose={() => setPdfPreview(null)} 
+                <PdfPreviewModal
                     pdfBlob={pdfPreview.blob}
+                    filename={pdfPreview.filename}
+                    onClose={() => setPdfPreview(null)}
                 />
             )}
             {enlargedImageUrl && (
@@ -1847,7 +1776,14 @@ Description: ${photo.description || 'N/A'}
                         </p>
                         <div className="flex justify-center gap-3">
                             <button
-                                onClick={() => setShowUnsavedModal(false)}
+                                onClick={() => {
+                                    setShowUnsavedModal(false);
+                                    if (pendingCloseRef.current) {
+                                        pendingCloseRef.current = false;
+                                        // @ts-ignore
+                                        window.electronAPI?.cancelClose();
+                                    }
+                                }}
                                 className="px-5 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-white font-semibold rounded-lg transition"
                             >
                                 Cancel
