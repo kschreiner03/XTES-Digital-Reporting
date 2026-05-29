@@ -51,7 +51,7 @@ const EditableField: React.FC<{
   }, [value]);
 
   const commonClasses = "p-1 w-full bg-transparent focus:outline-none transition text-base min-w-0 placeholder-gray-400 dark:placeholder-gray-500";
-  const labelClasses = "block text-base font-bold text-black dark:text-gray-200 whitespace-nowrap";
+  const labelClasses = `block text-base font-bold whitespace-nowrap ${isInvalid ? 'text-red-600 dark:text-red-400' : 'text-black dark:text-gray-200'}`;
 
   if (printable) {
     return (
@@ -65,7 +65,7 @@ const EditableField: React.FC<{
   if (readOnly) {
     return (
       <div className="flex items-baseline gap-2">
-        <label className={labelClasses}>{label}:</label>
+        <label className={`block text-base font-bold text-black dark:text-gray-200 whitespace-nowrap`}>{label}:</label>
         <span className="p-1 w-full text-base text-gray-500">{value}</span>
       </div>
     );
@@ -81,7 +81,7 @@ const EditableField: React.FC<{
           onChange={(e) => setLocalValue(e.target.value)}
           onBlur={() => { focusedRef.current = false; onChange(localValue); }}
           onFocus={() => { focusedRef.current = true; }}
-          className={`mt-1 ${commonClasses} border-b ${
+          className={`mt-1 ${commonClasses} border-b-2 ${
             isInvalid ? "border-red-500" : "border-gray-300 dark:border-gray-600 focus:border-[#007D8C]"
           }`}
           placeholder={placeholder}
@@ -100,7 +100,7 @@ const EditableField: React.FC<{
         onChange={(e) => setLocalValue(e.target.value)}
         onBlur={() => { focusedRef.current = false; onChange(localValue); }}
         onFocus={() => { focusedRef.current = true; }}
-        className={`${commonClasses} border-b ${
+        className={`${commonClasses} border-b-2 ${
           isInvalid ? "border-red-500" : "border-gray-300 dark:border-gray-600 focus:border-[#007D8C]"
         }`}
         placeholder={placeholder}
@@ -214,6 +214,7 @@ const PhotoEntry: React.FC<PhotoEntryProps> = ({
               value={data.date}
               onChange={(v) => onDataChange(data.id, "date", v)}
               printable={printable}
+              isInvalid={errors?.has('date')}
             />
 
             {!printable && (
@@ -234,6 +235,7 @@ const PhotoEntry: React.FC<PhotoEntryProps> = ({
               readOnly={isLocationLocked}
               onChange={(v) => onDataChange(data.id, "location", v)}
               printable={printable}
+              isInvalid={errors?.has('location')}
             />
 
             {!printable && (
@@ -268,6 +270,7 @@ const PhotoEntry: React.FC<PhotoEntryProps> = ({
               onAnchorPositionsChange={onAnchorPositionsChange ? (anchors) => onAnchorPositionsChange(data.id, anchors) : undefined}
               hoveredCommentId={hoveredCommentId}
               rows={4}
+              isInvalid={errors?.has('description')}
             />
           )}
 
