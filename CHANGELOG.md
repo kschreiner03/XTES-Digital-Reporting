@@ -8,7 +8,8 @@ All notable changes to X-TEC Digital Reporting are documented here.
 
 ### Fixed
 
-- Phantom photo bug — a drag-and-drop photo upload that hung (e.g. after demoing the feature and restarting the app) could leave an invisible incomplete photo entry in the project data, causing a false "Missing Information" error on PDF export with nothing visibly highlighted. Phantom entries (no image and no stored image ID) are now stripped on project load and skipped during validation across all report types (Standard DFR, SaskPower DFR, Photo Log, Combined Log).
+- Drag-and-drop hang — a missing `FileReader` error handler caused the batch photo import loop to hang permanently if any file failed to read (e.g. drag interrupted mid-drop). The failed photo placeholder is now cleaned up automatically and the import continues with remaining photos.
+- Phantom photo bug — a drag-and-drop photo upload that hung could leave an invisible incomplete photo entry in the project data, causing a false "Missing Information" error on PDF export with nothing visibly highlighted. Phantom entries (no image and no stored image ID) are now stripped on project load and skipped during validation across all report types (Standard DFR, SaskPower DFR, Photo Log, Combined Log).
 
 ---
 
