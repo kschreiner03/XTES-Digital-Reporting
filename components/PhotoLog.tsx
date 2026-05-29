@@ -596,6 +596,11 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, onBackDirect, initialData }
                     setBatchProgress({ current: i + 1, total: valid.length });
                     resolve();
                 };
+                reader.onerror = () => {
+                    setPhotosData(prev => prev.filter(p => p.id !== targetId));
+                    setBatchProgress({ current: i + 1, total: valid.length });
+                    resolve();
+                };
                 reader.readAsDataURL(valid[i]);
             });
         }
