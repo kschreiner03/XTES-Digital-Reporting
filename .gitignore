@@ -40,3 +40,10 @@ media-key.ps1
 
 # Claude Code local memory
 .claude/
+
+# Environment / secrets — never commit credentials
+.env
+.env.*
+*.p12
+*.pfx
+*.pem

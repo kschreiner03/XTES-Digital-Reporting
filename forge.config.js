@@ -1,35 +1,54 @@
+const fs = require('fs');
 const isNisis = process.env.NISIS_BUILD === 'true';
+const isMac = process.platform === 'darwin';
+const isWindows = process.platform === 'win32';
+const hasIogcBundle = fs.existsSync('IogcPdfGeneratorNode.bundle.js');
+
+// Electron Forge resolves icon extension automatically per platform:
+//   Windows → .ico, macOS → .icns, Linux → .png
+// Pass the path without extension so Forge picks the right one.
+const ICON_BASE = 'assets/icon';
 
 module.exports = {
   packagerConfig: {
     asar: true,
     name: isNisis ? 'NISIS Digital Reporting' : 'X-TES Digital Reporting',
-    icon: 'assets/icon.ico',
+    icon: ICON_BASE,
     executableName: isNisis ? 'NISIS Digital Reporting' : 'X-TES Digital Reporting',
     extraResource: [
       'assets',
-      'IogcPdfGeneratorNode.bundle.js',
+      ...(hasIogcBundle ? ['IogcPdfGeneratorNode.bundle.js'] : []),
     ],
+    ...(isMac && {
+      osxSign: {},
+      osxNotarize: {
+        tool: 'notarytool',
+        appleId: process.env.APPLE_ID,
+        appleIdPassword: process.env.APPLE_APP_SPECIFIC_PASSWORD,
+        teamId: process.env.APPLE_TEAM_ID,
+      },
+      darwinDarkModeSupport: true,
+    }),
     fileAssociations: [
       {
         ext: 'spdfr',
         name: 'SaskPower DFR Project',
-        icon: 'assets/SASKPOWERICON.ico'
+        icon: 'assets/SASKPOWERICON',
       },
       {
         ext: 'dfr',
         name: 'X-TES DFR Project',
-        icon: 'assets/XTERRAICON.ico'
+        icon: 'assets/XTERRAICON',
       },
       {
         ext: 'plog',
         name: 'X-TES Photo Log',
-        icon: 'assets/PHOTOLOGICON.ico'
+        icon: 'assets/PHOTOLOGICON',
       },
       {
         ext: 'clog',
         name: 'X-TES Combine Logs',
-        icon: 'assets/COMBINEDLOGICON.ico'
+        icon: 'assets/COMBINEDLOGICON',
       }
     ]
   },
@@ -45,6 +64,20 @@ module.exports = {
           },
         },
       ]
+    : isMac
+    ? [
+        {
+          name: '@electron-forge/maker-dmg',
+          config: {
+            icon: 'assets/icon.icns',
+            format: 'ULFO',
+          },
+        },
+        {
+          name: '@electron-forge/maker-zip',
+          platforms: ['darwin'],
+        },
+      ]
     : [
         {
           name: '@electron-forge/maker-squirrel',
@@ -57,6 +90,43 @@ module.exports = {
           },
         },
       ],
+  hooks: {
+    postPackage: async (_forgeConfig, options) => {
+      if (process.platform !== 'darwin') return;
+      const { execFileSync } = require('child_process');
+      const appPath = require('path').join(options.outputPaths[0], 'X-TES Digital Reporting.app');
+      try {
+        execFileSync('xcrun', ['stapler', 'staple', appPath]);
+        console.log(`Stapled app: ${appPath}`);
+      } catch (e) {
+        console.warn('App staple failed:', e.message);
+      }
+    },
+    postMake: async (_forgeConfig, makeResults) => {
+      if (process.platform !== 'darwin') return makeResults;
+      const { execFileSync } = require('child_process');
+      for (const result of makeResults) {
+        for (const artifact of result.artifacts) {
+          if (!artifact.endsWith('.dmg')) continue;
+          try {
+            console.log(`Notarizing DMG: ${artifact}`);
+            execFileSync('xcrun', [
+              'notarytool', 'submit', artifact,
+              '--apple-id', process.env.APPLE_ID,
+              '--password', process.env.APPLE_APP_SPECIFIC_PASSWORD,
+              '--team-id', process.env.APPLE_TEAM_ID,
+              '--wait',
+            ], { stdio: 'inherit' });
+            execFileSync('xcrun', ['stapler', 'staple', artifact]);
+            console.log(`Stapled DMG: ${artifact}`);
+          } catch (e) {
+            console.warn(`DMG notarize/staple failed: ${e.message}`);
+          }
+        }
+      }
+      return makeResults;
+    },
+  },
   publishers: [
     {
       name: '@electron-forge/publisher-electron-release-server',

@@ -14,7 +14,12 @@ if (!app.isPackaged) process.env['ELECTRON_DISABLE_SECURITY_WARNINGS'] = 'true';
 const generatorPath = app.isPackaged
   ? path.join(process.resourcesPath, 'IogcPdfGeneratorNode.bundle.js')
   : path.resolve(__dirname, '..', '..', 'IogcPdfGeneratorNode.js');
-const { generateIogcPdf } = require(generatorPath);
+let generateIogcPdf = null;
+try {
+  ({ generateIogcPdf } = require(generatorPath));
+} catch {
+  // IOGC bundle not included in this build
+}
 
 let mainWindow;
 let helpWindow;
@@ -278,6 +283,10 @@ const menuTemplate = [
 
 // --- Main Window ---
 function createWindow() {
+  // Clear any stale force-close timeout from a previous window (macOS reactivation)
+  if (closeTimeout) { clearTimeout(closeTimeout); closeTimeout = null; }
+  forceClose = false;
+
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 960,
@@ -294,11 +303,16 @@ function createWindow() {
 
   mainWindow.once('ready-to-show', () => {
     if (process.argv.includes('--squirrel-firstrun') && process.platform === 'win32') {
-      // Kill the Squirrel installer process so its loading GIF window closes,
-      // then show the app a beat later so there's no overlap.
-      spawn('taskkill', ['/F', '/IM', 'x-tec-digital-reporting-webSetup.exe'],
-        { detached: true, stdio: 'ignore' }).unref();
-      setTimeout(() => { mainWindow.maximize(); mainWindow.show(); }, 300);
+      // Show the app immediately, then kill the installer GIF window after a
+      // delay — Squirrel needs ~2-3 s to finish post-install cleanup inside
+      // setup.exe before it's safe to kill it. Force-killing too early leaves
+      // stale lock files that cause "Setup Error" on the next install attempt.
+      mainWindow.maximize();
+      mainWindow.show();
+      setTimeout(() => {
+        spawn('taskkill', ['/F', '/IM', 'x-tec-digital-reporting-webSetup.exe'],
+          { detached: true, stdio: 'ignore' }).unref();
+      }, 3000);
     } else {
       mainWindow.maximize();
       mainWindow.show();
@@ -408,6 +422,11 @@ function createWindow() {
     if (mainWindow) mainWindow.destroy();
   });
 
+  ipcMain.removeAllListeners('cancel-close');
+  ipcMain.on('cancel-close', () => {
+    if (closeTimeout) { clearTimeout(closeTimeout); closeTimeout = null; }
+  });
+
   mainWindow.on('closed', () => {
     if (closeTimeout) { clearTimeout(closeTimeout); closeTimeout = null; }
     mainWindow = null;
@@ -457,9 +476,12 @@ app.whenReady().then(() => {
       console.error('Failed to set auto-updater feed URL:', error);
     }
 
-    // Check for updates shortly after startup, then every hour
-    setTimeout(() => autoUpdater.checkForUpdates().catch(err => console.error('Update check failed:', err)), 5000);
-    setInterval(() => autoUpdater.checkForUpdates().catch(err => console.error('Update check failed:', err)), 60 * 60 * 1000);
+    // Check for updates shortly after startup, then every hour.
+    // checkForUpdates() returns a Promise on Windows (Squirrel) but undefined on macOS,
+    // so use try/catch instead of .catch() to avoid a cross-platform crash.
+    const checkForUpdates = () => { try { autoUpdater.checkForUpdates(); } catch (err) { console.error('Update check failed:', err); } };
+    setTimeout(checkForUpdates, 5000);
+    setInterval(checkForUpdates, 60 * 60 * 1000);
 
     autoUpdater.on('update-available', () => {
       if (mainWindow) mainWindow.webContents.send('update-available');
@@ -545,12 +567,13 @@ app.whenReady().then(() => {
     if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
       return `${MAIN_WINDOW_VITE_DEV_SERVER_URL}/assets/${encodedName}`;
     } else {
-      const assetPath = path.join(process.resourcesPath, 'assets', ...normalized.split('/'));
-      return encodeURI(`file://${assetPath.replace(/\\/g, '/')}`);
+      const assetPath = path.join(process.resourcesPath, 'assets', ...encodedName.split('/').map(s => decodeURIComponent(s)));
+      return `file:///${assetPath.replace(/\\/g, '/').split('/').map((s, i) => i === 0 ? s : encodeURIComponent(s)).join('/')}`;
     }
   });
 
   ipcMain.handle('generate-iogc-pdf', async (event, data) => {
+    if (!generateIogcPdf) return { success: false, error: 'IOGC PDF generation is not available in this build.' };
     const assetsDir = app.isPackaged
       ? path.join(process.resourcesPath, 'assets')
       : path.join(app.getAppPath(), 'assets');
@@ -691,6 +714,62 @@ app.whenReady().then(() => {
       console.error('Failed to open print preview:', err);
       return { success: false, error: err.message };
     }
+  });
+
+  ipcMain.handle('open-pdf-preview', async (event, data) => {
+    try {
+      const tempPath = path.join(os.tmpdir(), `xtec_preview_${Date.now()}.pdf`);
+      fs.writeFileSync(tempPath, Buffer.from(data));
+
+      const previewWindow = new BrowserWindow({
+        width: 1000,
+        height: 800,
+        title: 'PDF Preview',
+        parent: mainWindow,
+        webPreferences: {
+          nodeIntegration: false,
+          contextIsolation: true,
+          sandbox: false,
+          plugins: true,
+        },
+      });
+
+      previewWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+      await previewWindow.loadURL('file:///' + tempPath.replace(/\\/g, '/'));
+      previewWindow.show();
+
+      previewWindow.on('closed', () => {
+        try { fs.unlinkSync(tempPath); } catch {}
+      });
+
+      return { success: true };
+    } catch (err) {
+      console.error('Failed to open PDF preview:', err);
+      return { success: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('write-pdf-temp', async (event, data) => {
+    try {
+      const tempPath = path.join(os.tmpdir(), `xtec_preview_${Date.now()}.pdf`);
+      fs.writeFileSync(tempPath, Buffer.from(data));
+      return 'file:///' + tempPath.replace(/\\/g, '/');
+    } catch (err) {
+      console.error('Failed to write temp PDF:', err);
+      return null;
+    }
+  });
+
+  ipcMain.handle('delete-pdf-temp', async (event, fileUrl) => {
+    try {
+      if (typeof fileUrl !== 'string') return;
+      const filePath = fileUrl.replace(/^file:\/\/\//, '').replace(/\//g, path.sep);
+      const resolved = path.resolve(filePath);
+      const tmpDir = os.tmpdir();
+      if (resolved.startsWith(tmpDir) && path.basename(resolved).startsWith('xtec_preview_')) {
+        fs.unlinkSync(resolved);
+      }
+    } catch {}
   });
 
   ipcMain.handle('save-pdf', async (event, data, defaultPath) => {
@@ -870,6 +949,45 @@ app.whenReady().then(() => {
   }
 
   ipcMain.handle('get-media-info', () => new Promise((resolve) => {
+    if (process.platform === 'darwin') {
+      // macOS: query Spotify and Music app via AppleScript
+      const script = [
+        'set output to "inactive"',
+        'try',
+        '  tell application "System Events"',
+        '    set running_apps to name of every process',
+        '  end tell',
+        '  if "Spotify" is in running_apps then',
+        '    tell application "Spotify"',
+        '      if player state is playing then',
+        '        set output to "spotify|" & current track\'s name & "|" & current track\'s artist',
+        '      else if player state is paused then',
+        '        set output to "spotify-paused||"',
+        '      end if',
+        '    end tell',
+        '  end if',
+        '  if output is "inactive" and "Music" is in running_apps then',
+        '    tell application "Music"',
+        '      if player state is playing then',
+        '        set output to "music|" & current track\'s name & "|" & current track\'s artist',
+        '      end if',
+        '    end tell',
+        '  end if',
+        'end try',
+        'return output',
+      ].join('\n');
+      execFile('osascript', ['-e', script], { timeout: 4000 }, (err, stdout) => {
+        if (err) { resolve({ active: false }); return; }
+        const raw = (stdout || '').trim();
+        if (!raw || raw === 'inactive') { resolve({ active: false }); return; }
+        if (raw.startsWith('spotify-paused')) { resolve({ active: true, isPlaying: false, paused: true }); return; }
+        const parts = raw.split('|');
+        resolve({ active: true, isPlaying: true, title: (parts[1] || '').trim(), artist: (parts[2] || '').trim() });
+      });
+      return;
+    }
+
+    // Windows: PowerShell window-title polling
     const ps = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
     const cmd = [
       `$r=$null;$paused=$false`,
@@ -920,9 +1038,35 @@ app.whenReady().then(() => {
     } catch (e) { console.error('[art] error:', e.message); return null; }
   });
 
-  // Media keys via SendKeys VBScript — instant, no PS needed
+  // Media keys — platform-specific implementation
   const VK = { playpause: 0xB3, next: 0xB0, prev: 0xB1 };
   ipcMain.handle('media-key', (event, key) => new Promise((resolve) => {
+    if (process.platform === 'darwin') {
+      // macOS: control Spotify via AppleScript; fall back to Music app
+      const macActions = {
+        playpause: 'playpause',
+        next: 'next track',
+        prev: 'previous track',
+      };
+      const action = macActions[key];
+      if (!action) { resolve(false); return; }
+      const script = [
+        'try',
+        '  tell application "System Events"',
+        '    set running_apps to name of every process',
+        '  end tell',
+        '  if "Spotify" is in running_apps then',
+        `    tell application "Spotify" to ${action}`,
+        '  else if "Music" is in running_apps then',
+        `    tell application "Music" to ${action}`,
+        '  end if',
+        'end try',
+      ].join('\n');
+      execFile('osascript', ['-e', script], { timeout: 2000 }, () => resolve(true));
+      return;
+    }
+
+    // Windows: SendKeys VBScript
     if (!VK[key]) { resolve(false); return; }
     const vbs = `
       Dim WshShell : Set WshShell = CreateObject("WScript.Shell")
@@ -995,7 +1139,7 @@ app.whenReady().then(() => {
       "img-src 'self' data: blob:",
       "font-src 'self' data:",
       "connect-src 'self' blob:",
-      "frame-src blob:",
+      "frame-src blob: file:",
       "worker-src blob: 'self'",
       "object-src 'none'",
       "media-src 'none'",
