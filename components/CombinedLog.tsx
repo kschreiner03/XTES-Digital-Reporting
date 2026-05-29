@@ -1697,31 +1697,76 @@ Description: ${photo.description || 'N/A'}
                     </div>
                 </div>
             )}
-            {showValidationErrorModal && (
-                <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 transition-opacity duration-300">
-                    <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-2xl text-center relative max-w-md transform scale-95 hover:scale-100 transition-transform duration-300">
-                        <button
-                            onClick={() => setShowValidationErrorModal(false)}
-                            className="absolute top-2 right-2 p-1 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
-                            aria-label="Close"
-                        >
-                            <CloseIcon className="h-6 w-6" />
-                        </button>
-                        <SafeImage
-                            fileName="loading-error.gif"
-                            alt="Missing information animation"
-                            className="mx-auto mb-4 w-40 h-40"
-                        />
-                        <h3 className="text-2xl font-bold mb-2 text-gray-800 dark:text-white">Missing Information</h3>
-                        <p className="text-gray-600 dark:text-gray-300">
-                            Please fill in all required fields.
-                        </p>
-                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-3">
-                            Missing fields are highlighted in red.
-                        </p>
+            {showValidationErrorModal && (() => {
+                const reportLabels: Record<string, string> = {
+                    proponent: 'Proponent', projectName: 'Project Name', location: 'Location',
+                    date: 'Date', projectNumber: 'Project Number',
+                };
+                const photoFieldLabels: Record<string, string> = {
+                    date: 'Date', location: 'Location', description: 'Description',
+                    imageUrl: 'Image', direction: 'Direction',
+                };
+                const missingReport = Array.from(errors).filter(k => !k.startsWith('photo-')).map(k => reportLabels[k] || k);
+                const photoErrors: Record<string, string[]> = {};
+                Array.from(errors).filter(k => k.startsWith('photo-')).forEach(k => {
+                    const match = k.match(/^photo-(\d+)-(.+)$/);
+                    if (match) {
+                        const photo = photosData.find(p => p.id === Number(match[1]));
+                        const label = photo ? `Photo ${photo.photoNumber}` : 'Photo';
+                        if (!photoErrors[label]) photoErrors[label] = [];
+                        photoErrors[label].push(photoFieldLabels[match[2]] || match[2]);
+                    }
+                });
+                return (
+                    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
+                        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl relative max-w-md w-full mx-4 overflow-hidden">
+                            <div className="flex items-center gap-4 p-5 border-b border-gray-200 dark:border-gray-700">
+                                <SafeImage fileName="loading-error.gif" alt="Missing info" className="w-14 h-14 flex-shrink-0 rounded-lg" />
+                                <div className="flex-1 min-w-0">
+                                    <h3 className="text-lg font-bold text-gray-800 dark:text-white">Missing Information</h3>
+                                    <p className="text-sm text-gray-500 dark:text-gray-400">Fields highlighted in red need to be filled in.</p>
+                                </div>
+                                <button onClick={() => setShowValidationErrorModal(false)} className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 flex-shrink-0">
+                                    <CloseIcon className="h-5 w-5" />
+                                </button>
+                            </div>
+                            <div className="p-5 space-y-4 max-h-72 overflow-y-auto">
+                                {missingReport.length > 0 && (
+                                    <div>
+                                        <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-2">Report</p>
+                                        <div className="flex flex-wrap gap-2">
+                                            {missingReport.map(label => (
+                                                <span key={label} className="inline-flex items-center gap-1.5 px-3 py-1 bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-full text-xs font-medium border border-red-200 dark:border-red-800">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0" />
+                                                    {label}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                                {Object.entries(photoErrors).map(([photoLabel, fields]) => (
+                                    <div key={photoLabel}>
+                                        <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-2">{photoLabel}</p>
+                                        <div className="flex flex-wrap gap-2">
+                                            {fields.map(f => (
+                                                <span key={f} className="inline-flex items-center gap-1.5 px-3 py-1 bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-full text-xs font-medium border border-red-200 dark:border-red-800">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0" />
+                                                    {f}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                            <div className="px-5 pb-5 pt-1">
+                                <button onClick={() => setShowValidationErrorModal(false)} className="w-full bg-[#007D8C] hover:bg-[#006270] text-white font-semibold py-2.5 px-4 rounded-lg transition-colors text-sm">
+                                    Review Fields
+                                </button>
+                            </div>
+                        </div>
                     </div>
-                </div>
-            )}
+                );
+            })()}
              {showNoInternetModal && (
                 <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
                     <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-2xl text-center relative max-w-md">
