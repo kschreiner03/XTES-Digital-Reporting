@@ -6,10 +6,18 @@ All notable changes to X-TEC Digital Reporting are documented here.
 
 ## [1.1.6] — May 2026
 
+### Added
+
+- Missing Information modal — validation error modal redesigned with the GIF alongside a grouped list of missing fields (Report / Photo N) shown as red pill badges, so you can see exactly what needs filling in before exporting.
+
 ### Fixed
 
 - Drag-and-drop hang — a missing `FileReader` error handler caused the batch photo import loop to hang permanently if any file failed to read (e.g. drag interrupted mid-drop). The failed photo placeholder is now cleaned up automatically and the import continues with remaining photos.
 - Phantom photo bug — a drag-and-drop photo upload that hung could leave an invisible incomplete photo entry in the project data, causing a false "Missing Information" error on PDF export with nothing visibly highlighted. Phantom entries (no image and no stored image ID) are now stripped on project load and skipped during validation across all report types (Standard DFR, SaskPower DFR, Photo Log, Combined Log).
+- Photo entry fields not highlighting red — Date, Location, and Description fields in photo entries now turn red on a failed export attempt; previously only Direction was highlighted. Photo cards with missing fields also show a red outline and a "Missing: …" banner.
+- App crash 10 seconds after cancelling close — clicking Cancel on the unsaved changes modal was not notifying the main process, so the 10-second force-close timeout still fired and crashed the app. Cancel now clears the timeout immediately.
+- macOS Gatekeeper warning on DMG download — the app bundle was notarized but the DMG itself was not, causing macOS to show a malware warning when opening the downloaded DMG. The DMG is now notarized and stapled separately.
+- Several reliability fixes from code review: broken blob URLs no longer hang photo crop indefinitely; IndexedDB resets and retries on initialisation failure; auto-PDF export timer is cleaned up on unmount to prevent state updates on an unmounted component; recent projects list now uses hydrated photo data; duplicate file-open IPC listeners no longer accumulate; asset paths use consistent per-segment encoding in packaged builds; stale close timeout and force-close state are cleared when a new window is created on macOS.
 
 ---
 
