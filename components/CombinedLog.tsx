@@ -1500,7 +1500,7 @@ Description: ${photo.description || 'N/A'}
                 currentProjectTimestamp={projectTimestamp}
             />
 
-            <div className="sticky top-0 z-40 bg-gray-100/95 dark:bg-gray-900/95 backdrop-blur-sm py-2.5 border-b border-gray-200/80 dark:border-white/5">
+            <div className="sticky top-0 z-40 bg-gray-100/95 dark:bg-[#1c1c1e]/95 backdrop-blur-sm py-2.5 border-b border-gray-200/80 dark:border-white/5">
                 <div className="max-w-7xl mx-auto px-4 md:px-8 flex flex-wrap justify-between items-center gap-2">
                     <button onClick={handleBack} className="border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 font-semibold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
                         <ArrowLeftIcon /> <span>Home</span>
