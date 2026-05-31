@@ -794,6 +794,24 @@ html.dark .group:hover .xtec-card-icon {
 }
 
 /* ============================================================
+   TEAL ACCENT DIVIDER — matches landing page gradient accent line
+   Replaces the old border-t-4 solid teal bars across all reports.
+   ============================================================ */
+.xtec-divider {
+    height: 2px;
+    background: #007D8C;
+    border-radius: 1px;
+    flex-shrink: 0;
+}
+@media print {
+    .xtec-divider {
+        background: #007D8C;
+        box-shadow: none;
+        height: 1px;
+    }
+}
+
+/* ============================================================
    REPORT SECTION CARDS — mirrors landing page card aesthetic
    Gradient background + teal glow, matches AppSelectionCard style.
    ============================================================ */

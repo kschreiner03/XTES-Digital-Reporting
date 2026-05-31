@@ -246,18 +246,18 @@ const EditableField: React.FC<{ label: string; value: string; onChange: (value: 
 };
 
 const ChecklistRow: React.FC<{ label: string; value: ChecklistOption; onChange: (value: ChecklistOption) => void; isInvalid?: boolean; }> = ({ label, value, onChange, isInvalid = false }) => (
-    <div className={`flex flex-col sm:flex-row items-start sm:items-center justify-between py-2 border-b last:border-b-0 ${isInvalid ? 'border-red-500 bg-red-50 dark:bg-red-900/20 px-2 rounded' : 'border-gray-200 dark:border-gray-700'}`}>
-        <span className={`font-medium mb-2 sm:mb-0 ${isInvalid ? 'text-red-600 dark:text-red-400' : 'text-gray-800 dark:text-gray-200'}`}>{label}</span>
-        <div className="flex items-center space-x-6">
+    <div className={`flex flex-col sm:flex-row items-start sm:items-center justify-between py-2 border-b last:border-b-0 ${isInvalid ? 'border-red-500 bg-red-50 dark:bg-red-900/20 px-2 rounded-lg' : 'border-gray-100 dark:border-white/5'}`}>
+        <span className={`text-sm font-medium mb-2 sm:mb-0 ${isInvalid ? 'text-red-600 dark:text-red-400' : 'text-gray-700 dark:text-gray-200'}`}>{label}</span>
+        <div className="flex items-center space-x-4">
             {(['Yes', 'No', 'NA'] as ChecklistOption[]).map(option => (
-                <label key={option} className="flex items-center space-x-2 cursor-pointer text-gray-600 dark:text-gray-400">
+                <label key={option} className="flex items-center space-x-1.5 cursor-pointer text-sm text-gray-600 dark:text-gray-400">
                     <input
                         type="radio"
                         name={label}
                         value={option}
                         checked={value === option}
                         onChange={() => onChange(option)}
-                        className="h-5 w-5 text-[#007D8C] border-gray-300 focus:ring-[#006b7a]"
+                        className="h-4 w-4 accent-[#007D8C] focus:ring-[#007D8C]/40"
                     />
                     <span>{option}</span>
                 </label>
@@ -2035,7 +2035,7 @@ Description: ${photo.description || 'N/A'}
                 <div className="main-content space-y-8" style={{ overflow: 'visible', transform: `scale(${zoomLevel / 100})`, transformOrigin: 'top left', width: `${10000 / zoomLevel}%` }}>
                     {/* Header Section */}
                     <div id="report-fields-section" className="xtec-report-card p-6 transition-colors duration-200" style={{ overflow: 'visible' }}>
-                        <div className="grid grid-cols-1 md:grid-cols-[1fr,auto,1fr] md:items-center pb-4 gap-4">
+                        <div className="grid grid-cols-1 md:grid-cols-[1fr,auto,1fr] md:items-center pb-3 gap-4">
                             <div className="flex justify-center md:justify-start">
                                 <SafeImage fileName="xterra-logo.png" alt="X-TERRA Logo" className="h-14 w-auto dark:hidden" />
                                 <SafeImage fileName="xterra-white.png" alt="X-TERRA Logo" className="h-14 w-auto hidden dark:block" />
@@ -2045,24 +2045,25 @@ Description: ${photo.description || 'N/A'}
                             </h1>
                             <div></div>
                         </div>
-                        <div className="border-t-4 border-[#007D8C] mb-4"></div>
-                        
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="xtec-divider mb-3"></div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2 pt-3 pb-2">
                              {/* Col 1 */}
-                            <div className="space-y-4">
+                            <div className="flex flex-col gap-y-2">
                                 <EditableField label="PROPONENT" value={data.proponent} onChange={(v) => handleChange('proponent', v)} isInvalid={errors.has('proponent')} />
                                 <EditableField label="PROJECT" value={data.projectName} onChange={(v) => handleChange('projectName', v)} isInvalid={errors.has('projectName')} />
                                 <EditableField label="LOCATION" value={data.location} onChange={(v) => handleChange('location', v)} isTextArea isInvalid={errors.has('location')} />
                                 <EditableField label="ENV FILE NUMBER" value={data.envFileNumber} onChange={(v) => handleChange('envFileNumber', v)} isInvalid={errors.has('envFileNumber')} />
                             </div>
                             {/* Col 2 */}
-                             <div className="space-y-4">
+                            <div className="flex flex-col gap-y-2">
                                 <EditableField label="DATE" value={data.date} onChange={(v) => handleChange('date', v)} placeholder="Month Day, Year" isInvalid={errors.has('date')} />
                                 <EditableField label="X-TERRA PROJECT #" value={data.projectNumber} onChange={(v) => handleChange('projectNumber', v)} isInvalid={errors.has('projectNumber')} />
                                 <EditableField label="MONITOR" value={data.environmentalMonitor} onChange={(v) => handleChange('environmentalMonitor', v)} isInvalid={errors.has('environmentalMonitor')} />
                                 <EditableField label="VENDOR & FOREMAN" value={data.vendorAndForeman} onChange={(v) => handleChange('vendorAndForeman', v)} isInvalid={errors.has('vendorAndForeman')} />
                             </div>
                         </div>
+                        <div className="xtec-divider mt-2"></div>
                     </div>
 
                     {/* Project Activities */}
