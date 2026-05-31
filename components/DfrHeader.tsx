@@ -48,22 +48,19 @@ const SelectableLabelField: React.FC<{
         );
     }
     
-    const selectClasses = `p-1 border-b-2 focus:outline-none focus:border-[#007D8C] transition duration-200 bg-transparent dark:bg-transparent text-base font-bold text-black dark:text-gray-200 ${isInvalid ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'}`;
-    const inputClasses = `p-1 w-full border-b-2 focus:outline-none focus:border-[#007D8C] transition duration-200 bg-transparent text-base font-normal text-black dark:text-gray-100 min-w-0 ${isInvalid ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'}`;
+    const boxClass = `w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#007D8C]/40 focus:border-[#007D8C] outline-none transition bg-gray-50 dark:bg-transparent text-gray-800 dark:text-white ${isInvalid ? 'border-red-500' : 'border-gray-200 dark:border-white/10'}`;
 
     return (
-        <div className="flex items-baseline gap-2">
-             <select value={labelType} onChange={(e) => onLabelChange(e.target.value)} className={selectClasses}>
-                {options.map(o => <option key={o} value={o}>{o}</option>)}
-            </select>
-            <input 
-                type="text" 
-                value={value}
-                onChange={(e) => onValueChange(e.target.value)}
-                className={inputClasses}
-                placeholder={placeholder}
-                spellCheck={true}
-            />
+        <div>
+            <label className="block text-sm font-semibold text-gray-500 dark:text-gray-400 mb-1">{labelType}</label>
+            <div className="flex gap-2">
+                <select value={labelType} onChange={(e) => onLabelChange(e.target.value)}
+                    className={`px-2 py-2 border rounded-lg focus:ring-2 focus:ring-[#007D8C]/40 focus:border-[#007D8C] outline-none transition bg-gray-50 dark:bg-transparent text-gray-800 dark:text-white text-sm font-semibold shrink-0 ${isInvalid ? 'border-red-500' : 'border-gray-200 dark:border-white/10'}`}>
+                    {options.map(o => <option key={o} value={o}>{o}</option>)}
+                </select>
+                <input type="text" value={value} onChange={(e) => onValueChange(e.target.value)}
+                    className={boxClass} placeholder={placeholder} spellCheck={true} />
+            </div>
         </div>
     );
 };
@@ -96,19 +93,19 @@ const EditableField: React.FC<{
         );
     }
 
-    const commonInputClasses = `p-1 w-full border-b-2 focus:outline-none focus:border-[#007D8C] transition duration-200 bg-transparent text-base font-normal text-black dark:text-gray-100 min-w-0 ${isInvalid ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'}`;
-    const labelClasses = "text-base font-bold text-black dark:text-gray-200 flex-shrink-0 whitespace-nowrap";
+    const boxClass = `block w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#007D8C]/40 focus:border-[#007D8C] outline-none transition bg-gray-50 dark:bg-transparent text-gray-800 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 ${isInvalid ? 'border-red-500' : 'border-gray-200 dark:border-white/10'}`;
+    const labelClasses = "block text-sm font-semibold text-gray-500 dark:text-gray-400 mb-1";
 
     if (isTextArea) {
         return (
-            <div className="flex items-start gap-2">
-                <label className={`${labelClasses} pt-1`}>{label}:</label>
+            <div>
+                <label className={labelClasses}>{label}</label>
                 <textarea
                     ref={textareaRef}
                     value={value}
                     onChange={(e) => onChange(e.target.value)}
                     rows={1}
-                    className={`${commonInputClasses} resize-none overflow-hidden`}
+                    className={`${boxClass} resize-none overflow-hidden`}
                     placeholder={placeholder}
                     spellCheck={true}
                 />
@@ -117,14 +114,14 @@ const EditableField: React.FC<{
     }
 
     return (
-        <div className="flex items-baseline gap-2">
-            <label className={labelClasses}>{label}:</label>
-            <input 
+        <div>
+            <label className={labelClasses}>{label}</label>
+            <input
                 ref={inputRef}
-                type="text" 
+                type="text"
                 value={value}
                 onChange={(e) => onChange(e.target.value)}
-                className={commonInputClasses}
+                className={boxClass}
                 placeholder={placeholder}
                 spellCheck={true}
             />
@@ -135,7 +132,7 @@ const EditableField: React.FC<{
 export const DfrHeader: React.FC<HeaderProps> = ({ data, onDataChange, isPrintable = false, errors, placeholders, isPhotologHeader = false }) => {
     return (
         <div className={`transition-colors duration-200 ${isPrintable ? 'p-0' : 'xtec-report-card p-6'}`}>
-            <div className={`grid grid-cols-1 md:grid-cols-[1fr,auto,1fr] md:items-center pb-4 gap-4`}>
+            <div className="grid grid-cols-1 md:grid-cols-[1fr,auto,1fr] md:items-center pb-3 gap-4">
                 <div className="flex justify-center md:justify-start">
                     <XterraLogo isPrintable={isPrintable} />
                 </div>
@@ -148,7 +145,7 @@ export const DfrHeader: React.FC<HeaderProps> = ({ data, onDataChange, isPrintab
             
             <div className="xtec-divider"></div>
             
-            <div className={`${isPrintable ? 'py-2' : 'pt-4'}`}>
+            <div className={`${isPrintable ? 'py-2' : 'pt-3 pb-2'}`}>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2">
                     <div className="flex flex-col gap-y-2">
                         <EditableField label="DATE" value={data.date} onChange={(v) => onDataChange('date', v)} isPrintable={isPrintable} isInvalid={errors?.has('date')} placeholder="October 1, 2025" />
