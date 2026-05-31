@@ -194,7 +194,7 @@ const ImportProjectsModal: React.FC<{
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
-            <div className="bg-white dark:bg-[#1c1c1e] p-6 rounded-xl shadow-xl max-w-2xl w-full max-h-[80vh] flex flex-col border border-gray-200 dark:border-[#007D8C]/20 transition-colors duration-200">
+            <div className="xtec-report-card p-6 max-w-2xl w-full max-h-[80vh] flex flex-col transition-colors duration-200">
                 <div className="flex justify-between items-center border-b dark:border-gray-700 pb-3 mb-4">
                     <h2 className="text-xl font-bold text-gray-800 dark:text-white">Import Photos from Projects</h2>
                     <button onClick={onClose} className="text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"><CloseIcon /></button>
@@ -1721,7 +1721,7 @@ Description: ${photo.description || 'N/A'}
                 const badgeClass = "inline-flex items-center gap-1.5 px-3 py-1 bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-full text-xs font-medium border border-red-200 dark:border-red-800";
                 return (
                     <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
-                        <div role="alert" className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl relative max-w-md w-full mx-4 overflow-hidden">
+                        <div role="alert" className="xtec-report-card rounded-xl shadow-2xl relative max-w-md w-full mx-4 overflow-hidden">
                             <div className="flex items-center gap-4 p-5 border-b border-gray-200 dark:border-gray-700">
                                 <SafeImage fileName="loading-error.gif" alt="Missing info" className="w-14 h-14 flex-shrink-0 rounded-lg" />
                                 <div className="flex-1 min-w-0">

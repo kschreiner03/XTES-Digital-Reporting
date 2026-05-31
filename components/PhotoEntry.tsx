@@ -169,7 +169,7 @@ const PhotoEntry: React.FC<PhotoEntryProps> = ({
   }
 
   return (
-    <div ref={setNodeRef} style={sortableStyle} className={`bg-white dark:bg-[#1c1c1e] p-6 shadow-sm rounded-xl border break-inside-avoid ${hasErrors ? 'border-red-400 dark:border-red-500 ring-2 ring-red-500' : 'border-gray-200 dark:border-[#007D8C]/15'}`}>
+    <div ref={setNodeRef} style={sortableStyle} className={`xtec-report-card p-6 break-inside-avoid ${hasErrors ? '!border-red-400 dark:!border-red-500 ring-2 ring-red-500' : ''}`}>
       {hasErrors && (
         <div className="mb-4 flex items-center gap-2 flex-wrap">
           <span className="text-red-600 dark:text-red-400 font-semibold text-sm">Missing:</span>

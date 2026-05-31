@@ -794,6 +794,23 @@ html.dark .group:hover .xtec-card-icon {
 }
 
 /* ============================================================
+   REPORT SECTION CARDS — mirrors landing page card aesthetic
+   Gradient background + teal glow, matches AppSelectionCard style.
+   ============================================================ */
+.xtec-report-card {
+    background: linear-gradient(160deg, #ffffff 0%, #f9fafb 100%);
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    box-shadow: 0 0 24px rgba(0, 125, 140, 0.10), 0 2px 8px rgba(0, 0, 0, 0.04);
+    border-radius: 1rem; /* rounded-2xl */
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+html.dark .xtec-report-card {
+    background: linear-gradient(160deg, rgba(28, 32, 36, 0.98) 0%, rgba(20, 24, 28, 1) 100%);
+    border: 1px solid rgba(0, 125, 140, 0.22);
+    box-shadow: 0 0 24px rgba(0, 125, 140, 0.09), inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+/* ============================================================
    VIEW TRANSITIONS — Report ↔ Landing Page
    Pure opacity + transform; works identically in light & dark
    because the page background shows through naturally.

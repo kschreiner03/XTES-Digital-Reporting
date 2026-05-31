@@ -253,7 +253,7 @@ const formatDateForFilename = (dateString: string): string => {
 
 // --- Local UI Components ---
 const Section: React.FC<{ title: string; children: React.ReactNode; }> = ({ title, children }) => (
-    <div className="bg-white dark:bg-[#1c1c1e] p-6 shadow-sm rounded-xl border border-gray-200 dark:border-[#007D8C]/15 transition-colors duration-200" style={{ overflow: 'visible' }}>
+    <div className="xtec-report-card p-6 transition-colors duration-200" style={{ overflow: 'visible' }}>
         <p className="text-xs font-semibold uppercase tracking-wider text-[#007D8C] border-b border-gray-100 dark:border-white/5 pb-3 mb-4">{title}</p>
         <div className="space-y-4" style={{ overflow: 'visible' }}>{children}</div>
     </div>
@@ -310,7 +310,7 @@ const LocationBlockEntry: React.FC<{
     const [isCommentOpen, setIsCommentOpen] = useState(false);
     const fieldId = `locationActivity_${data.id}`;
     return (
-        <div className="p-4 border border-gray-200 dark:border-[#007D8C]/15 rounded-xl bg-white dark:bg-[#1c1c1e] transition-colors duration-200">
+        <div className="xtec-report-card p-4 transition-colors duration-200">
             <div className="flex justify-between items-center mb-2">
                 <div className="flex items-center gap-2">
                     <h3 className="font-bold text-gray-600 dark:text-gray-400">Location Specific Activity</h3>

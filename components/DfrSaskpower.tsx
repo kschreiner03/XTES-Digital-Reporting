@@ -207,7 +207,7 @@ const formatDateForFilename = (dateString: string): string => {
 
 // --- UI Components ---
 const Section: React.FC<{ title: string; children: React.ReactNode; }> = ({ title, children }) => (
-    <div className="bg-white dark:bg-[#1c1c1e] p-6 shadow-sm rounded-xl border border-gray-200 dark:border-[#007D8C]/15 transition-colors duration-200" style={{ overflow: 'visible' }}>
+    <div className="xtec-report-card p-6 transition-colors duration-200" style={{ overflow: 'visible' }}>
         <p className="text-xs font-semibold uppercase tracking-wider text-[#007D8C] border-b border-gray-100 dark:border-white/5 pb-3 mb-4">{title}</p>
         <div className="space-y-4" style={{ overflow: 'visible' }}>{children}</div>
     </div>
@@ -2034,7 +2034,7 @@ Description: ${photo.description || 'N/A'}
 
                 <div className="main-content space-y-8" style={{ overflow: 'visible', transform: `scale(${zoomLevel / 100})`, transformOrigin: 'top left', width: `${10000 / zoomLevel}%` }}>
                     {/* Header Section */}
-                    <div id="report-fields-section" className="bg-white dark:bg-[#1c1c1e] p-6 shadow-sm rounded-xl border border-gray-200 dark:border-[#007D8C]/15 transition-colors duration-200" style={{ overflow: 'visible' }}>
+                    <div id="report-fields-section" className="xtec-report-card p-6 transition-colors duration-200" style={{ overflow: 'visible' }}>
                         <div className="grid grid-cols-1 md:grid-cols-[1fr,auto,1fr] md:items-center pb-4 gap-4">
                             <div className="flex justify-center md:justify-start">
                                 <SafeImage fileName="xterra-logo.png" alt="X-TERRA Logo" className="h-14 w-auto dark:hidden" />
