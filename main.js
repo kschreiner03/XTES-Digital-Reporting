@@ -586,6 +586,15 @@ app.whenReady().then(() => {
     }
   });
 
+  // Ensure dialog opens in a local folder (documents) when only a filename is given.
+  // Without this, Windows resolves the "last used" location which can be OneDrive or
+  // a network share, causing 5-10s delays before the dialog appears.
+  const resolveDialogPath = (defaultPath) => {
+    if (!defaultPath) return app.getPath('documents');
+    if (path.isAbsolute(defaultPath)) return defaultPath;
+    return path.join(app.getPath('documents'), defaultPath);
+  };
+
   ipcMain.handle('save-project', async (event, data, defaultPath) => {
     const window = BrowserWindow.getFocusedWindow();
     let filters = [{ name: 'Project Files', extensions: ['json'] }];
@@ -599,7 +608,7 @@ app.whenReady().then(() => {
 
     const { filePath } = await dialog.showSaveDialog(window, {
       title: 'Save Project',
-      defaultPath,
+      defaultPath: resolveDialogPath(defaultPath),
       filters,
     });
 
@@ -776,7 +785,7 @@ app.whenReady().then(() => {
     const window = BrowserWindow.getFocusedWindow();
     const { filePath } = await dialog.showSaveDialog(window, {
       title: 'Save PDF',
-      defaultPath: defaultPath || 'photolog.pdf',
+      defaultPath: resolveDialogPath(defaultPath || 'photolog.pdf'),
       filters: [{ name: 'PDF Files', extensions: ['pdf'] }],
     });
 
@@ -796,7 +805,7 @@ app.whenReady().then(() => {
     const window = BrowserWindow.getFocusedWindow();
     const { filePath } = await dialog.showSaveDialog(window, {
         title: 'Save Photos As...',
-        defaultPath: defaultPath,
+        defaultPath: resolveDialogPath(defaultPath),
         filters: [{ name: 'Zip Files', extensions: ['zip'] }],
     });
 
