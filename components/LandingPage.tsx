@@ -111,7 +111,7 @@ const getReportTypeName = (type: AppType): string => {
 const AppSelectionCard: React.FC<{ title: string; description: string; icon: React.ReactNode; onClick: () => void; keepIconColor?: boolean; isDark?: boolean; }> = ({ title, description, icon, onClick, isDark }) => (
     <button
         onClick={onClick}
-        className="p-3 sm:p-4 md:p-6 flex flex-col items-center text-center group w-full h-full backdrop-blur-sm border border-[#007D8C] rounded-2xl xtec-card"
+        className="p-3 sm:p-4 md:p-6 flex flex-col items-center text-center group w-full h-full backdrop-blur-sm border border-gray-200/80 dark:border-[#007D8C]/25 rounded-2xl xtec-card"
         style={isDark
             ? { background: 'rgba(28,32,36,0.75)', boxShadow: '0 0 24px rgba(0,125,140,0.10)' }
             : { background: 'rgba(255,255,255,0.75)', boxShadow: '0 0 24px rgba(0,125,140,0.18)' }
@@ -127,7 +127,7 @@ const AppSelectionCard: React.FC<{ title: string; description: string; icon: Rea
             </div>
         </div>
         <h3 className="text-base font-bold text-gray-900 dark:text-white mb-1 group-hover:text-[#007D8C] transition-colors duration-200 min-h-[2.5rem] flex items-center justify-center">{title}</h3>
-        <p className="text-gray-600 dark:text-slate-300 text-xs leading-relaxed">{description}</p>
+        <p className="text-gray-600 dark:text-gray-400 text-xs leading-relaxed">{description}</p>
     </button>
 );
 
@@ -361,7 +361,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSelectApp, onOpenProject, s
                     className="rounded-3xl p-4 sm:p-5 md:p-6 flex flex-col backdrop-blur-xl dark:backdrop-blur-none"
                     style={isDark ? {
                         background: 'linear-gradient(180deg, rgba(24,28,32,0.92) 0%, rgba(18,22,26,0.95) 100%)',
-                        border: '1px solid rgba(255,255,255,0.07)',
+                        border: '1px solid rgba(0,125,140,0.18)',
                         boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.04), 0 8px 32px rgba(0,0,0,0.30)',
                     } : {
                         background: 'linear-gradient(180deg, rgba(255,255,255,0.75) 0%, rgba(249,250,251,0.82) 100%)',
@@ -385,7 +385,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSelectApp, onOpenProject, s
                         <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 dark:from-white dark:to-slate-200 bg-clip-text text-transparent md:text-4xl tracking-tight">
                             Create a New Report
                         </h1>
-                        <p className="mt-2 text-sm text-gray-600 dark:text-slate-300 max-w-lg mx-auto">
+                        <p className="mt-2 text-sm text-gray-600 dark:text-gray-400 max-w-lg mx-auto">
                             Select a report type to begin a new project.
                         </p>
                         <div style={{ width: 80, height: 2, background: 'linear-gradient(90deg, #007D8C, rgba(0,125,140,0.25))', margin: '10px auto 0', borderRadius: 1 }} />
@@ -517,7 +517,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSelectApp, onOpenProject, s
                                         <div className="absolute top-1/2 right-3 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
                                             <button
                                                 onClick={(e) => handleToggleMenu(e, project.timestamp)}
-                                                className="p-1.5 text-gray-500 dark:text-[#aaa] hover:text-[#007D8C] dark:hover:text-[#007D8C] rounded-lg hover:bg-blue-50 dark:hover:bg-[#363636] focus:outline-none transition-all duration-200"
+                                                className="p-1.5 text-gray-500 dark:text-[#aaa] hover:text-[#007D8C] dark:hover:text-[#007D8C] rounded-lg hover:bg-teal-50 dark:hover:bg-[#073d44] focus:outline-none transition-all duration-200"
                                                 aria-haspopup="true"
                                                 aria-expanded={openMenuTimestamp === project.timestamp}
                                             >
@@ -529,8 +529,8 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSelectApp, onOpenProject, s
                             </ul>
                         ) : (
                             <div className="text-center py-12 px-6">
-                                <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-gray-200 to-gray-100 dark:from-slate-700 dark:to-slate-600 flex items-center justify-center mx-auto mb-3">
-                                    <FolderOpenIcon className="h-6 w-6 text-gray-400 dark:text-slate-400" />
+                                <div className="w-12 h-12 rounded-xl bg-teal-50 dark:bg-[#073d44] flex items-center justify-center mx-auto mb-3">
+                                    <FolderOpenIcon className="h-6 w-6 text-[#007D8C]" />
                                 </div>
                                 <h3 className="text-sm font-semibold text-gray-500 dark:text-slate-300">
                                     {searchTerm ? 'No matching projects' : 'No Recent Projects'}
