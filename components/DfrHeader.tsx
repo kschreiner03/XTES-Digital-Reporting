@@ -37,7 +37,7 @@ const SelectableLabelField: React.FC<{
     placeholder?: string;
 }> = ({ labelType, value, onLabelChange, onValueChange, isPrintable = false, isInvalid = false, placeholder = '' }) => {
     
-    const options = ["IOCG Lease #", "Disposition #", "ENV File #", "License #", "WSA File #"];
+    const options = ["IOCG Lease #", "Disposition #", "ENV File #", "MOE File #", "License #", "WSA File #"];
 
     if (isPrintable) {
         return (
