@@ -728,7 +728,7 @@ const BulletPointEditor: React.FC<BulletPointEditorProps> = ({
                             }
                         }}
                         placeholder="Type comment, press Enter..."
-                        className="flex-1 text-sm px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-black dark:text-white focus:ring-1 focus:ring-blue-400 focus:outline-none"
+                        className="flex-1 text-sm px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-black dark:text-white focus:ring-1 focus:ring-[#007D8C]/40 focus:border-[#007D8C] focus:outline-none"
                     />
                     <button
                         type="button"
@@ -912,7 +912,7 @@ const BulletPointEditor: React.FC<BulletPointEditorProps> = ({
                             onMouseUp={handleSelectionChange}
                             onKeyUp={handleSelectionChange}
                             placeholder={placeholder}
-                            className={`block w-full p-2 border rounded-md shadow-sm focus:ring-2 focus:ring-[#007D8C] focus:border-[#007D8C] transition-all text-black dark:text-white dark:placeholder-gray-400 relative z-10 resize-none ${
+                            className={`block w-full p-2 border rounded-md focus:ring-2 focus:ring-[#007D8C]/40 focus:border-[#007D8C] focus:outline-none transition-all text-black dark:text-white dark:placeholder-gray-400 relative z-10 resize-none ${
                                 isInvalid ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 dark:border-gray-600'
                             }`}
                             spellCheck={true}
