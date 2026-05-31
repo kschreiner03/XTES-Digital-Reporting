@@ -48,7 +48,7 @@ const SelectableLabelField: React.FC<{
         );
     }
     
-    const selectClasses = `p-1 border-b-2 focus:outline-none focus:border-[#007D8C] transition duration-200 bg-transparent text-base font-bold text-black dark:text-gray-200 dark:bg-gray-800 ${isInvalid ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'}`;
+    const selectClasses = `p-1 border-b-2 focus:outline-none focus:border-[#007D8C] transition duration-200 bg-transparent dark:bg-transparent text-base font-bold text-black dark:text-gray-200 ${isInvalid ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'}`;
     const inputClasses = `p-1 w-full border-b-2 focus:outline-none focus:border-[#007D8C] transition duration-200 bg-transparent text-base font-normal text-black dark:text-gray-100 min-w-0 ${isInvalid ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'}`;
 
     return (
@@ -134,7 +134,7 @@ const EditableField: React.FC<{
 
 export const DfrHeader: React.FC<HeaderProps> = ({ data, onDataChange, isPrintable = false, errors, placeholders, isPhotologHeader = false }) => {
     return (
-        <div className={`bg-white dark:bg-gray-800 transition-colors duration-200 ${isPrintable ? 'p-0 shadow-none' : 'p-6 shadow-md rounded-lg'}`}>
+        <div className={`transition-colors duration-200 ${isPrintable ? 'p-0' : 'xtec-report-card p-6'}`}>
             <div className={`grid grid-cols-1 md:grid-cols-[1fr,auto,1fr] md:items-center pb-4 gap-4`}>
                 <div className="flex justify-center md:justify-start">
                     <XterraLogo isPrintable={isPrintable} />
@@ -146,9 +146,9 @@ export const DfrHeader: React.FC<HeaderProps> = ({ data, onDataChange, isPrintab
                 <div></div>
             </div>
             
-            <div className="border-t-4 border-[#007D8C]"></div>
+            <div className="xtec-divider"></div>
             
-            <div className={`bg-white dark:bg-gray-800 transition-colors duration-200 ${isPrintable ? 'py-2' : 'pt-4'}`}>
+            <div className={`${isPrintable ? 'py-2' : 'pt-4'}`}>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2">
                     <div className="flex flex-col gap-y-2">
                         <EditableField label="DATE" value={data.date} onChange={(v) => onDataChange('date', v)} isPrintable={isPrintable} isInvalid={errors?.has('date')} placeholder="October 1, 2025" />
@@ -182,7 +182,7 @@ export const DfrHeader: React.FC<HeaderProps> = ({ data, onDataChange, isPrintab
                 </div>
             </div>
             
-            <div className={`border-t-4 border-[#007D8C] ${isPrintable ? '' : 'mt-2'}`}></div>
+            <div className={`xtec-divider ${isPrintable ? '' : 'mt-2'}`}></div>
         </div>
     );
 };

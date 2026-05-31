@@ -194,7 +194,7 @@ const ImportProjectsModal: React.FC<{
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
-            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl max-w-2xl w-full max-h-[80vh] flex flex-col transition-colors duration-200">
+            <div className="xtec-report-card p-6 max-w-2xl w-full max-h-[80vh] flex flex-col transition-colors duration-200">
                 <div className="flex justify-between items-center border-b dark:border-gray-700 pb-3 mb-4">
                     <h2 className="text-xl font-bold text-gray-800 dark:text-white">Import Photos from Projects</h2>
                     <button onClick={onClose} className="text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"><CloseIcon /></button>
@@ -1500,7 +1500,7 @@ Description: ${photo.description || 'N/A'}
                 currentProjectTimestamp={projectTimestamp}
             />
 
-            <div className="sticky top-0 z-40 bg-gray-100 dark:bg-gray-900 py-2 border-b border-gray-200 dark:border-gray-700">
+            <div className="sticky top-0 z-40 bg-gray-100/95 dark:bg-gray-900/95 backdrop-blur-sm py-2.5 border-b border-gray-200/80 dark:border-white/5">
                 <div className="max-w-7xl mx-auto px-4 md:px-8 flex flex-wrap justify-between items-center gap-2">
                     <button onClick={handleBack} className="border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 font-semibold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
                         <ArrowLeftIcon /> <span>Home</span>
@@ -1540,7 +1540,7 @@ Description: ${photo.description || 'N/A'}
                                 <ChevronDownIcon className="h-4 w-4" />
                             </button>
                             {showImportMenu && (
-                                <div className="absolute left-0 top-full mt-1 z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 min-w-[200px]">
+                                <div className="absolute left-0 top-full mt-1 z-50 bg-white dark:bg-[#1c1c1e] border border-gray-200 dark:border-[#007D8C]/20 rounded-xl shadow-lg py-1 min-w-[200px]">
                                     <button
                                         onClick={() => { setShowImportMenu(false); handleOpenProject(); }}
                                         className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
@@ -1574,7 +1574,7 @@ Description: ${photo.description || 'N/A'}
                                 <ChevronDownIcon className="h-4 w-4" />
                             </button>
                             {showSaveAsMenu && (
-                                <div className="absolute right-0 top-full mt-1 z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 min-w-[160px]">
+                                <div className="absolute right-0 top-full mt-1 z-50 bg-white dark:bg-[#1c1c1e] border border-gray-200 dark:border-[#007D8C]/20 rounded-xl shadow-lg py-1 min-w-[160px]">
                                     <button
                                         onClick={() => { setShowSaveAsMenu(false); handleSaveProject(); }}
                                         className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
@@ -1615,7 +1615,7 @@ Description: ${photo.description || 'N/A'}
                                 {index < photosData.length - 1 && (
                                      <div className="relative my-10 flex items-center justify-center">
                                         <div className="absolute inset-0 flex items-center" aria-hidden="true">
-                                            <div className="w-full border-t-4 border-[#007D8C]"></div>
+                                            <div className="w-full border-t border-gray-200 dark:border-white/10"></div>
                                         </div>
                                         <div className="relative">
                                             <button
@@ -1668,14 +1668,14 @@ Description: ${photo.description || 'N/A'}
                         )}
                     </div>
                 </div>
-                {photosData.length > 0 && <div className="border-t-4 border-[#007D8C] my-8" />}
+                {photosData.length > 0 && <div className="border-t border-gray-200 dark:border-white/10 my-8" />}
                 <footer className="text-center text-gray-500 dark:text-gray-400 text-sm py-4">
                     X-TES Digital Reporting v1.1.5
                 </footer>
             </div>
             {showUnsupportedFileModal && (
                 <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 transition-opacity duration-300">
-                    <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-2xl text-center relative max-w-md transform scale-95 hover:scale-100 transition-transform duration-300">
+                    <div className="bg-white dark:bg-[#1c1c1e] p-6 rounded-xl shadow-2xl text-center relative max-w-md">
                         <button
                             onClick={() => setShowUnsupportedFileModal(false)}
                             className="absolute top-2 right-2 p-1 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
@@ -1721,7 +1721,7 @@ Description: ${photo.description || 'N/A'}
                 const badgeClass = "inline-flex items-center gap-1.5 px-3 py-1 bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-full text-xs font-medium border border-red-200 dark:border-red-800";
                 return (
                     <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
-                        <div role="alert" className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl relative max-w-md w-full mx-4 overflow-hidden">
+                        <div role="alert" className="xtec-report-card rounded-xl shadow-2xl relative max-w-md w-full mx-4 overflow-hidden">
                             <div className="flex items-center gap-4 p-5 border-b border-gray-200 dark:border-gray-700">
                                 <SafeImage fileName="loading-error.gif" alt="Missing info" className="w-14 h-14 flex-shrink-0 rounded-lg" />
                                 <div className="flex-1 min-w-0">
@@ -1771,7 +1771,7 @@ Description: ${photo.description || 'N/A'}
             })()}
              {showNoInternetModal && (
                 <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
-                    <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-2xl text-center relative max-w-md">
+                    <div className="bg-white dark:bg-[#1c1c1e] p-6 rounded-xl shadow-2xl text-center relative max-w-md">
                         <button
                             onClick={() => setShowNoInternetModal(false)}
                             className="absolute top-2 right-2 p-1 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
@@ -1789,7 +1789,7 @@ Description: ${photo.description || 'N/A'}
 
             {showFirstSaveModal && (
                 <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[200]">
-                    <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-2xl relative max-w-lg w-full">
+                    <div className="bg-white dark:bg-[#1c1c1e] p-6 rounded-xl shadow-2xl relative max-w-lg w-full border border-gray-200 dark:border-[#007D8C]/20">
                         <h3 className="text-lg font-bold mb-1 text-gray-800 dark:text-white">Save Project</h3>
                         <p className="text-gray-500 dark:text-gray-400 text-xs mb-4">Confirm project details before saving. Autosave will activate after this.</p>
                         <div className="grid grid-cols-2 gap-3 mb-5">
@@ -1824,7 +1824,7 @@ Description: ${photo.description || 'N/A'}
 
             {showUnsavedModal && (
                 <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[200]">
-                    <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-2xl text-center relative max-w-md">
+                    <div className="bg-white dark:bg-[#1c1c1e] p-6 rounded-xl shadow-2xl text-center relative max-w-md">
                         <h3 className="text-xl font-bold mb-3 text-gray-800 dark:text-white">Unsaved Changes</h3>
                         <p className="text-gray-600 dark:text-gray-300 mb-6">
                             You have unsaved changes. Are you sure you want to leave? Your changes will be lost.

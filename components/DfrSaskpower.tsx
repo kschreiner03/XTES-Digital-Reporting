@@ -207,14 +207,14 @@ const formatDateForFilename = (dateString: string): string => {
 
 // --- UI Components ---
 const Section: React.FC<{ title: string; children: React.ReactNode; }> = ({ title, children }) => (
-    <div className="bg-white dark:bg-gray-800 p-6 shadow-md rounded-lg transition-colors duration-200" style={{ overflow: 'visible' }}>
-        <h2 className="text-xl font-bold text-gray-800 dark:text-gray-100 border-b-2 border-gray-200 dark:border-gray-700 pb-2 mb-4">{title}</h2>
+    <div className="xtec-report-card p-6 transition-colors duration-200" style={{ overflow: 'visible' }}>
+        <p className="text-xs font-semibold uppercase tracking-wider text-[#007D8C] border-b border-gray-100 dark:border-white/5 pb-3 mb-4">{title}</p>
         <div className="space-y-4" style={{ overflow: 'visible' }}>{children}</div>
     </div>
 );
 
 const EditableField: React.FC<{ label: string; value: string; onChange: (value: string) => void; type?: string; isTextArea?: boolean; rows?: number; placeholder?: string; isInvalid?: boolean; }> = ({ label, value, onChange, type = 'text', isTextArea = false, rows = 1, placeholder = '', isInvalid = false }) => {
-    const commonClasses = `block w-full p-2 border rounded-md shadow-sm focus:ring-2 focus:ring-[#007D8C] focus:border-[#007D8C] transition bg-white dark:bg-gray-700 text-black dark:text-white dark:placeholder-gray-400 ${isInvalid ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'}`;
+    const commonClasses = `block w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#007D8C]/40 focus:border-[#007D8C] outline-none transition bg-gray-50 dark:bg-white/5 text-gray-800 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 ${isInvalid ? 'border-red-500' : 'border-gray-200 dark:border-white/10'}`;
     const elementRef = React.useRef<HTMLInputElement & HTMLTextAreaElement>(null);
 
     return (
@@ -246,18 +246,18 @@ const EditableField: React.FC<{ label: string; value: string; onChange: (value: 
 };
 
 const ChecklistRow: React.FC<{ label: string; value: ChecklistOption; onChange: (value: ChecklistOption) => void; isInvalid?: boolean; }> = ({ label, value, onChange, isInvalid = false }) => (
-    <div className={`flex flex-col sm:flex-row items-start sm:items-center justify-between py-2 border-b last:border-b-0 ${isInvalid ? 'border-red-500 bg-red-50 dark:bg-red-900/20 px-2 rounded' : 'border-gray-200 dark:border-gray-700'}`}>
-        <span className={`font-medium mb-2 sm:mb-0 ${isInvalid ? 'text-red-600 dark:text-red-400' : 'text-gray-800 dark:text-gray-200'}`}>{label}</span>
-        <div className="flex items-center space-x-6">
+    <div className={`flex flex-col sm:flex-row items-start sm:items-center justify-between py-2 border-b last:border-b-0 ${isInvalid ? 'border-red-500 bg-red-50 dark:bg-red-900/20 px-2 rounded-lg' : 'border-gray-100 dark:border-white/5'}`}>
+        <span className={`text-sm font-medium mb-2 sm:mb-0 ${isInvalid ? 'text-red-600 dark:text-red-400' : 'text-gray-700 dark:text-gray-200'}`}>{label}</span>
+        <div className="flex items-center space-x-4">
             {(['Yes', 'No', 'NA'] as ChecklistOption[]).map(option => (
-                <label key={option} className="flex items-center space-x-2 cursor-pointer text-gray-600 dark:text-gray-300">
+                <label key={option} className="flex items-center space-x-1.5 cursor-pointer text-sm text-gray-600 dark:text-gray-400">
                     <input
                         type="radio"
                         name={label}
                         value={option}
                         checked={value === option}
                         onChange={() => onChange(option)}
-                        className="h-5 w-5 text-[#007D8C] border-gray-300 focus:ring-[#006b7a]"
+                        className="h-4 w-4 accent-[#007D8C] focus:ring-[#007D8C]/40"
                     />
                     <span>{option}</span>
                 </label>
@@ -1943,23 +1943,18 @@ Description: ${photo.description || 'N/A'}
                 {/* Main content column - scales down on laptops to fit comments */}
                 <div className="flex-1 min-w-0 max-w-[1400px]">
                 {showMigrationNotice && (
-                    <div className="bg-blue-100 border-l-4 border-blue-500 text-blue-700 p-4 mb-6 rounded-md shadow-sm" role="alert">
-                        <div className="flex">
-                            <div className="py-1">
-                                <svg className="fill-current h-6 w-6 text-blue-500 mr-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M2.93 17.07A10 10 0 1 1 17.07 2.93 10 10 0 0 1 2.93 17.07zm12.73-1.41A8 8 0 1 0 4.34 4.34a8 8 0 0 0 11.32 11.32zM9 11V9h2v6H9v-4zm0-6h2v2H9V5z"/></svg>
-                            </div>
-                            <div>
-                                <p className="font-bold">Project format updated</p>
-                                <p className="text-sm">This project was opened in an older format and has been automatically updated. Please save the project to keep these changes.</p>
-                            </div>
-                            <button onClick={() => setShowMigrationNotice(false)} className="ml-auto -mx-1.5 -my-1.5 bg-blue-100 text-blue-500 rounded-lg focus:ring-2 focus:ring-blue-400 p-1.5 hover:bg-blue-200 inline-flex h-8 w-8" aria-label="Dismiss">
-                                <span className="sr-only">Dismiss</span>
-                                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd"></path></svg>
-                            </button>
+                    <div className="flex items-start gap-3 bg-[#007D8C]/8 dark:bg-[#007D8C]/10 border border-[#007D8C]/25 p-3.5 mb-6 rounded-xl" role="alert">
+                        <svg className="h-5 w-5 text-[#007D8C] shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" /></svg>
+                        <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-gray-800 dark:text-white">Project format updated</p>
+                            <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5">Opened in an older format and automatically updated. Save the project to keep these changes.</p>
                         </div>
+                        <button onClick={() => setShowMigrationNotice(false)} className="shrink-0 p-1 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-white hover:bg-[#007D8C]/10 transition-colors focus:outline-none focus:ring-2 focus:ring-[#007D8C]/40" aria-label="Dismiss">
+                            <CloseIcon className="h-4 w-4" />
+                        </button>
                     </div>
                 )}
-                <div className="sticky top-0 z-40 bg-gray-100 dark:bg-gray-900 py-2 mb-4 border-b border-gray-200 dark:border-gray-700">
+                <div className="sticky top-0 z-40 bg-gray-100/95 dark:bg-gray-900/95 backdrop-blur-sm py-2.5 mb-4 border-b border-gray-200/80 dark:border-white/5">
                     <div className="flex flex-wrap justify-between items-center gap-2">
                         <button onClick={handleBack} className="border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 font-semibold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
                             <ArrowLeftIcon /> <span>Home</span>
@@ -1998,7 +1993,7 @@ Description: ${photo.description || 'N/A'}
                                     <ChevronDownIcon className="h-4 w-4" />
                                 </button>
                                 {showSaveAsMenu && (
-                                    <div className="absolute right-0 top-full mt-1 z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 min-w-[160px]">
+                                    <div className="absolute right-0 top-full mt-1 z-50 bg-white dark:bg-[#1c1c1e] border border-gray-200 dark:border-[#007D8C]/20 rounded-xl shadow-lg py-1 min-w-[160px]">
                                         <button
                                             onClick={() => { setShowSaveAsMenu(false); handleSaveProject(); }}
                                             className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
@@ -2026,21 +2021,21 @@ Description: ${photo.description || 'N/A'}
 
                 {/* Zoom Controls */}
                 <div className="flex items-center justify-end gap-1 mb-4">
-                    <button onClick={handleZoomOut} className="p-1.5 rounded-md bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 transition" title="Zoom out">
+                    <button onClick={handleZoomOut} className="p-1.5 rounded-md bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-400 transition focus:outline-none focus:ring-2 focus:ring-[#007D8C]/40" title="Zoom out">
                         <ZoomOutIcon className="h-4 w-4" />
                     </button>
-                    <button onClick={handleZoomReset} className="px-2 py-1 text-xs font-medium rounded-md bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 transition min-w-[3rem]" title="Reset zoom">
+                    <button onClick={handleZoomReset} className="px-2 py-1 text-xs font-medium rounded-md bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-400 transition min-w-[3rem] focus:outline-none focus:ring-2 focus:ring-[#007D8C]/40" title="Reset zoom">
                         {zoomLevel}%
                     </button>
-                    <button onClick={handleZoomIn} className="p-1.5 rounded-md bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 transition" title="Zoom in">
+                    <button onClick={handleZoomIn} className="p-1.5 rounded-md bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-400 transition focus:outline-none focus:ring-2 focus:ring-[#007D8C]/40" title="Zoom in">
                         <ZoomInIcon className="h-4 w-4" />
                     </button>
                 </div>
 
                 <div className="main-content space-y-8" style={{ overflow: 'visible', transform: `scale(${zoomLevel / 100})`, transformOrigin: 'top left', width: `${10000 / zoomLevel}%` }}>
                     {/* Header Section */}
-                    <div id="report-fields-section" className="bg-white dark:bg-gray-800 p-6 shadow-md rounded-lg transition-colors duration-200" style={{ overflow: 'visible' }}>
-                        <div className="grid grid-cols-1 md:grid-cols-[1fr,auto,1fr] md:items-center pb-4 gap-4">
+                    <div id="report-fields-section" className="xtec-report-card p-6 transition-colors duration-200" style={{ overflow: 'visible' }}>
+                        <div className="grid grid-cols-1 md:grid-cols-[1fr,auto,1fr] md:items-center pb-3 gap-4">
                             <div className="flex justify-center md:justify-start">
                                 <SafeImage fileName="xterra-logo.png" alt="X-TERRA Logo" className="h-14 w-auto dark:hidden" />
                                 <SafeImage fileName="xterra-white.png" alt="X-TERRA Logo" className="h-14 w-auto hidden dark:block" />
@@ -2050,24 +2045,25 @@ Description: ${photo.description || 'N/A'}
                             </h1>
                             <div></div>
                         </div>
-                        <div className="border-t-4 border-[#007D8C] mb-4"></div>
-                        
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="xtec-divider mb-3"></div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2 pt-3 pb-2">
                              {/* Col 1 */}
-                            <div className="space-y-4">
+                            <div className="flex flex-col gap-y-2">
                                 <EditableField label="PROPONENT" value={data.proponent} onChange={(v) => handleChange('proponent', v)} isInvalid={errors.has('proponent')} />
                                 <EditableField label="PROJECT" value={data.projectName} onChange={(v) => handleChange('projectName', v)} isInvalid={errors.has('projectName')} />
                                 <EditableField label="LOCATION" value={data.location} onChange={(v) => handleChange('location', v)} isTextArea isInvalid={errors.has('location')} />
                                 <EditableField label="ENV FILE NUMBER" value={data.envFileNumber} onChange={(v) => handleChange('envFileNumber', v)} isInvalid={errors.has('envFileNumber')} />
                             </div>
                             {/* Col 2 */}
-                             <div className="space-y-4">
+                            <div className="flex flex-col gap-y-2">
                                 <EditableField label="DATE" value={data.date} onChange={(v) => handleChange('date', v)} placeholder="Month Day, Year" isInvalid={errors.has('date')} />
                                 <EditableField label="X-TERRA PROJECT #" value={data.projectNumber} onChange={(v) => handleChange('projectNumber', v)} isInvalid={errors.has('projectNumber')} />
                                 <EditableField label="MONITOR" value={data.environmentalMonitor} onChange={(v) => handleChange('environmentalMonitor', v)} isInvalid={errors.has('environmentalMonitor')} />
                                 <EditableField label="VENDOR & FOREMAN" value={data.vendorAndForeman} onChange={(v) => handleChange('vendorAndForeman', v)} isInvalid={errors.has('vendorAndForeman')} />
                             </div>
                         </div>
+                        <div className="xtec-divider mt-2"></div>
                     </div>
 
                     {/* Project Activities */}
@@ -2169,7 +2165,7 @@ Description: ${photo.description || 'N/A'}
                         </Section>
                     </div>
 
-                    <div className="border-t-4 border-[#007D8C] my-10" />
+                    <div className="border-t border-gray-200 dark:border-white/10 my-10" />
 
                     <h2 className="text-3xl font-bold text-gray-700 dark:text-white text-center">Photographic Log</h2>
                     
@@ -2197,7 +2193,7 @@ Description: ${photo.description || 'N/A'}
                                 {index < photosData.length - 1 && (
                                      <div className="relative my-6 flex items-center justify-center">
                                         <div className="absolute inset-0 flex items-center" aria-hidden="true">
-                                            <div className="w-full border-t-2 border-gray-300 dark:border-gray-600"></div>
+                                            <div className="w-full border-t border-gray-200 dark:border-white/10"></div>
                                         </div>
                                         <div className="relative">
                                             <button
@@ -2249,7 +2245,7 @@ Description: ${photo.description || 'N/A'}
                         )}
                     </div>
                 </div>
-                {photosData.length > 0 && <div className="border-t-4 border-[#007D8C] my-8" />}
+                {photosData.length > 0 && <div className="border-t border-gray-200 dark:border-white/10 my-8" />}
                 <footer className="text-center text-gray-500 dark:text-gray-400 text-sm py-4">
                     X-TES Digital Reporting v1.1.5
                 </footer>
@@ -2280,13 +2276,13 @@ Description: ${photo.description || 'N/A'}
             {/* Modals */}
              {showUnsupportedFileModal && (
                 <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 transition-opacity duration-300">
-                    <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-2xl text-center relative max-w-md transform scale-95 hover:scale-100 transition-transform duration-300">
+                    <div className="bg-white dark:bg-[#1c1c1e] p-6 rounded-xl shadow-2xl text-center relative max-w-md">
                         <button onClick={() => setShowUnsupportedFileModal(false)} className="absolute top-2 right-2 p-1 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors">
                             <CloseIcon className="h-6 w-6" />
                         </button>
                         <SafeImage fileName="loading-error.gif" alt="Unsupported file type" className="mx-auto mb-4 w-40 h-40" />
                         <h3 className="text-2xl font-bold mb-2 text-gray-800 dark:text-white">Unsupported File Type</h3>
-                        <p className="text-gray-600 dark:text-gray-300">Please upload a supported image file (JPG, PNG).</p>
+                        <p className="text-gray-600 dark:text-gray-400">Please upload a supported image file (JPG, PNG).</p>
                     </div>
                 </div>
             )}
@@ -2369,17 +2365,17 @@ Description: ${photo.description || 'N/A'}
             })()}
             {showNoInternetModal && (
                 <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
-                     <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-2xl text-center relative max-w-md">
+                     <div className="bg-white dark:bg-[#1c1c1e] p-6 rounded-xl shadow-2xl text-center relative max-w-md">
                         <button onClick={() => setShowNoInternetModal(false)} className="absolute top-2 right-2 p-1 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"><CloseIcon className="h-6 w-6" /></button>
                         <h3 className="text-2xl font-bold mb-2 text-gray-800 dark:text-white">No Internet Connection</h3>
-                        <p className="text-gray-600 dark:text-gray-300">Internet is required for PDF generation.</p>
+                        <p className="text-gray-600 dark:text-gray-400">Internet is required for PDF generation.</p>
                     </div>
                 </div>
             )}
 
             {showFirstSaveModal && (
                 <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[200]">
-                    <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-2xl relative max-w-lg w-full">
+                    <div className="bg-white dark:bg-[#1c1c1e] p-6 rounded-xl shadow-2xl relative max-w-lg w-full border border-gray-200 dark:border-[#007D8C]/20">
                         <h3 className="text-lg font-bold mb-1 text-gray-800 dark:text-white">Save Project</h3>
                         <p className="text-gray-500 dark:text-gray-400 text-xs mb-4">Confirm project details before saving. Autosave will activate after this.</p>
                         <div className="grid grid-cols-2 gap-3 mb-5">
@@ -2414,9 +2410,9 @@ Description: ${photo.description || 'N/A'}
 
             {showUnsavedModal && (
                 <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[200]">
-                    <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-2xl text-center relative max-w-md">
-                        <h3 className="text-xl font-bold mb-3 text-gray-800 dark:text-white">Unsaved Changes</h3>
-                        <p className="text-gray-600 dark:text-gray-300 mb-6">
+                    <div className="bg-white dark:bg-[#1c1c1e] p-6 rounded-xl shadow-2xl text-center relative max-w-md">
+                        <h3 className="text-base font-semibold mb-2 text-gray-800 dark:text-white">Unsaved Changes</h3>
+                        <p className="text-gray-600 dark:text-gray-400 mb-5">
                             You have unsaved changes. Are you sure you want to leave? Your changes will be lost.
                         </p>
                         <div className="flex justify-center gap-3">

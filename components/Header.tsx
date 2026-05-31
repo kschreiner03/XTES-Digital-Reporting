@@ -105,7 +105,7 @@ const Header: React.FC<HeaderProps> = ({ data, onDataChange, isPrintable = false
                 <div></div>
             </div>
             
-            <div className={`border-t-4 border-[#007D8C]`}></div>
+            <div className="xtec-divider"></div>
 
             <div className={`max-w-5xl mx-auto flex flex-col ${isPrintable ? 'gap-y-1 pt-3 pb-2' : 'gap-y-2 pt-3 pb-2'}`}>
                 <div className={`grid grid-cols-1 md:grid-cols-2 ${isPrintable ? 'gap-x-4 gap-y-1' : 'gap-x-8 gap-y-2'}`}>
@@ -126,7 +126,7 @@ const Header: React.FC<HeaderProps> = ({ data, onDataChange, isPrintable = false
                 </div>
             </div>
             
-            <div className={`border-t-4 border-[#007D8C]`}></div>
+            <div className="xtec-divider"></div>
         </div>
     );
 };
