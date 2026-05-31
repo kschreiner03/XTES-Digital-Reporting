@@ -207,14 +207,14 @@ const formatDateForFilename = (dateString: string): string => {
 
 // --- UI Components ---
 const Section: React.FC<{ title: string; children: React.ReactNode; }> = ({ title, children }) => (
-    <div className="bg-white dark:bg-gray-800 p-6 shadow-md rounded-lg transition-colors duration-200" style={{ overflow: 'visible' }}>
+    <div className="bg-white dark:bg-[#1c1c1e] p-6 shadow-sm rounded-xl border border-gray-200 dark:border-[#007D8C]/15 transition-colors duration-200" style={{ overflow: 'visible' }}>
         <p className="text-xs font-semibold uppercase tracking-wider text-[#007D8C] border-b border-gray-100 dark:border-white/5 pb-3 mb-4">{title}</p>
         <div className="space-y-4" style={{ overflow: 'visible' }}>{children}</div>
     </div>
 );
 
 const EditableField: React.FC<{ label: string; value: string; onChange: (value: string) => void; type?: string; isTextArea?: boolean; rows?: number; placeholder?: string; isInvalid?: boolean; }> = ({ label, value, onChange, type = 'text', isTextArea = false, rows = 1, placeholder = '', isInvalid = false }) => {
-    const commonClasses = `block w-full p-2 border rounded-md shadow-sm focus:ring-2 focus:ring-[#007D8C] focus:border-[#007D8C] transition bg-white dark:bg-gray-700 text-black dark:text-white dark:placeholder-gray-400 ${isInvalid ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'}`;
+    const commonClasses = `block w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#007D8C]/40 focus:border-[#007D8C] outline-none transition bg-gray-50 dark:bg-white/5 text-gray-800 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 ${isInvalid ? 'border-red-500' : 'border-gray-200 dark:border-white/10'}`;
     const elementRef = React.useRef<HTMLInputElement & HTMLTextAreaElement>(null);
 
     return (
@@ -1993,7 +1993,7 @@ Description: ${photo.description || 'N/A'}
                                     <ChevronDownIcon className="h-4 w-4" />
                                 </button>
                                 {showSaveAsMenu && (
-                                    <div className="absolute right-0 top-full mt-1 z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 min-w-[160px]">
+                                    <div className="absolute right-0 top-full mt-1 z-50 bg-white dark:bg-[#1c1c1e] border border-gray-200 dark:border-[#007D8C]/20 rounded-xl shadow-lg py-1 min-w-[160px]">
                                         <button
                                             onClick={() => { setShowSaveAsMenu(false); handleSaveProject(); }}
                                             className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
@@ -2034,7 +2034,7 @@ Description: ${photo.description || 'N/A'}
 
                 <div className="main-content space-y-8" style={{ overflow: 'visible', transform: `scale(${zoomLevel / 100})`, transformOrigin: 'top left', width: `${10000 / zoomLevel}%` }}>
                     {/* Header Section */}
-                    <div id="report-fields-section" className="bg-white dark:bg-gray-800 p-6 shadow-md rounded-lg transition-colors duration-200" style={{ overflow: 'visible' }}>
+                    <div id="report-fields-section" className="bg-white dark:bg-[#1c1c1e] p-6 shadow-sm rounded-xl border border-gray-200 dark:border-[#007D8C]/15 transition-colors duration-200" style={{ overflow: 'visible' }}>
                         <div className="grid grid-cols-1 md:grid-cols-[1fr,auto,1fr] md:items-center pb-4 gap-4">
                             <div className="flex justify-center md:justify-start">
                                 <SafeImage fileName="xterra-logo.png" alt="X-TERRA Logo" className="h-14 w-auto dark:hidden" />
@@ -2374,7 +2374,7 @@ Description: ${photo.description || 'N/A'}
 
             {showFirstSaveModal && (
                 <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[200]">
-                    <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-2xl relative max-w-lg w-full">
+                    <div className="bg-white dark:bg-[#1c1c1e] p-6 rounded-xl shadow-2xl relative max-w-lg w-full border border-gray-200 dark:border-[#007D8C]/20">
                         <h3 className="text-lg font-bold mb-1 text-gray-800 dark:text-white">Save Project</h3>
                         <p className="text-gray-500 dark:text-gray-400 text-xs mb-4">Confirm project details before saving. Autosave will activate after this.</p>
                         <div className="grid grid-cols-2 gap-3 mb-5">

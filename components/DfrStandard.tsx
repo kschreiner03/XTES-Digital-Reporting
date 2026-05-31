@@ -253,7 +253,7 @@ const formatDateForFilename = (dateString: string): string => {
 
 // --- Local UI Components ---
 const Section: React.FC<{ title: string; children: React.ReactNode; }> = ({ title, children }) => (
-    <div className="bg-white dark:bg-gray-800 p-6 shadow-md rounded-lg transition-colors duration-200" style={{ overflow: 'visible' }}>
+    <div className="bg-white dark:bg-[#1c1c1e] p-6 shadow-sm rounded-xl border border-gray-200 dark:border-[#007D8C]/15 transition-colors duration-200" style={{ overflow: 'visible' }}>
         <p className="text-xs font-semibold uppercase tracking-wider text-[#007D8C] border-b border-gray-100 dark:border-white/5 pb-3 mb-4">{title}</p>
         <div className="space-y-4" style={{ overflow: 'visible' }}>{children}</div>
     </div>
@@ -310,7 +310,7 @@ const LocationBlockEntry: React.FC<{
     const [isCommentOpen, setIsCommentOpen] = useState(false);
     const fieldId = `locationActivity_${data.id}`;
     return (
-        <div className="p-4 border border-gray-200 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 transition-colors duration-200">
+        <div className="p-4 border border-gray-200 dark:border-[#007D8C]/15 rounded-xl bg-white dark:bg-[#1c1c1e] transition-colors duration-200">
             <div className="flex justify-between items-center mb-2">
                 <div className="flex items-center gap-2">
                     <h3 className="font-bold text-gray-600 dark:text-gray-400">Location Specific Activity</h3>
@@ -2280,7 +2280,7 @@ Description: ${photo.description || 'N/A'}
                                     <ChevronDownIcon className="h-4 w-4" />
                                 </button>
                                 {showSaveAsMenu && (
-                                    <div className="absolute right-0 top-full mt-1 z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 min-w-[160px]">
+                                    <div className="absolute right-0 top-full mt-1 z-50 bg-white dark:bg-[#1c1c1e] border border-gray-200 dark:border-[#007D8C]/20 rounded-xl shadow-lg py-1 min-w-[160px]">
                                         <button
                                             onClick={() => { setShowSaveAsMenu(false); handleSaveProject(); }}
                                             className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
@@ -2661,7 +2661,7 @@ Description: ${photo.description || 'N/A'}
 
             {showFirstSaveModal && (
                 <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[200]">
-                    <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-2xl relative max-w-lg w-full">
+                    <div className="bg-white dark:bg-[#1c1c1e] p-6 rounded-xl shadow-2xl relative max-w-lg w-full border border-gray-200 dark:border-[#007D8C]/20">
                         <h3 className="text-lg font-bold mb-1 text-gray-800 dark:text-white">Save Project</h3>
                         <p className="text-gray-500 dark:text-gray-400 text-xs mb-4">Confirm project details before saving. Autosave will activate after this.</p>
                         <div className="grid grid-cols-2 gap-3 mb-5">

@@ -134,7 +134,7 @@ const EditableField: React.FC<{
 
 export const DfrHeader: React.FC<HeaderProps> = ({ data, onDataChange, isPrintable = false, errors, placeholders, isPhotologHeader = false }) => {
     return (
-        <div className={`bg-white dark:bg-gray-800 transition-colors duration-200 ${isPrintable ? 'p-0 shadow-none' : 'p-6 shadow-md rounded-lg'}`}>
+        <div className={`bg-white dark:bg-[#1c1c1e] transition-colors duration-200 ${isPrintable ? 'p-0 shadow-none' : 'p-6 shadow-sm rounded-xl border border-gray-200 dark:border-[#007D8C]/15'}`}>
             <div className={`grid grid-cols-1 md:grid-cols-[1fr,auto,1fr] md:items-center pb-4 gap-4`}>
                 <div className="flex justify-center md:justify-start">
                     <XterraLogo isPrintable={isPrintable} />
