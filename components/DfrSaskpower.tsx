@@ -208,7 +208,7 @@ const formatDateForFilename = (dateString: string): string => {
 // --- UI Components ---
 const Section: React.FC<{ title: string; children: React.ReactNode; }> = ({ title, children }) => (
     <div className="bg-white dark:bg-gray-800 p-6 shadow-md rounded-lg transition-colors duration-200" style={{ overflow: 'visible' }}>
-        <p className="text-[11px] font-semibold uppercase tracking-widest text-[#007D8C] border-b border-gray-100 dark:border-white/5 pb-3 mb-4">{title}</p>
+        <p className="text-xs font-semibold uppercase tracking-wider text-[#007D8C] border-b border-gray-100 dark:border-white/5 pb-3 mb-4">{title}</p>
         <div className="space-y-4" style={{ overflow: 'visible' }}>{children}</div>
     </div>
 );
@@ -250,7 +250,7 @@ const ChecklistRow: React.FC<{ label: string; value: ChecklistOption; onChange: 
         <span className={`font-medium mb-2 sm:mb-0 ${isInvalid ? 'text-red-600 dark:text-red-400' : 'text-gray-800 dark:text-gray-200'}`}>{label}</span>
         <div className="flex items-center space-x-6">
             {(['Yes', 'No', 'NA'] as ChecklistOption[]).map(option => (
-                <label key={option} className="flex items-center space-x-2 cursor-pointer text-gray-600 dark:text-gray-300">
+                <label key={option} className="flex items-center space-x-2 cursor-pointer text-gray-600 dark:text-gray-400">
                     <input
                         type="radio"
                         name={label}
@@ -1954,7 +1954,7 @@ Description: ${photo.description || 'N/A'}
                         </button>
                     </div>
                 )}
-                <div className="sticky top-0 z-40 bg-gray-100 dark:bg-gray-900 py-2 mb-4 border-b border-gray-200 dark:border-gray-700">
+                <div className="sticky top-0 z-40 bg-gray-100/95 dark:bg-gray-900/95 backdrop-blur-sm py-2.5 mb-4 border-b border-gray-200/80 dark:border-white/5">
                     <div className="flex flex-wrap justify-between items-center gap-2">
                         <button onClick={handleBack} className="border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 font-semibold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
                             <ArrowLeftIcon /> <span>Home</span>
@@ -2275,13 +2275,13 @@ Description: ${photo.description || 'N/A'}
             {/* Modals */}
              {showUnsupportedFileModal && (
                 <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 transition-opacity duration-300">
-                    <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-2xl text-center relative max-w-md transform scale-95 hover:scale-100 transition-transform duration-300">
+                    <div className="bg-white dark:bg-[#1c1c1e] p-6 rounded-xl shadow-2xl text-center relative max-w-md">
                         <button onClick={() => setShowUnsupportedFileModal(false)} className="absolute top-2 right-2 p-1 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors">
                             <CloseIcon className="h-6 w-6" />
                         </button>
                         <SafeImage fileName="loading-error.gif" alt="Unsupported file type" className="mx-auto mb-4 w-40 h-40" />
                         <h3 className="text-2xl font-bold mb-2 text-gray-800 dark:text-white">Unsupported File Type</h3>
-                        <p className="text-gray-600 dark:text-gray-300">Please upload a supported image file (JPG, PNG).</p>
+                        <p className="text-gray-600 dark:text-gray-400">Please upload a supported image file (JPG, PNG).</p>
                     </div>
                 </div>
             )}
@@ -2364,10 +2364,10 @@ Description: ${photo.description || 'N/A'}
             })()}
             {showNoInternetModal && (
                 <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
-                     <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-2xl text-center relative max-w-md">
+                     <div className="bg-white dark:bg-[#1c1c1e] p-6 rounded-xl shadow-2xl text-center relative max-w-md">
                         <button onClick={() => setShowNoInternetModal(false)} className="absolute top-2 right-2 p-1 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"><CloseIcon className="h-6 w-6" /></button>
                         <h3 className="text-2xl font-bold mb-2 text-gray-800 dark:text-white">No Internet Connection</h3>
-                        <p className="text-gray-600 dark:text-gray-300">Internet is required for PDF generation.</p>
+                        <p className="text-gray-600 dark:text-gray-400">Internet is required for PDF generation.</p>
                     </div>
                 </div>
             )}
@@ -2409,9 +2409,9 @@ Description: ${photo.description || 'N/A'}
 
             {showUnsavedModal && (
                 <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[200]">
-                    <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-2xl text-center relative max-w-md">
-                        <h3 className="text-xl font-bold mb-3 text-gray-800 dark:text-white">Unsaved Changes</h3>
-                        <p className="text-gray-600 dark:text-gray-300 mb-6">
+                    <div className="bg-white dark:bg-[#1c1c1e] p-6 rounded-xl shadow-2xl text-center relative max-w-md">
+                        <h3 className="text-base font-semibold mb-2 text-gray-800 dark:text-white">Unsaved Changes</h3>
+                        <p className="text-gray-600 dark:text-gray-400 mb-5">
                             You have unsaved changes. Are you sure you want to leave? Your changes will be lost.
                         </p>
                         <div className="flex justify-center gap-3">

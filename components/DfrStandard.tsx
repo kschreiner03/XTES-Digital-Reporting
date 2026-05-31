@@ -254,7 +254,7 @@ const formatDateForFilename = (dateString: string): string => {
 // --- Local UI Components ---
 const Section: React.FC<{ title: string; children: React.ReactNode; }> = ({ title, children }) => (
     <div className="bg-white dark:bg-gray-800 p-6 shadow-md rounded-lg transition-colors duration-200" style={{ overflow: 'visible' }}>
-        <p className="text-[11px] font-semibold uppercase tracking-widest text-[#007D8C] border-b border-gray-100 dark:border-white/5 pb-3 mb-4">{title}</p>
+        <p className="text-xs font-semibold uppercase tracking-wider text-[#007D8C] border-b border-gray-100 dark:border-white/5 pb-3 mb-4">{title}</p>
         <div className="space-y-4" style={{ overflow: 'visible' }}>{children}</div>
     </div>
 );
@@ -313,7 +313,7 @@ const LocationBlockEntry: React.FC<{
         <div className="p-4 border border-gray-200 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 transition-colors duration-200">
             <div className="flex justify-between items-center mb-2">
                 <div className="flex items-center gap-2">
-                    <h3 className="font-bold text-gray-600 dark:text-gray-300">Location Specific Activity</h3>
+                    <h3 className="font-bold text-gray-600 dark:text-gray-400">Location Specific Activity</h3>
                     <button
                         onClick={() => setIsCommentOpen(!isCommentOpen)}
                         title="Toggle comment"
@@ -2241,7 +2241,7 @@ Description: ${photo.description || 'N/A'}
                         </button>
                     </div>
                 )}
-                <div className="sticky top-0 z-40 bg-gray-100 dark:bg-gray-900 py-2 mb-4 border-b border-gray-200 dark:border-gray-700">
+                <div className="sticky top-0 z-40 bg-gray-100/95 dark:bg-gray-900/95 backdrop-blur-sm py-2.5 mb-4 border-b border-gray-200/80 dark:border-white/5">
                     <div className="flex flex-wrap justify-between items-center gap-2">
                         <button onClick={handleBack} className="border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 font-semibold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
                             <ArrowLeftIcon /> <span>Home</span>
@@ -2543,7 +2543,7 @@ Description: ${photo.description || 'N/A'}
 
             {showUnsupportedFileModal && (
                 <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 transition-opacity duration-300">
-                    <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-2xl text-center relative max-w-md transform scale-95 hover:scale-100 transition-transform duration-300">
+                    <div className="bg-white dark:bg-[#1c1c1e] p-6 rounded-xl shadow-2xl text-center relative max-w-md">
                         <button
                             onClick={() => setShowUnsupportedFileModal(false)}
                             className="absolute top-2 right-2 p-1 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
@@ -2557,7 +2557,7 @@ Description: ${photo.description || 'N/A'}
                             className="mx-auto mb-4 w-40 h-40"
                         />
                         <h3 className="text-2xl font-bold mb-2 text-gray-800 dark:text-white">Unsupported File Type</h3>
-                        <p className="text-gray-600 dark:text-gray-300">
+                        <p className="text-gray-600 dark:text-gray-400">
                             Please upload a supported image file.
                         </p>
                         <p className="text-sm text-gray-500 dark:text-gray-400 mt-3">
@@ -2643,7 +2643,7 @@ Description: ${photo.description || 'N/A'}
             })()}
              {showNoInternetModal && (
                 <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
-                    <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-2xl text-center relative max-w-md">
+                    <div className="bg-white dark:bg-[#1c1c1e] p-6 rounded-xl shadow-2xl text-center relative max-w-md">
                         <button
                             onClick={() => setShowNoInternetModal(false)}
                             className="absolute top-2 right-2 p-1 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
@@ -2652,7 +2652,7 @@ Description: ${photo.description || 'N/A'}
                             <CloseIcon className="h-6 w-6" />
                         </button>
                         <h3 className="text-2xl font-bold mb-2 text-gray-800 dark:text-white">No Internet Connection</h3>
-                        <p className="text-gray-600 dark:text-gray-300">
+                        <p className="text-gray-600 dark:text-gray-400">
                             An internet connection is required to save the PDF. Please connect to the internet and try again.
                         </p>
                     </div>
@@ -2696,9 +2696,9 @@ Description: ${photo.description || 'N/A'}
 
             {showUnsavedModal && (
                 <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[200]">
-                    <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-2xl text-center relative max-w-md">
-                        <h3 className="text-xl font-bold mb-3 text-gray-800 dark:text-white">Unsaved Changes</h3>
-                        <p className="text-gray-600 dark:text-gray-300 mb-6">
+                    <div className="bg-white dark:bg-[#1c1c1e] p-6 rounded-xl shadow-2xl text-center relative max-w-md">
+                        <h3 className="text-base font-semibold mb-2 text-gray-800 dark:text-white">Unsaved Changes</h3>
+                        <p className="text-gray-600 dark:text-gray-400 mb-5">
                             You have unsaved changes. Are you sure you want to leave? Your changes will be lost.
                         </p>
                         <div className="flex justify-center gap-3">
