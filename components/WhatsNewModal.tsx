@@ -72,11 +72,11 @@ const WhatsNewModal: React.FC<WhatsNewModalProps> = ({ onClose }) => {
     return (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={handleClose}>
             <div
-                className="xtec-modal-enter bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-lg w-full max-h-[85vh] flex flex-col overflow-hidden"
+                className="xtec-modal-enter bg-white dark:bg-[#1c1c1e] rounded-2xl shadow-2xl max-w-lg w-full max-h-[85vh] flex flex-col overflow-hidden border border-gray-200 dark:border-[#007D8C]/20"
                 onClick={(e) => e.stopPropagation()}
             >
                 {/* Header */}
-                <div className="px-6 pt-6 pb-4 border-b border-gray-200 dark:border-gray-700 flex items-start justify-between">
+                <div className="px-6 pt-6 pb-4 border-b border-gray-100 dark:border-white/5 flex items-start justify-between">
                     <div>
                         <SafeImage fileName="xterra-logo.png" alt="X-TERRA Logo" className="h-7 w-auto mb-2 dark:hidden" />
                         <SafeImage fileName="Xterra-White.png" alt="X-TERRA Logo" className="h-7 w-auto mb-2 hidden dark:block" />
@@ -108,7 +108,7 @@ const WhatsNewModal: React.FC<WhatsNewModalProps> = ({ onClose }) => {
                     {currentRelease ? (
                         <ul className="space-y-2">
                             {currentRelease.highlights.map((item, i) => (
-                                <li key={i} className="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-300">
+                                <li key={i} className="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-400">
                                     <span className="text-[#007D8C] mt-0.5 flex-shrink-0">&#x2022;</span>
                                     {item}
                                 </li>
