@@ -1705,7 +1705,7 @@ Description: ${photo.description || 'N/A'}
                     imageUrl: 'Image', direction: 'Direction',
                 };
                 const missingReport = Array.from(errors).filter(k => !k.startsWith('photo-')).map(k => reportLabels[k] || k);
-                const photoErrors: Record<string, { fields: string[]; elementId: string }> = {};
+                const photoErrors: Record<string, string[]> = {};
                 Array.from(errors).filter(k => k.startsWith('photo-')).forEach(k => {
                     const match = k.match(/^photo-(\d+)-(.+)$/);
                     if (match) {
@@ -1718,7 +1718,7 @@ Description: ${photo.description || 'N/A'}
                 const badgeClass = "inline-flex items-center gap-1.5 px-3 py-1 bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-full text-xs font-medium border border-red-200 dark:border-red-800";
                 return (
                     <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
-                        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl relative max-w-md w-full mx-4 overflow-hidden">
+                        <div role="alert" className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl relative max-w-md w-full mx-4 overflow-hidden">
                             <div className="flex items-center gap-4 p-5 border-b border-gray-200 dark:border-gray-700">
                                 <SafeImage fileName="loading-error.gif" alt="Missing info" className="w-14 h-14 flex-shrink-0 rounded-lg" />
                                 <div className="flex-1 min-w-0">
