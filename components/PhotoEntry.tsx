@@ -82,7 +82,7 @@ const EditableField: React.FC<{
           onBlur={() => { focusedRef.current = false; onChange(localValue); }}
           onFocus={() => { focusedRef.current = true; }}
           className={`mt-1 ${commonClasses} border-b-2 ${
-            isInvalid ? "border-red-500" : "border-gray-300 dark:border-gray-600 focus:border-[#007D8C]"
+            isInvalid ? "border-red-500 focus:border-[#007D8C]" : "border-gray-300 dark:border-gray-600 focus:border-[#007D8C]"
           }`}
           placeholder={placeholder}
           spellCheck={true}
@@ -101,7 +101,7 @@ const EditableField: React.FC<{
         onBlur={() => { focusedRef.current = false; onChange(localValue); }}
         onFocus={() => { focusedRef.current = true; }}
         className={`${commonClasses} border-b-2 ${
-          isInvalid ? "border-red-500" : "border-gray-300 dark:border-gray-600 focus:border-[#007D8C]"
+          isInvalid ? "border-red-500 focus:border-[#007D8C]" : "border-gray-300 dark:border-gray-600 focus:border-[#007D8C]"
         }`}
         placeholder={placeholder}
         spellCheck={true}
