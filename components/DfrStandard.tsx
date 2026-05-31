@@ -340,7 +340,7 @@ const LocationBlockEntry: React.FC<{
                     onChange={(e) => onDataChange(data.id, 'comment', e.target.value)}
                     placeholder="Add a comment for this location..."
                     rows={2}
-                    className="block w-full p-2 border border-yellow-300 bg-yellow-50 text-gray-900 rounded-md shadow-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition mb-2"
+                    className="block w-full p-2 border border-yellow-300 bg-yellow-50 dark:bg-yellow-900/20 dark:border-yellow-700/50 text-gray-900 dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-[#007D8C]/40 focus:border-[#007D8C] outline-none transition mb-2"
                     spellCheck={true}
                 />
             )}
@@ -2331,7 +2331,7 @@ Description: ${photo.description || 'N/A'}
                                 </button>
                             </div>
                             {openComments.has('generalActivity') && (
-                                <textarea value={bodyData.comments?.generalActivity || ''} onChange={(e) => handleCommentChange('generalActivity', e.target.value)} placeholder="Add a comment for editing purposes..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 text-gray-900 rounded-md shadow-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition mb-2" spellCheck={true} />
+                                <textarea value={bodyData.comments?.generalActivity || ''} onChange={(e) => handleCommentChange('generalActivity', e.target.value)} placeholder="Add a comment for editing purposes..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 dark:bg-yellow-900/20 dark:border-yellow-700/50 text-gray-900 dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-[#007D8C]/40 focus:border-[#007D8C] outline-none transition mb-2" spellCheck={true} />
                             )}
                             <BulletPointEditor label="" fieldId="generalActivity" value={bodyData.generalActivity} highlights={bodyData.highlights?.generalActivity} inlineComments={bodyData.inlineComments?.generalActivity} onChange={handleGeneralActivityChange} onHighlightsChange={h => handleHighlightsChange('generalActivity', h)} onInlineCommentsChange={c => handleInlineCommentsChange('generalActivity', c)} onAnchorPositionsChange={a => handleAnchorPositionsChange('generalActivity', a)} hoveredCommentId={hoveredCommentId} placeholder={dfrPlaceholders.body.generalActivity} isInvalid={errors.has('generalActivity')} />
                         </div>
@@ -2369,7 +2369,7 @@ Description: ${photo.description || 'N/A'}
                                 </button>
                             </div>
                             {openComments.has('communication') && (
-                                <textarea value={bodyData.comments?.communication || ''} onChange={(e) => handleCommentChange('communication', e.target.value)} placeholder="Add a comment for editing purposes..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 text-gray-900 rounded-md shadow-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition mb-2" spellCheck={true} />
+                                <textarea value={bodyData.comments?.communication || ''} onChange={(e) => handleCommentChange('communication', e.target.value)} placeholder="Add a comment for editing purposes..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 dark:bg-yellow-900/20 dark:border-yellow-700/50 text-gray-900 dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-[#007D8C]/40 focus:border-[#007D8C] outline-none transition mb-2" spellCheck={true} />
                             )}
                             <BulletPointEditor label="" fieldId="communication" value={bodyData.communication} highlights={bodyData.highlights?.communication} inlineComments={bodyData.inlineComments?.communication} onChange={v => handleBodyDataChange('communication', v)} onHighlightsChange={h => handleHighlightsChange('communication', h)} onInlineCommentsChange={c => handleInlineCommentsChange('communication', c)} onAnchorPositionsChange={a => handleAnchorPositionsChange('communication', a)} hoveredCommentId={hoveredCommentId} placeholder={dfrPlaceholders.body.communication} isInvalid={errors.has('communication')}/>
                         </div>
@@ -2381,7 +2381,7 @@ Description: ${photo.description || 'N/A'}
                                 </button>
                             </div>
                             {openComments.has('weatherAndGroundConditions') && (
-                                <textarea value={bodyData.comments?.weatherAndGroundConditions || ''} onChange={(e) => handleCommentChange('weatherAndGroundConditions', e.target.value)} placeholder="Add a comment for editing purposes..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 text-gray-900 rounded-md shadow-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition mb-2" spellCheck={true} />
+                                <textarea value={bodyData.comments?.weatherAndGroundConditions || ''} onChange={(e) => handleCommentChange('weatherAndGroundConditions', e.target.value)} placeholder="Add a comment for editing purposes..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 dark:bg-yellow-900/20 dark:border-yellow-700/50 text-gray-900 dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-[#007D8C]/40 focus:border-[#007D8C] outline-none transition mb-2" spellCheck={true} />
                             )}
                             <BulletPointEditor label="" fieldId="weatherAndGroundConditions" value={bodyData.weatherAndGroundConditions} highlights={bodyData.highlights?.weatherAndGroundConditions} inlineComments={bodyData.inlineComments?.weatherAndGroundConditions} onChange={v => handleBodyDataChange('weatherAndGroundConditions', v)} onHighlightsChange={h => handleHighlightsChange('weatherAndGroundConditions', h)} onInlineCommentsChange={c => handleInlineCommentsChange('weatherAndGroundConditions', c)} onAnchorPositionsChange={a => handleAnchorPositionsChange('weatherAndGroundConditions', a)} hoveredCommentId={hoveredCommentId} placeholder={dfrPlaceholders.body.weatherAndGroundConditions} isInvalid={errors.has('weatherAndGroundConditions')}/>
                         </div>
@@ -2396,7 +2396,7 @@ Description: ${photo.description || 'N/A'}
                                 </button>
                             </div>
                             {openComments.has('environmentalProtection') && (
-                                <textarea value={bodyData.comments?.environmentalProtection || ''} onChange={(e) => handleCommentChange('environmentalProtection', e.target.value)} placeholder="Add a comment for editing purposes..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 text-gray-900 rounded-md shadow-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition mb-2" spellCheck={true} />
+                                <textarea value={bodyData.comments?.environmentalProtection || ''} onChange={(e) => handleCommentChange('environmentalProtection', e.target.value)} placeholder="Add a comment for editing purposes..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 dark:bg-yellow-900/20 dark:border-yellow-700/50 text-gray-900 dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-[#007D8C]/40 focus:border-[#007D8C] outline-none transition mb-2" spellCheck={true} />
                             )}
                             <BulletPointEditor label="" fieldId="environmentalProtection" value={bodyData.environmentalProtection} highlights={bodyData.highlights?.environmentalProtection} inlineComments={bodyData.inlineComments?.environmentalProtection} onChange={v => handleBodyDataChange('environmentalProtection', v)} onHighlightsChange={h => handleHighlightsChange('environmentalProtection', h)} onInlineCommentsChange={c => handleInlineCommentsChange('environmentalProtection', c)} onAnchorPositionsChange={a => handleAnchorPositionsChange('environmentalProtection', a)} hoveredCommentId={hoveredCommentId} placeholder={dfrPlaceholders.body.environmentalProtection} isInvalid={errors.has('environmentalProtection')} />
                         </div>
@@ -2408,7 +2408,7 @@ Description: ${photo.description || 'N/A'}
                                 </button>
                             </div>
                             {openComments.has('wildlifeObservations') && (
-                                <textarea value={bodyData.comments?.wildlifeObservations || ''} onChange={(e) => handleCommentChange('wildlifeObservations', e.target.value)} placeholder="Add a comment for editing purposes..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 text-gray-900 rounded-md shadow-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition mb-2" spellCheck={true} />
+                                <textarea value={bodyData.comments?.wildlifeObservations || ''} onChange={(e) => handleCommentChange('wildlifeObservations', e.target.value)} placeholder="Add a comment for editing purposes..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 dark:bg-yellow-900/20 dark:border-yellow-700/50 text-gray-900 dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-[#007D8C]/40 focus:border-[#007D8C] outline-none transition mb-2" spellCheck={true} />
                             )}
                             <BulletPointEditor label="" fieldId="wildlifeObservations" value={bodyData.wildlifeObservations} highlights={bodyData.highlights?.wildlifeObservations} inlineComments={bodyData.inlineComments?.wildlifeObservations} onChange={v => handleBodyDataChange('wildlifeObservations', v)} onHighlightsChange={h => handleHighlightsChange('wildlifeObservations', h)} onInlineCommentsChange={c => handleInlineCommentsChange('wildlifeObservations', c)} onAnchorPositionsChange={a => handleAnchorPositionsChange('wildlifeObservations', a)} hoveredCommentId={hoveredCommentId} placeholder={dfrPlaceholders.body.wildlifeObservations} isInvalid={errors.has('wildlifeObservations')}/>
                         </div>
@@ -2420,7 +2420,7 @@ Description: ${photo.description || 'N/A'}
                                 </button>
                             </div>
                             {openComments.has('furtherRestoration') && (
-                                <textarea value={bodyData.comments?.furtherRestoration || ''} onChange={(e) => handleCommentChange('furtherRestoration', e.target.value)} placeholder="Add a comment for editing purposes..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 text-gray-900 rounded-md shadow-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition mb-2" spellCheck={true} />
+                                <textarea value={bodyData.comments?.furtherRestoration || ''} onChange={(e) => handleCommentChange('furtherRestoration', e.target.value)} placeholder="Add a comment for editing purposes..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 dark:bg-yellow-900/20 dark:border-yellow-700/50 text-gray-900 dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-[#007D8C]/40 focus:border-[#007D8C] outline-none transition mb-2" spellCheck={true} />
                             )}
                             <BulletPointEditor label="" fieldId="furtherRestoration" value={bodyData.furtherRestoration} highlights={bodyData.highlights?.furtherRestoration} inlineComments={bodyData.inlineComments?.furtherRestoration} onChange={v => handleBodyDataChange('furtherRestoration', v)} onHighlightsChange={h => handleHighlightsChange('furtherRestoration', h)} onInlineCommentsChange={c => handleInlineCommentsChange('furtherRestoration', c)} onAnchorPositionsChange={a => handleAnchorPositionsChange('furtherRestoration', a)} hoveredCommentId={hoveredCommentId} placeholder={dfrPlaceholders.body.furtherRestoration} isInvalid={errors.has('furtherRestoration')} />
                         </div>
