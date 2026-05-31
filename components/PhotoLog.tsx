@@ -1590,7 +1590,7 @@ Description: ${photo.description || 'N/A'}
                                 {index < photosData.length - 1 && (
                                      <div className="relative my-10 flex items-center justify-center">
                                         <div className="absolute inset-0 flex items-center" aria-hidden="true">
-                                            <div className="w-full border-t-4 border-[#007D8C]"></div>
+                                            <div className="w-full border-t border-gray-200 dark:border-white/10"></div>
                                         </div>
                                         <div className="relative">
                                             <button
@@ -1643,7 +1643,7 @@ Description: ${photo.description || 'N/A'}
                         )}
                     </div>
                 </div>
-                {photosData.length > 0 && <div className="border-t-4 border-[#007D8C] my-8" />}
+                {photosData.length > 0 && <div className="border-t border-gray-200 dark:border-white/10 my-8" />}
                 <footer className="text-center text-gray-500 dark:text-gray-400 text-sm py-4">
                     X-TES Digital Reporting v1.1.5
                 </footer>
