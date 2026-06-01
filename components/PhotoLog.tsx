@@ -852,6 +852,17 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, onBackDirect, initialData }
         return () => clearTimeout(t);
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+    useEffect(() => {
+        if (!(initialData as any)?.newDay) return;
+        const todayStr = new Date().toLocaleDateString('en-CA', { year:'numeric', month:'long', day:'numeric' });
+        setHeaderData(h => ({ ...h, date: todayStr }));
+        savedFilePathRef.current = null;
+        projectTimestampRef.current = null;
+        setFileSynced(null);
+        setAutosaveEnabled(false);
+        setIsDirty(true);
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
     const handleSaveProject = async () => {
         if (isSavingRef.current) return;
         const photosForExport = photosData.map(({ imageId, ...photo }) => photo);
@@ -1611,7 +1622,7 @@ Description: ${photo.description || 'N/A'}
                                 }
                             </div>
                         )}
-                        <button onClick={handleSavePdf} title="Export PDF" className="bg-[#007D8C]/15 hover:bg-[#007D8C]/25 text-[#007D8C] dark:text-[#00bcd4] font-semibold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
+                        <button onClick={handleSavePdf} title="Export PDF" className="bg-[#007D8C] hover:bg-[#006b7a] text-white font-semibold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
                             <DownloadIcon /> <span>PDF</span>
                         </button>
                         <button onClick={handleOpenProject} className="border border-gray-300 dark:border-gray-600 bg-white dark:bg-[#1c1c1e] hover:bg-gray-50 dark:hover:bg-[#2a2a2e] text-gray-700 dark:text-gray-200 font-semibold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
