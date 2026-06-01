@@ -2214,29 +2214,6 @@ Description: ${photo.description || 'N/A'}
 
     saveProjectRef.current = handleSaveProject;
 
-    const handleNewDay = () => {
-        const todayStr = new Date().toLocaleDateString('en-CA', { year:'numeric', month:'long', day:'numeric' });
-        setHeaderData(h => ({ ...h, date: todayStr }));
-        savedFilePathRef.current = null;
-        projectTimestampRef.current = null;
-        setIsDirty(true);
-        setFileSynced(null);
-        setAutosaveEnabled(false);
-        toast(`New draft for ${todayStr} — click Save to save it`);
-    };
-    const handleSaveCopy = async () => {
-        if (isSavingRef.current) return;
-        isSavingRef.current = true;
-        try {
-            const photosForExport = photosData.map(({ imageId, ...p }: any) => p);
-            const stateForCopy = { headerData, bodyData, photosData: photosForExport };
-            const sanitize = (s: string) => s.replace(/[^a-z0-9_]/gi, '-').toLowerCase();
-            const fname = `${sanitize(headerData.projectName || 'project')}_copy.dfr`;
-            // @ts-ignore
-            await window.electronAPI?.saveProject?.(JSON.stringify(stateForCopy), fname);
-            toast('Copy saved ✓');
-        } catch (e) { console.error('Save copy failed:', e); } finally { isSavingRef.current = false; }
-    };
     savePdfRef.current = handleSavePdf;
 
     const getHeaderErrors = (): Set<keyof DfrHeaderData> => {
@@ -2342,11 +2319,6 @@ Description: ${photo.description || 'N/A'}
                             </button>
                             <button onClick={handleOpenProject} className="border border-gray-300 dark:border-gray-600 bg-white dark:bg-[#1c1c1e] hover:bg-gray-50 dark:hover:bg-[#2a2a2e] text-gray-700 dark:text-gray-200 font-semibold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
                                 <FolderOpenIcon /> <span>Open</span>
-                            </button>
-                            <button onClick={handleNewDay} title="Copy to a new draft with today's date"
-                                className="border border-gray-300 dark:border-gray-600 bg-white dark:bg-[#1c1c1e] hover:bg-gray-50 dark:hover:bg-[#2a2a2e] text-gray-700 dark:text-gray-200 font-semibold py-2 px-4 rounded-lg inline-flex items-center gap-1.5 transition duration-200">
-                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/></svg>
-                                <span>New Day</span>
                             </button>
                             <div className="relative" ref={moreMenuRef}>
                                 <button onClick={() => setShowMoreMenu(v => !v)} title="More options"
