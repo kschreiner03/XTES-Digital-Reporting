@@ -354,6 +354,8 @@ const DfrSaskpower = ({ onBack, onBackDirect, initialData }: DfrSaskpowerProps):
     })());
     const photosDataRef = useRef(photosData);
     photosDataRef.current = photosData;
+    // fileSynced: true=in sync with file, false=pending sync, null=no file linked
+    const [fileSynced, setFileSynced] = useState<boolean | null>(savedFilePathRef.current ? true : null);
     const projectTimestampRef = useRef<number | null>(initialData?.timestamp ?? null);
     const isSavingRef = useRef(false);
     const isDirtyRef = useRef(isDirty);
@@ -499,7 +501,7 @@ const DfrSaskpower = ({ onBack, onBackDirect, initialData }: DfrSaskpowerProps):
                 },
             }));
         }
-        setIsDirty(true);
+        setIsDirty(true); if (savedFilePathRef.current) setFileSynced(false);
     };
 
     // Comment action handlers for CommentsRail
@@ -708,6 +710,24 @@ const DfrSaskpower = ({ onBack, onBackDirect, initialData }: DfrSaskpowerProps):
         };
     }, [isDirty]);
 
+    // Persist initial file path to localStorage on mount so future sessions can find it
+    useEffect(() => {
+        const p = savedFilePathRef.current;
+        const ts = projectTimestampRef.current ?? initialData?.timestamp;
+        if (p && ts) { try { const m=JSON.parse(localStorage.getItem('xtec_file_paths')?? '{}'); if(!m[String(ts)]){m[String(ts)]=p;localStorage.setItem('xtec_file_paths',JSON.stringify(m));} } catch {} }
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+    const syncToFile = async () => {
+        if (!savedFilePathRef.current) { handleSaveProject(); return; }
+        try {
+            const photosForExport = photosDataRef.current.map(({ imageId, ...p }) => p);
+            const fileState = JSON.stringify({ ...data, photosData: photosForExport });
+            await (window as any).electronAPI?.writeToFile?.(fileState, savedFilePathRef.current);
+            setFileSynced(true);
+            toast('File saved ✓');
+        } catch (e) { console.error('Sync failed:', e); toast('File save failed', 'error'); }
+    };
+
     const handleBack = () => {
         if (isDirty) {
             pendingCloseRef.current = false;
@@ -719,7 +739,7 @@ const DfrSaskpower = ({ onBack, onBackDirect, initialData }: DfrSaskpowerProps):
 
     const handleChange = (field: keyof Omit<DfrSaskpowerData, 'comments' | 'highlights'>, value: string | ChecklistOption | TextHighlight[]) => {
         setData(prev => ({ ...prev, [field]: value }));
-        setIsDirty(true);
+        setIsDirty(true); if (savedFilePathRef.current) setFileSynced(false);
     };
 
     const handleHighlightsChange = (field: keyof Omit<DfrSaskpowerData, 'comments'>, highlights: TextHighlight[]) => {
@@ -730,7 +750,7 @@ const DfrSaskpower = ({ onBack, onBackDirect, initialData }: DfrSaskpowerProps):
                 [field]: highlights
             }
         }));
-        setIsDirty(true);
+        setIsDirty(true); if (savedFilePathRef.current) setFileSynced(false);
     };
 
     const handleInlineCommentsChange = (field: keyof Omit<DfrSaskpowerData, 'comments'>, comments: TextComment[]) => {
@@ -741,7 +761,7 @@ const DfrSaskpower = ({ onBack, onBackDirect, initialData }: DfrSaskpowerProps):
                 [field]: comments
             }
         }));
-        setIsDirty(true);
+        setIsDirty(true); if (savedFilePathRef.current) setFileSynced(false);
     };
     const toggleComment = (field: string) => {
         setOpenComments(prev => {
@@ -763,23 +783,23 @@ const DfrSaskpower = ({ onBack, onBackDirect, initialData }: DfrSaskpowerProps):
                 [field]: value
             }
         }));
-        setIsDirty(true);
+        setIsDirty(true); if (savedFilePathRef.current) setFileSynced(false);
     };
 
     // --- Photo Handlers ---
     const handlePhotoDataChange = useCallback((id: number, field: keyof Omit<PhotoData, 'id' | 'imageUrl' | 'imageId'>, value: string) => {
         setPhotosData(prev => prev.map(photo => photo.id === id ? { ...photo, [field]: value } : photo));
-        setIsDirty(true);
+        setIsDirty(true); if (savedFilePathRef.current) setFileSynced(false);
     }, []);
 
     const handlePhotoCommentsChange = useCallback((photoId: number, comments: TextComment[]) => {
         setPhotosData(prev => prev.map(p => p.id === photoId ? { ...p, inlineComments: comments } : p));
-        setIsDirty(true);
+        setIsDirty(true); if (savedFilePathRef.current) setFileSynced(false);
     }, []);
 
     const handlePhotoHighlightsChange = useCallback((photoId: number, highlights: TextHighlight[]) => {
         setPhotosData(prev => prev.map(p => p.id === photoId ? { ...p, highlights } : p));
-        setIsDirty(true);
+        setIsDirty(true); if (savedFilePathRef.current) setFileSynced(false);
     }, []);
 
     const handlePhotoAnchorPositionsChange = useCallback((id: number, anchors: CommentAnchorPosition[]) => {
@@ -798,7 +818,7 @@ const DfrSaskpower = ({ onBack, onBackDirect, initialData }: DfrSaskpowerProps):
              const dataUrl = e.target?.result as string;
              autoCropImage(dataUrl).then(croppedImageUrl => {
                 setPhotosData(prev => prev.map(photo => photo.id === id ? { ...photo, imageUrl: croppedImageUrl } : photo));
-                setIsDirty(true);
+                setIsDirty(true); if (savedFilePathRef.current) setFileSynced(false);
              });
         };
         reader.readAsDataURL(file);
@@ -858,7 +878,7 @@ const DfrSaskpower = ({ onBack, onBackDirect, initialData }: DfrSaskpowerProps):
             });
         }
         setBatchProgress(null);
-        setIsDirty(true);
+        setIsDirty(true); if (savedFilePathRef.current) setFileSynced(false);
         toast(
             skipped > 0
                 ? `${valid.length} photo${valid.length !== 1 ? 's' : ''} added · ${skipped} skipped (unsupported format)`
@@ -913,7 +933,7 @@ const DfrSaskpower = ({ onBack, onBackDirect, initialData }: DfrSaskpowerProps):
             }
             return renumberPhotos(newPhotos);
         });
-        setIsDirty(true);
+        setIsDirty(true); if (savedFilePathRef.current) setFileSynced(false);
     };
 
     const removePhoto = useCallback((id: number) => {
@@ -925,7 +945,7 @@ const DfrSaskpower = ({ onBack, onBackDirect, initialData }: DfrSaskpowerProps):
             }
             return renumberPhotos(prev.filter(photo => photo.id !== id));
         });
-        setIsDirty(true);
+        setIsDirty(true); if (savedFilePathRef.current) setFileSynced(false);
     }, []);
 
     const handlePhotoDragEnd = (event: DragEndEvent) => {
@@ -934,7 +954,7 @@ const DfrSaskpower = ({ onBack, onBackDirect, initialData }: DfrSaskpowerProps):
             const oldIndex = photosData.findIndex(p => p.id === active.id);
             const newIndex = photosData.findIndex(p => p.id === over!.id);
             setPhotosData(renumberPhotos(arrayMove(photosData, oldIndex, newIndex)));
-            setIsDirty(true);
+            setIsDirty(true); if (savedFilePathRef.current) setFileSynced(false);
         }
     };
 
@@ -1632,7 +1652,8 @@ const renderTextSection = async (
                         const photosForExport = photosDataRef.current.map(({ imageId, ...p }) => p);
                         const fileState = JSON.stringify({ ...data, photosData: photosForExport });
                         await (window as any).electronAPI?.writeToFile?.(fileState, savedFilePathRef.current);
-                    } catch (e) { console.error('File write failed:', e); }
+                        setFileSynced(true);
+                    } catch (e) { console.error('File write failed:', e); setFileSynced(false); }
                 }
                 toast('Saved ✓');
             } else {
@@ -2001,6 +2022,17 @@ Description: ${photo.description || 'N/A'}
                             </div>
                             <button onClick={handleQuickSave} title="Save (Ctrl+S)" className="bg-[#007D8C] hover:bg-[#006b7a] text-white font-semibold py-2 px-3 rounded-lg inline-flex items-center transition duration-200">
                                 <SaveIcon />
+                            </button>
+                            {/* File sync indicator */}
+                            <button onClick={syncToFile} title={fileSynced===null?'Link to a file to keep it in sync':'Sync changes to project file'}
+                                className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all ${
+                                    fileSynced === true  ? 'text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800' :
+                                    fileSynced === false ? 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border-amber-300 dark:border-amber-700 animate-pulse' :
+                                                           'text-gray-500 dark:text-gray-400 border-gray-200 dark:border-white/10 hover:bg-gray-50 dark:hover:bg-white/5'
+                                }`}>
+                                {fileSynced === true  && <><svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>Synced</>}
+                                {fileSynced === false && <><svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/></svg>Sync to File</>}
+                                {fileSynced === null  && <><svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244"/></svg>Link to File</>}
                             </button>
                             <button onClick={handleOpenProject} className="border border-[#007D8C] text-[#007D8C] hover:bg-[#007D8C]/10 dark:hover:bg-[#007D8C]/10 font-semibold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
                                 <FolderOpenIcon /> <span>Open Project</span>
