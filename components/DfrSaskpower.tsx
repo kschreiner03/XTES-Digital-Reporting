@@ -1664,6 +1664,14 @@ const renderTextSection = async (
                 }
             }
 
+            // Persist file path immediately after successful write — use any known timestamp
+            const persistPath = (ts: number | string | null | undefined, path: string) => {
+                if (!ts || !path) return;
+                try { const m=JSON.parse(localStorage.getItem('xtec_file_paths')?? '{}'); m[String(ts)]=path; localStorage.setItem('xtec_file_paths',JSON.stringify(m)); } catch {}
+            };
+            const knownTs = projectTimestampRef.current ?? (initialData as any)?.timestamp;
+            persistPath(knownTs, filePath!);
+
             // Update recent projects list (non-critical — don't let it abort the save)
             try {
             const stateForRecent = await prepareStateForRecentProjectStorage(currentData);
@@ -1673,9 +1681,8 @@ const renderTextSection = async (
             const savedTs = await addRecentProject(stateForRecent, { type: 'dfrSaskpower', name: projectName, projectNumber: currentData.projectNumber, proponent: currentData.proponent, date: currentData.date }, projectTimestampRef.current ?? undefined);
             if (savedTs) {
                 projectTimestampRef.current = savedTs;
-                try { const m=JSON.parse(localStorage.getItem('xtec_file_paths')?? '{}'); m[String(savedTs)]=filePath!; localStorage.setItem('xtec_file_paths',JSON.stringify(m)); } catch {}
+                persistPath(savedTs, filePath!); // also store under the canonical Recent Projects timestamp
             }
-
             } catch (recentsErr) {
                 console.warn('Recent projects update failed (file was saved):', recentsErr);
             }
