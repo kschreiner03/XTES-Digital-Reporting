@@ -219,7 +219,7 @@ const EditableField: React.FC<{ label: string; value: string; onChange: (value: 
 
     return (
         <div>
-            {label && <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{label}</label>}
+            {label && <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">{label}</label>}
             {isTextArea ? (
                 <textarea
                     ref={elementRef}
@@ -1907,7 +1907,7 @@ Description: ${photo.description || 'N/A'}
 
     return (
         <div
-            className="bg-gray-50 dark:bg-[#111] min-h-screen transition-colors duration-200 relative"
+            className="bg-gray-50 dark:bg-[#161618] min-h-screen transition-colors duration-200 relative"
             onDragOver={handleFileDragOver}
             onDragLeave={handleFileDragLeave}
             onDrop={handleFileDrop}
@@ -1954,7 +1954,7 @@ Description: ${photo.description || 'N/A'}
                         </button>
                     </div>
                 )}
-                <div className="sticky top-0 z-40 bg-gray-50/95 dark:bg-[#111]/95 backdrop-blur-sm py-2.5 mb-4 border-b border-gray-200/60 dark:border-white/5">
+                <div className="sticky top-0 z-40 bg-gray-50/95 dark:bg-[#161618]/95 backdrop-blur-sm py-2.5 mb-4 border-b border-gray-200/60 dark:border-white/5">
                     <div className="flex flex-wrap justify-between items-center gap-2">
                         <button onClick={handleBack} className="border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 font-semibold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
                             <ArrowLeftIcon /> <span>Home</span>
@@ -2315,8 +2315,8 @@ Description: ${photo.description || 'N/A'}
                 const badgeClass = "inline-flex items-center gap-1.5 px-3 py-1 bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-full text-xs font-medium border border-red-200 dark:border-red-800";
                 return (
                     <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
-                        <div role="alert" className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl relative max-w-md w-full mx-4 overflow-hidden">
-                            <div className="flex items-center gap-4 p-5 border-b border-gray-200 dark:border-gray-700">
+                        <div role="alert" className="bg-white dark:bg-[#1c1c1e] rounded-xl shadow-2xl relative max-w-md w-full mx-4 overflow-hidden">
+                            <div className="flex items-center gap-4 p-5 border-b border-gray-100 dark:border-white/5">
                                 <SafeImage fileName="loading-error.gif" alt="Missing info" className="w-14 h-14 flex-shrink-0 rounded-lg" />
                                 <div className="flex-1 min-w-0">
                                     <h3 className="text-lg font-bold text-gray-800 dark:text-white">Missing Information</h3>
@@ -2381,23 +2381,23 @@ Description: ${photo.description || 'N/A'}
                         <div className="grid grid-cols-2 gap-3 mb-5">
                             <div>
                                 <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Proponent</label>
-                                <input type="text" value={firstSaveHeader.proponent} onChange={e => setFirstSaveHeader(h => ({...h, proponent: e.target.value}))} className="w-full border border-gray-300 dark:border-gray-600 rounded px-2 py-1.5 text-sm text-gray-800 dark:text-white bg-white dark:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-[#007D8C]" />
+                                <input type="text" value={firstSaveHeader.proponent} onChange={e => setFirstSaveHeader(h => ({...h, proponent: e.target.value}))} className="w-full border border-gray-200 dark:border-white/10 rounded-lg px-2 py-1.5 text-sm text-gray-800 dark:text-white bg-gray-50 dark:bg-transparent focus:outline-none focus:ring-2 focus:ring-[#007D8C]/40 focus:border-[#007D8C]" />
                             </div>
                             <div>
                                 <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Project #</label>
-                                <input type="text" value={firstSaveHeader.projectNumber} onChange={e => setFirstSaveHeader(h => ({...h, projectNumber: e.target.value}))} className="w-full border border-gray-300 dark:border-gray-600 rounded px-2 py-1.5 text-sm text-gray-800 dark:text-white bg-white dark:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-[#007D8C]" />
+                                <input type="text" value={firstSaveHeader.projectNumber} onChange={e => setFirstSaveHeader(h => ({...h, projectNumber: e.target.value}))} className="w-full border border-gray-200 dark:border-white/10 rounded-lg px-2 py-1.5 text-sm text-gray-800 dark:text-white bg-gray-50 dark:bg-transparent focus:outline-none focus:ring-2 focus:ring-[#007D8C]/40 focus:border-[#007D8C]" />
                             </div>
                             <div className="col-span-2">
                                 <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Project Name</label>
-                                <input type="text" value={firstSaveHeader.projectName} onChange={e => setFirstSaveHeader(h => ({...h, projectName: e.target.value}))} className="w-full border border-gray-300 dark:border-gray-600 rounded px-2 py-1.5 text-sm text-gray-800 dark:text-white bg-white dark:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-[#007D8C]" />
+                                <input type="text" value={firstSaveHeader.projectName} onChange={e => setFirstSaveHeader(h => ({...h, projectName: e.target.value}))} className="w-full border border-gray-200 dark:border-white/10 rounded-lg px-2 py-1.5 text-sm text-gray-800 dark:text-white bg-gray-50 dark:bg-transparent focus:outline-none focus:ring-2 focus:ring-[#007D8C]/40 focus:border-[#007D8C]" />
                             </div>
                             <div className="col-span-2">
                                 <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Location</label>
-                                <input type="text" value={firstSaveHeader.location} onChange={e => setFirstSaveHeader(h => ({...h, location: e.target.value}))} className="w-full border border-gray-300 dark:border-gray-600 rounded px-2 py-1.5 text-sm text-gray-800 dark:text-white bg-white dark:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-[#007D8C]" />
+                                <input type="text" value={firstSaveHeader.location} onChange={e => setFirstSaveHeader(h => ({...h, location: e.target.value}))} className="w-full border border-gray-200 dark:border-white/10 rounded-lg px-2 py-1.5 text-sm text-gray-800 dark:text-white bg-gray-50 dark:bg-transparent focus:outline-none focus:ring-2 focus:ring-[#007D8C]/40 focus:border-[#007D8C]" />
                             </div>
                             <div>
                                 <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Date</label>
-                                <input type="text" placeholder="e.g. October 1, 2025" value={firstSaveHeader.date} onChange={e => setFirstSaveHeader(h => ({...h, date: e.target.value}))} className="w-full border border-gray-300 dark:border-gray-600 rounded px-2 py-1.5 text-sm text-gray-800 dark:text-white bg-white dark:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-[#007D8C]" />
+                                <input type="text" placeholder="e.g. October 1, 2025" value={firstSaveHeader.date} onChange={e => setFirstSaveHeader(h => ({...h, date: e.target.value}))} className="w-full border border-gray-200 dark:border-white/10 rounded-lg px-2 py-1.5 text-sm text-gray-800 dark:text-white bg-gray-50 dark:bg-transparent focus:outline-none focus:ring-2 focus:ring-[#007D8C]/40 focus:border-[#007D8C]" />
                             </div>
                         </div>
                         <div className="flex justify-end gap-3">

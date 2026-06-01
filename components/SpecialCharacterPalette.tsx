@@ -30,7 +30,7 @@ export const SpecialCharacterPalette: React.FC = () => {
     }
 
     return (
-        <div className="fixed top-1/2 right-0 -translate-y-1/2 bg-white dark:bg-gray-800 p-4 rounded-l-lg shadow-xl z-50 border-l-2 border-t-2 border-b-2 border-gray-200 dark:border-gray-600 w-64 transition-colors duration-200">
+        <div className="fixed top-1/2 right-0 -translate-y-1/2 bg-white dark:bg-[#1c1c1e] p-4 rounded-l-lg shadow-xl z-50 border-l-2 border-t-2 border-b-2 border-gray-200 dark:border-white/10 w-64 transition-colors duration-200">
             <div className="flex justify-between items-center mb-2">
                 <h3 className="font-bold text-gray-700 dark:text-gray-200">Special Characters</h3>
                 <button
