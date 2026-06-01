@@ -400,6 +400,10 @@ const DfrStandard = ({ onBack, onBackDirect, initialData }: DfrStandardProps): R
     const [showSaveAsMenu, setShowSaveAsMenu] = useState(false);
     const saveAsMenuRef = useRef<HTMLDivElement>(null);
     const quickSaveRef = useRef<() => Promise<void>>();
+    const saveProjectRef = useRef<() => Promise<void>>();
+    const savePdfRef = useRef<() => void>();
+    const photosDataRef = useRef(photosData);
+    photosDataRef.current = photosData;
     const projectTimestampRef = useRef<number | null>(initialData?.timestamp ?? null);
     const isSavingRef = useRef(false);
     const isDirtyRef = useRef(isDirty);
@@ -1401,18 +1405,18 @@ Description: ${photo.description || 'N/A'}
         }
         if (api?.onSaveProjectShortcut) {
             api.removeSaveProjectShortcutListener?.();
-            api.onSaveProjectShortcut(() => { handleSaveProject(); });
+            api.onSaveProjectShortcut(() => { saveProjectRef.current?.(); });
         }
         if (api?.onExportPdfShortcut) {
             api.removeExportPdfShortcutListener?.();
-            api.onExportPdfShortcut(() => { handleSavePdf(); });
+            api.onExportPdfShortcut(() => { savePdfRef.current?.(); });
         }
         return () => {
             api?.removeQuickSaveShortcutListener?.();
             api?.removeSaveProjectShortcutListener?.();
             api?.removeExportPdfShortcutListener?.();
         };
-    }, [headerData, bodyData, photosData]);
+    }, []);
 
     // Project packaging — respond to Package Project… menu action
     useEffect(() => {
@@ -1462,7 +1466,7 @@ Description: ${photo.description || 'N/A'}
 
     useEffect(() => {
         return () => {
-            photosData.forEach(p => { if (p.imageUrl) revokeImageUrl(p.imageUrl); });
+            photosDataRef.current.forEach(p => { if (p.imageUrl) revokeImageUrl(p.imageUrl); });
         };
     }, []);
 
@@ -2169,6 +2173,9 @@ Description: ${photo.description || 'N/A'}
             setShowStatusModal(false);
         }
     };
+
+    saveProjectRef.current = handleSaveProject;
+    savePdfRef.current = handleSavePdf;
 
     const getHeaderErrors = (): Set<keyof DfrHeaderData> => {
         const headerErrors = new Set<keyof DfrHeaderData>();
