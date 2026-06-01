@@ -331,7 +331,7 @@ const CommentCard: React.FC<CommentCardProps> = ({
 
                 {/* Action buttons */}
                 {!isEditing && !showReply && (
-                    <div className="flex items-center gap-1 mt-3 pt-3 border-t border-gray-100 dark:border-gray-700">
+                    <div className="flex items-center flex-wrap gap-1 mt-3 pt-3 border-t border-gray-100 dark:border-gray-700">
                         {onFocus && (
                             <button
                                 onClick={() => {
@@ -376,7 +376,7 @@ const CommentCard: React.FC<CommentCardProps> = ({
                         )}
                         <button
                             onClick={onResolve}
-                            className={`ml-auto flex items-center gap-1 px-2 py-1 text-xs font-medium rounded ${
+                            className={`ml-auto shrink-0 flex items-center gap-1 px-2 py-1 text-xs font-medium rounded ${
                                 comment.resolved
                                     ? 'text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30'
                                     : 'text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/30'
