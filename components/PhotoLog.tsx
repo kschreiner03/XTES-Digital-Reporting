@@ -203,6 +203,7 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, onBackDirect, initialData }
     })());
     const photosDataRef = useRef(photosData);
     photosDataRef.current = photosData;
+    const [fileSynced, setFileSynced] = useState<boolean | null>(savedFilePathRef.current ? true : null);
     const projectTimestampRef = useRef<number | null>(initialData?.timestamp ?? null);
     const isSavingRef = useRef(false);
     const isDirtyRef = useRef(isDirty);
@@ -250,12 +251,12 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, onBackDirect, initialData }
 
     const handlePhotoCommentsChange = useCallback((photoId: number, comments: TextComment[]) => {
         setPhotosData(prev => prev.map(p => p.id === photoId ? { ...p, inlineComments: comments } : p));
-        setIsDirty(true);
+        setIsDirty(true); if (savedFilePathRef.current) setFileSynced(false);
     }, []);
 
     const handlePhotoHighlightsChange = useCallback((photoId: number, highlights: TextHighlight[]) => {
         setPhotosData(prev => prev.map(p => p.id === photoId ? { ...p, highlights } : p));
-        setIsDirty(true);
+        setIsDirty(true); if (savedFilePathRef.current) setFileSynced(false);
     }, []);
 
     const handlePhotoAnchorPositionsChange = useCallback((id: number, anchors: CommentAnchorPosition[]) => {
@@ -274,7 +275,7 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, onBackDirect, initialData }
         setPhotosData(prev => prev.map(p =>
             p.id === photoId ? { ...p, inlineComments: updater(p.inlineComments || []) } : p
         ));
-        setIsDirty(true);
+        setIsDirty(true); if (savedFilePathRef.current) setFileSynced(false);
     };
 
     const fieldLabels: Record<string, string> = useMemo(() => {
@@ -487,6 +488,24 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, onBackDirect, initialData }
         };
     }, [isDirty]);
 
+
+    useEffect(() => {
+        const p = savedFilePathRef.current;
+        const ts = projectTimestampRef.current ?? initialData?.timestamp;
+        if (p && ts) { try { const m=JSON.parse(localStorage.getItem('xtec_file_paths')?? '{}'); if(!m[String(ts)]){m[String(ts)]=p;localStorage.setItem('xtec_file_paths',JSON.stringify(m));} } catch {} }
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+    const syncToFile = async () => {
+        if (!savedFilePathRef.current) { handleSaveProject(); return; }
+        try {
+            const photosForExport = photosDataRef.current.map(({ imageId, ...p }: any) => p);
+            const fileState = JSON.stringify({ headerData, photosData: photosForExport });
+            await (window as any).electronAPI?.writeToFile?.(fileState, savedFilePathRef.current);
+            setFileSynced(true);
+            (window as any).__toast?.('File saved ✓');
+        } catch (e) { console.error('Sync failed:', e); }
+    };
+
     const handleBack = () => {
         if (isDirty) {
             pendingCloseRef.current = false;
@@ -498,12 +517,12 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, onBackDirect, initialData }
 
     const handleHeaderChange = (field: keyof HeaderData, value: string) => {
         setHeaderData(prev => ({ ...prev, [field]: value }));
-        setIsDirty(true);
+        setIsDirty(true); if (savedFilePathRef.current) setFileSynced(false);
     };
 
     const handlePhotoDataChange = useCallback((id: number, field: keyof Omit<PhotoData, 'id' | 'imageUrl' | 'imageId'>, value: string) => {
         setPhotosData(prev => prev.map(photo => photo.id === id ? { ...photo, [field]: value } : photo));
-        setIsDirty(true);
+        setIsDirty(true); if (savedFilePathRef.current) setFileSynced(false);
     }, []);
     
     const autoCropImage = (imageUrl: string): Promise<string> => {
@@ -572,7 +591,7 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, onBackDirect, initialData }
                     // Fall back to uncropped image
                     setPhotosData(prev => prev.map(photo => photo.id === id ? { ...photo, imageUrl: dataUrl } : photo));
                 }
-                setIsDirty(true);
+                setIsDirty(true); if (savedFilePathRef.current) setFileSynced(false);
             };
             img.src = dataUrl;
         };
@@ -628,7 +647,7 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, onBackDirect, initialData }
             });
         }
         setBatchProgress(null);
-        setIsDirty(true);
+        setIsDirty(true); if (savedFilePathRef.current) setFileSynced(false);
         toast(
             skipped > 0
                 ? `${valid.length} photo${valid.length !== 1 ? 's' : ''} added · ${skipped} skipped (unsupported format)`
@@ -682,7 +701,7 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, onBackDirect, initialData }
             }
             return renumberPhotos(newPhotos);
         });
-        setIsDirty(true);
+        setIsDirty(true); if (savedFilePathRef.current) setFileSynced(false);
     };
 
     const removePhoto = useCallback((id: number) => {
@@ -694,7 +713,7 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, onBackDirect, initialData }
             }
             return renumberPhotos(prev.filter(photo => photo.id !== id));
         });
-        setIsDirty(true);
+        setIsDirty(true); if (savedFilePathRef.current) setFileSynced(false);
     }, []);
 
     const handlePhotoDragEnd = (event: DragEndEvent) => {
@@ -703,7 +722,7 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, onBackDirect, initialData }
             const oldIndex = photosData.findIndex(p => p.id === active.id);
             const newIndex = photosData.findIndex(p => p.id === over!.id);
             setPhotosData(renumberPhotos(arrayMove(photosData, oldIndex, newIndex)));
-            setIsDirty(true);
+            setIsDirty(true); if (savedFilePathRef.current) setFileSynced(false);
         }
     };
 
@@ -759,7 +778,8 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, onBackDirect, initialData }
                         const photosForExport = photosDataRef.current.map(({ imageId, ...p }: any) => p);
                         const fileState = JSON.stringify({ headerData, photosData: photosForExport });
                         await (window as any).electronAPI?.writeToFile?.(fileState, savedFilePathRef.current);
-                    } catch (e) { console.error('File write failed:', e); }
+                        setFileSynced(true);
+                    } catch (e) { console.error('File write failed:', e); setFileSynced(false); }
                 }
                 toast('Saved ✓');
             } else {
