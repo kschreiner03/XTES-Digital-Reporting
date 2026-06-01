@@ -1231,9 +1231,19 @@ const DfrStandard = ({ onBack, onBackDirect, initialData }: DfrStandardProps): R
                 savedFilePathRef.current = filePath;
             } else {
                 // @ts-ignore
-                await window.electronAPI?.writeToFile?.(filePayload, filePath);
+                if ((window as any).electronAPI?.writeToFile) {
+                    const writeResult = await (window as any).electronAPI.writeToFile(filePayload, filePath);
+                    if (writeResult && !writeResult.success) {
+                        throw new Error(writeResult.error || 'Could not write to file');
+                    }
+                } else {
+                    // Fallback if handler not yet loaded (restart app to get write-to-file)
+                    // @ts-ignore
+                    await window.electronAPI?.saveProject?.(filePayload, filePath);
+                }
             }
 
+            try {
             const stateForRecent = await prepareStateForRecentProjectStorage();
             const formattedDate = formatDateForRecentProject(hd.date);
             const dateSuffix = formattedDate ? ` - ${formattedDate}` : '';
@@ -1246,13 +1256,17 @@ const DfrStandard = ({ onBack, onBackDirect, initialData }: DfrStandardProps): R
                 try { const m=JSON.parse(localStorage.getItem('xtec_file_paths')?? '{}'); m[String(savedTs)]=filePath!; localStorage.setItem('xtec_file_paths',JSON.stringify(m)); } catch {}
             }
 
+            } catch (recentsErr) {
+                console.warn('Recent projects update failed (file was saved):', recentsErr);
+            }
+
             setIsDirty(false);
             setFileSynced(true);
             setAutosaveEnabled(true);
             toast('Saved ✓');
         } catch (e) {
             console.error('Save failed:', e);
-            toast('Save failed — please try again.', 'error');
+            toast(`Save failed — ${e instanceof Error ? e.message : 'please try again.'}`, 'error');
         } finally {
             isSavingRef.current = false;
         }
