@@ -62,7 +62,7 @@ const App: React.FC = () => {
             else if (ext === 'iogc') type = 'iogcLeaseAudit';
 
             if (type) {
-                setProjectToOpen(projectData);
+                setProjectToOpen({ ...projectData, filePath: path });
                 setSelectedApp(type);
             } else {
                 alert('Could not determine project type from file extension.');

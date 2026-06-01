@@ -624,6 +624,21 @@ app.whenReady().then(() => {
     return { success: false };
   });
 
+  // Write directly to a known path — no dialog. Used by quick save / autosave
+  // when the user has already chosen a file location via Save As.
+  ipcMain.handle('write-to-file', async (event, data, filePath) => {
+    try {
+      if (!filePath || !path.isAbsolute(filePath)) {
+        return { success: false, error: 'Invalid file path' };
+      }
+      fs.writeFileSync(filePath, data);
+      return { success: true };
+    } catch (err) {
+      console.error('Failed to write project to file:', err);
+      return { success: false, error: err.message };
+    }
+  });
+
   ipcMain.handle('load-project', async (event, fileType) => {
     const window = BrowserWindow.getFocusedWindow();
     let filters = [];

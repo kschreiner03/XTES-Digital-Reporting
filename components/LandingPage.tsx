@@ -6,6 +6,7 @@ import { AppType } from '../App';
 import { deleteImage, deleteProject, deleteThumbnail, retrieveProject, getAllProjectKeys } from './db';
 import SafeImage, { getAssetUrl } from './SafeImage';
 import WhatsNewModal from './WhatsNewModal';
+import CalendarPlanner from './CalendarPlanner';
 import { safeSet } from './safeStorage';
 
 // Photo contest credits — only contest-winning photos get credit overlays
@@ -132,6 +133,7 @@ const AppSelectionCard: React.FC<{ title: string; description: string; icon: Rea
 );
 
 const LandingPage: React.FC<LandingPageProps> = ({ onSelectApp, onOpenProject, showWhatsNew, onCloseWhatsNew }) => {
+    const [showCalendar, setShowCalendar] = useState(false);
     const [recentProjects, setRecentProjects] = useState<RecentProject[]>([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [openMenuTimestamp, setOpenMenuTimestamp] = useState<number | null>(null);
@@ -588,6 +590,19 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSelectApp, onOpenProject, s
             {showWhatsNew && (
                 <WhatsNewModal onClose={onCloseWhatsNew} />
             )}
+
+            {/* Calendar planner button — bottom-left floating */}
+            <button
+                onClick={() => setShowCalendar(true)}
+                title="Field Planner"
+                className="fixed bottom-5 left-5 z-10 w-10 h-10 rounded-xl bg-white/80 dark:bg-[#1c1c1e]/80 backdrop-blur-sm border border-gray-200/80 dark:border-[#007D8C]/25 shadow-md hover:shadow-lg hover:border-[#007D8C]/60 dark:hover:border-[#007D8C]/50 text-gray-500 dark:text-gray-400 hover:text-[#007D8C] dark:hover:text-[#007D8C] transition-all duration-200 flex items-center justify-center"
+            >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.75} stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
+                </svg>
+            </button>
+
+            {showCalendar && <CalendarPlanner onClose={() => setShowCalendar(false)} />}
         </div>
     );
 };
