@@ -1234,6 +1234,12 @@ const DfrStandard = ({ onBack, onBackDirect, initialData }: DfrStandardProps): R
                 }
             }
 
+            const persistPath = (ts: number | string | null | undefined, path: string) => {
+                if (!ts || !path) return;
+                try { const m=JSON.parse(localStorage.getItem('xtec_file_paths')?? '{}'); m[String(ts)]=path; localStorage.setItem('xtec_file_paths',JSON.stringify(m)); } catch {}
+            };
+            persistPath(projectTimestampRef.current ?? (initialData as any)?.timestamp, filePath!);
+
             try {
             const stateForRecent = await prepareStateForRecentProjectStorage();
             const formattedDate = formatDateForRecentProject(hd.date);
@@ -1242,10 +1248,7 @@ const DfrStandard = ({ onBack, onBackDirect, initialData }: DfrStandardProps): R
             const savedTs = await addRecentProject({ ...stateForRecent, headerData: { ...stateForRecent.headerData, ...hd } }, {
                 type: 'dfrStandard', name: projectName, projectNumber: hd.projectNumber, proponent: hd.proponent, date: hd.date,
             }, projectTimestampRef.current ?? undefined);
-            if (savedTs) {
-                projectTimestampRef.current = savedTs;
-                try { const m=JSON.parse(localStorage.getItem('xtec_file_paths')?? '{}'); m[String(savedTs)]=filePath!; localStorage.setItem('xtec_file_paths',JSON.stringify(m)); } catch {}
-            }
+            if (savedTs) { projectTimestampRef.current = savedTs; persistPath(savedTs, filePath!); }
 
             } catch (recentsErr) {
                 console.warn('Recent projects update failed (file was saved):', recentsErr);
