@@ -848,6 +848,12 @@ const CombinedLog: React.FC<CombinedLogProps> = ({ onBack, onBackDirect, initial
                 }
             }
 
+            const persistPath = (ts: number | string | null | undefined, path: string) => {
+                if (!ts || !path) return;
+                try { const m=JSON.parse(localStorage.getItem('xtec_file_paths')?? '{}'); m[String(ts)]=path; localStorage.setItem('xtec_file_paths',JSON.stringify(m)); } catch {}
+            };
+            persistPath(projectTimestamp ?? (initialData as any)?.timestamp, filePath!);
+
             try {
             const stateForRecent = await prepareStateForRecentProjectStorage(hd, photosData);
             const formattedDate = formatDateForRecentProject(hd.date);
@@ -856,10 +862,7 @@ const CombinedLog: React.FC<CombinedLogProps> = ({ onBack, onBackDirect, initial
             const savedTs = await addRecentProject(stateForRecent, {
                 type: 'combinedLog', name: projectName, projectNumber: hd.projectNumber, proponent: hd.proponent, date: hd.date,
             }, projectTimestamp ?? undefined);
-            if (savedTs) {
-                setProjectTimestamp(savedTs);
-                try { const m=JSON.parse(localStorage.getItem('xtec_file_paths')?? '{}'); m[String(savedTs)]=filePath!; localStorage.setItem('xtec_file_paths',JSON.stringify(m)); } catch {}
-            }
+            if (savedTs) { setProjectTimestamp(savedTs); persistPath(savedTs, filePath!); }
 
             } catch (recentsErr) {
                 console.warn('Recent projects update failed (file was saved):', recentsErr);
