@@ -1647,11 +1647,7 @@ Description: ${photo.description || 'N/A'}
                         </div>
 
                         {/* Save As dropdown */}
-                        <button onClick={handleNewDay} title="Copy to a new draft with today's date"
-                            className="border border-gray-300 dark:border-gray-600 bg-white dark:bg-[#1c1c1e] hover:bg-gray-50 dark:hover:bg-[#2a2a2e] text-gray-700 dark:text-gray-200 font-semibold py-2 px-4 rounded-lg inline-flex items-center gap-1.5 transition duration-200">
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/></svg>
-                            <span>New Day</span>
-                        </button>
+
                         <div className="relative" ref={moreMenuRef}>
                             <button onClick={() => setShowMoreMenu(v => !v)} title="More options"
                                 className="border border-gray-300 dark:border-gray-600 bg-white dark:bg-[#1c1c1e] hover:bg-gray-50 dark:hover:bg-[#2a2a2e] text-gray-500 dark:text-gray-400 py-2 px-2 rounded-lg inline-flex items-center transition duration-200">
@@ -1659,11 +1655,6 @@ Description: ${photo.description || 'N/A'}
                             </button>
                             {showMoreMenu && (
                                 <div className="absolute right-0 top-full mt-1 z-50 bg-white dark:bg-[#1c1c1e] border border-gray-200 dark:border-[#007D8C]/20 rounded-xl shadow-xl py-1 min-w-[160px]">
-                                    <button onClick={() => { setShowMoreMenu(false); handleSaveCopy(); }}
-                                        className="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-white/5 flex items-center gap-2.5">
-                                        <svg className="w-4 h-4 shrink-0 text-gray-400" fill="none" viewBox="0 0 24 24" strokeWidth={1.75} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 01-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 011.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 00-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 01-1.125-1.125v-9.25m12 6.625v-1.875a3.375 3.375 0 00-3.375-3.375h-1.5a1.125 1.125 0 01-1.125-1.125v-1.5a3.375 3.375 0 00-3.375-3.375H9.75"/></svg>
-                                        Save a Copy…
-                                    </button>
                                     <button onClick={() => { setShowMoreMenu(false); handleSaveProject(); }}
                                         className="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-white/5 flex items-center gap-2.5">
                                         <SaveIcon className="w-4 h-4 shrink-0 text-gray-400" />
