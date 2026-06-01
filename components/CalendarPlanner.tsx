@@ -26,8 +26,17 @@ const MY_NAME_KEY   = 'xtec_planner_my_name';
 const empty = (): DayEntry => ({ notes: '', tasks: [], schedule: [] });
 
 const load = (): PlannerData => {
-    try { const r = localStorage.getItem(STORAGE_KEY); return r ? JSON.parse(r) : {}; }
-    catch { return {}; }
+    try {
+        const r = localStorage.getItem(STORAGE_KEY);
+        if (!r) return {};
+        const raw = JSON.parse(r) as Record<string, any>;
+        // Migrate entries from older format that lacked schedule array
+        const out: PlannerData = {};
+        for (const [k, v] of Object.entries(raw)) {
+            out[k] = { notes: v?.notes ?? '', tasks: v?.tasks ?? [], schedule: v?.schedule ?? [] };
+        }
+        return out;
+    } catch { return {}; }
 };
 const persist = (d: PlannerData) => {
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(d)); } catch {}
@@ -258,9 +267,9 @@ const CalendarPlanner: React.FC<CalendarPlannerProps> = ({ onClose }) => {
 
                 const existing = next[key] ?? empty();
                 // Avoid duplicate entries for the same project+date
-                const isDuplicate = existing.schedule.some(s => s.project === project && s.location === location);
+                const isDuplicate = ( existing.schedule ?? [] ).some(s => s.project === project && s.location === location);
                 if (!isDuplicate) {
-                    next[key] = { ...existing, schedule: [...existing.schedule, entry] };
+                    next[key] = { ...existing, schedule: [...(existing.schedule ?? []), entry] };
                     count++;
                 }
             }
@@ -464,11 +473,11 @@ const CalendarPlanner: React.FC<CalendarPlannerProps> = ({ onClose }) => {
                                 <div className="flex-1 overflow-y-auto p-5 space-y-5">
 
                                     {/* Schedule entries */}
-                                    {entry.schedule.length > 0 && (
+                                    {( entry.schedule ?? [] ).length > 0 && (
                                         <div>
                                             <p className="text-[11px] font-semibold uppercase tracking-wider text-[#007D8C] mb-2">Schedule</p>
                                             <div className="space-y-2">
-                                                {entry.schedule.map(s => (
+                                                {(entry.schedule ?? []).map(s => (
                                                     <div key={s.id} className="group flex items-start gap-2 p-3 rounded-xl"
                                                         style={{ backgroundColor: s.color, color: s.textColor }}>
                                                         <div className="flex-1 min-w-0">
