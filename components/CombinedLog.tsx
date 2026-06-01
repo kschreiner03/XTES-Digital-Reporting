@@ -827,75 +827,65 @@ const CombinedLog: React.FC<CombinedLogProps> = ({ onBack, onBackDirect, initial
         return true;
     };
 
-    const handleQuickSave = async () => {
+    const performSave = async (hd = headerData) => {
         if (isSavingRef.current) return;
-        if (projectTimestamp === null) {
-            setFirstSaveHeader({ proponent: headerData.proponent, projectName: headerData.projectName, location: headerData.location, date: headerData.date, projectNumber: headerData.projectNumber });
-            setShowFirstSaveModal(true);
-            return;
-        }
         isSavingRef.current = true;
         try {
-            const stateForRecentProjects = await prepareStateForRecentProjectStorage(headerData, photosData);
-            const formattedDate = formatDateForRecentProject(headerData.date);
+            const photosForExport = photosDataRef.current.map(({ imageId, ...p }: any) => p);
+            const filePayload = JSON.stringify({ headerData: hd, photosData: photosForExport });
+            let filePath = savedFilePathRef.current;
+
+            if (!filePath) {
+                const sanitize = (s: string) => s.replace(/[^a-z0-9_]/gi, '-').toLowerCase();
+                const fname = `${sanitize(hd.projectNumber || 'project')}_${sanitize(hd.projectName || 'combinedlog')}.clog`;
+                // @ts-ignore
+                const result = await window.electronAPI?.saveProject?.(filePayload, fname);
+                if (!result?.path) return;
+                filePath = result.path;
+                savedFilePathRef.current = filePath;
+            } else {
+                // @ts-ignore
+                await window.electronAPI?.writeToFile?.(filePayload, filePath);
+            }
+
+            const stateForRecent = await prepareStateForRecentProjectStorage(hd, photosData);
+            const formattedDate = formatDateForRecentProject(hd.date);
             const dateSuffix = formattedDate ? ` - ${formattedDate}` : '';
-            const projectName = `${headerData.projectName || 'Untitled Combine Logs'}${dateSuffix}`;
-            const savedTs = await addRecentProject(stateForRecentProjects, {
-                type: 'combinedLog',
-                name: projectName,
-                projectNumber: headerData.projectNumber,
-                proponent: headerData.proponent,
-                date: headerData.date,
+            const projectName = `${hd.projectName || 'Untitled Combine Logs'}${dateSuffix}`;
+            const savedTs = await addRecentProject(stateForRecent, {
+                type: 'combinedLog', name: projectName, projectNumber: hd.projectNumber, proponent: hd.proponent, date: hd.date,
             }, projectTimestamp ?? undefined);
             if (savedTs) {
                 setProjectTimestamp(savedTs);
-                setIsDirty(false);
-                if (savedFilePathRef.current) {
-                    try {
-                        const photosForExport = photosDataRef.current.map(({ imageId, ...p }: any) => p);
-                        const fileState = JSON.stringify({ headerData, photosData: photosForExport });
-                        await (window as any).electronAPI?.writeToFile?.(fileState, savedFilePathRef.current);
-                        setFileSynced(true);
-                    } catch (e) { console.error('File write failed:', e); setFileSynced(false); }
-                }
-                toast('Saved ✓');
-            } else {
-                toast('Save failed — please try again.', 'error');
+                try { const m=JSON.parse(localStorage.getItem('xtec_file_paths')?? '{}'); m[String(savedTs)]=filePath!; localStorage.setItem('xtec_file_paths',JSON.stringify(m)); } catch {}
             }
+
+            setIsDirty(false);
+            setFileSynced(true);
+            setAutosaveEnabled(true);
+            toast('Saved ✓');
+        } catch (e) {
+            console.error('Save failed:', e);
+            toast('Save failed — please try again.', 'error');
         } finally {
             isSavingRef.current = false;
         }
     };
 
+    const handleQuickSave = async () => {
+        if (isSavingRef.current) return;
+        if (!headerData.projectName.trim() && !headerData.projectNumber?.trim() && !savedFilePathRef.current) {
+            setFirstSaveHeader({ proponent: headerData.proponent, projectName: headerData.projectName, location: headerData.location, date: headerData.date, projectNumber: headerData.projectNumber });
+            setShowFirstSaveModal(true);
+            return;
+        }
+        await performSave();
+    };
+
     const handleConfirmFirstSave = async () => {
         setShowFirstSaveModal(false);
         setHeaderData(h => ({ ...h, ...firstSaveHeader }));
-        if (isSavingRef.current) return;
-        isSavingRef.current = true;
-        try {
-            const mergedHeader = { ...headerData, ...firstSaveHeader };
-            const stateForRecentProjects = await prepareStateForRecentProjectStorage(mergedHeader, photosData);
-            const formattedDate = formatDateForRecentProject(firstSaveHeader.date);
-            const dateSuffix = formattedDate ? ` - ${formattedDate}` : '';
-            const projectName = `${firstSaveHeader.projectName || 'Untitled Combine Logs'}${dateSuffix}`;
-            const savedTs = await addRecentProject(stateForRecentProjects, {
-                type: 'combinedLog',
-                name: projectName,
-                projectNumber: firstSaveHeader.projectNumber,
-                proponent: firstSaveHeader.proponent,
-                date: firstSaveHeader.date,
-            });
-            if (savedTs) {
-                setProjectTimestamp(savedTs);
-                setIsDirty(false);
-                setAutosaveEnabled(true);
-                toast('Saved ✓');
-            } else {
-                toast('Save failed — please try again.', 'error');
-            }
-        } finally {
-            isSavingRef.current = false;
-        }
+        await performSave({ ...headerData, ...firstSaveHeader } as any);
     };
     quickSaveRef.current = handleQuickSave;
 
@@ -906,7 +896,7 @@ const CombinedLog: React.FC<CombinedLogProps> = ({ onBack, onBackDirect, initial
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
     const handleSaveProject = async () => {
-        await handleQuickSave();
+        if (isSavingRef.current) return;
         const photosForExport = photosData.map(({ imageId, ...photo }) => photo);
         const stateForFileExport = { headerData, photosData: photosForExport };
         const sanitize = (name: string) => name.replace(/[^a-z0-9_]/gi, '-').toLowerCase();

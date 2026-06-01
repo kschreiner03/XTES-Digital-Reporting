@@ -1629,64 +1629,71 @@ const renderTextSection = async (
         }
     };
 
-    const handleQuickSave = async () => {
+    // Core save — works like Word/Excel Ctrl+S.
+    // First call with no file path → shows Save dialog.
+    // All subsequent calls → writes directly to the same file.
+    const performSave = async (currentData: DfrSaskpowerData) => {
         if (isSavingRef.current) return;
-        if (projectTimestampRef.current === null) {
-            setFirstSaveHeader({ proponent: data.proponent, projectName: data.projectName, location: data.location, date: data.date, projectNumber: data.projectNumber });
-            setShowFirstSaveModal(true);
-            return;
-        }
         isSavingRef.current = true;
         try {
-            const stateForRecentProjects = await prepareStateForRecentProjectStorage(data);
-            const formattedDate = formatDateForRecentProject(data.date);
+            const photosForExport = photosDataRef.current.map(({ imageId, ...p }) => p);
+            const filePayload = JSON.stringify({ ...currentData, photosData: photosForExport });
+            let filePath = savedFilePathRef.current;
+
+            if (!filePath) {
+                // No file linked yet — show Save dialog (Word behaviour: first Ctrl+S)
+                const sanitize = (s: string) => s.replace(/[^a-z0-9_]/gi, '-').toLowerCase();
+                const fname = `${sanitize(currentData.projectName || 'project')}_${formatDateForFilename(currentData.date)}.spdfr`;
+                // @ts-ignore
+                const result = await window.electronAPI?.saveProject?.(filePayload, fname);
+                if (!result?.path) return; // user cancelled dialog
+                filePath = result.path;
+                savedFilePathRef.current = filePath;
+            } else {
+                // Path known — write directly, no dialog (Word behaviour: subsequent Ctrl+S)
+                // @ts-ignore
+                await window.electronAPI?.writeToFile?.(filePayload, filePath);
+            }
+
+            // Update recent projects list
+            const stateForRecent = await prepareStateForRecentProjectStorage(currentData);
+            const formattedDate = formatDateForRecentProject(currentData.date);
             const dateSuffix = formattedDate ? ` - ${formattedDate}` : '';
-            const projectName = `${data.projectName || 'Untitled SaskPower DFR'}${dateSuffix}`;
-            const savedTs = await addRecentProject(stateForRecentProjects, { type: 'dfrSaskpower', name: projectName, projectNumber: data.projectNumber, proponent: data.proponent, date: data.date }, projectTimestampRef.current ?? undefined);
+            const projectName = `${currentData.projectName || 'Untitled SaskPower DFR'}${dateSuffix}`;
+            const savedTs = await addRecentProject(stateForRecent, { type: 'dfrSaskpower', name: projectName, projectNumber: currentData.projectNumber, proponent: currentData.proponent, date: currentData.date }, projectTimestampRef.current ?? undefined);
             if (savedTs) {
                 projectTimestampRef.current = savedTs;
-                setIsDirty(false);
-                // Also write to the project file if a path is known
-                if (savedFilePathRef.current) {
-                    try {
-                        const photosForExport = photosDataRef.current.map(({ imageId, ...p }) => p);
-                        const fileState = JSON.stringify({ ...data, photosData: photosForExport });
-                        await (window as any).electronAPI?.writeToFile?.(fileState, savedFilePathRef.current);
-                        setFileSynced(true);
-                    } catch (e) { console.error('File write failed:', e); setFileSynced(false); }
-                }
-                toast('Saved ✓');
-            } else {
-                toast('Save failed — please try again.', 'error');
+                try { const m=JSON.parse(localStorage.getItem('xtec_file_paths')?? '{}'); m[String(savedTs)]=filePath!; localStorage.setItem('xtec_file_paths',JSON.stringify(m)); } catch {}
             }
+
+            setIsDirty(false);
+            setFileSynced(true);
+            setAutosaveEnabled(true);
+            toast('Saved ✓');
+        } catch (e) {
+            console.error('Save failed:', e);
+            toast('Save failed — please try again.', 'error');
         } finally {
             isSavingRef.current = false;
         }
     };
 
+    const handleQuickSave = async () => {
+        if (isSavingRef.current) return;
+        // If no project info yet, collect it first (like Word prompting for document title)
+        if (!data.projectName.trim() && !data.projectNumber.trim() && !savedFilePathRef.current) {
+            setFirstSaveHeader({ proponent: data.proponent, projectName: data.projectName, location: data.location, date: data.date, projectNumber: data.projectNumber });
+            setShowFirstSaveModal(true);
+            return;
+        }
+        await performSave(data);
+    };
+
     const handleConfirmFirstSave = async () => {
         setShowFirstSaveModal(false);
-        const mergedData = { ...data, ...firstSaveHeader }; // capture current state before scheduling update
+        const mergedData = { ...data, ...firstSaveHeader };
         setData(d => ({ ...d, ...firstSaveHeader }));
-        if (isSavingRef.current) return;
-        isSavingRef.current = true;
-        try {
-            const stateForRecentProjects = await prepareStateForRecentProjectStorage(mergedData);
-            const formattedDate = formatDateForRecentProject(firstSaveHeader.date);
-            const dateSuffix = formattedDate ? ` - ${formattedDate}` : '';
-            const projectName = `${firstSaveHeader.projectName || 'Untitled SaskPower DFR'}${dateSuffix}`;
-            const savedTs = await addRecentProject(stateForRecentProjects, { type: 'dfrSaskpower', name: projectName, projectNumber: firstSaveHeader.projectNumber, proponent: firstSaveHeader.proponent, date: firstSaveHeader.date });
-            if (savedTs) {
-                projectTimestampRef.current = savedTs;
-                setIsDirty(false);
-                setAutosaveEnabled(true);
-                toast('Saved ✓');
-            } else {
-                toast('Save failed — please try again.', 'error');
-            }
-        } finally {
-            isSavingRef.current = false;
-        }
+        await performSave(mergedData);
     };
     quickSaveRef.current = handleQuickSave;
     savePdfRef.current = handleSavePdf;
@@ -1698,7 +1705,10 @@ const renderTextSection = async (
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
     const handleSaveProject = async () => {
-        await handleQuickSave();
+        // Save As — always shows the dialog so user can pick a new location
+        if (isSavingRef.current) return;
+        isSavingRef.current = true;
+        try {
         const photosForExport = photosData.map(({ imageId, ...photo }) => photo);
         const stateForFileExport = { ...data, photosData: photosForExport };
         const sanitize = (name: string) => name.replace(/[^a-z0-9_]/gi, '-').toLowerCase();
@@ -1712,6 +1722,7 @@ const renderTextSection = async (
             if (result?.path) {
                 savedFilePathRef.current = result.path;
                 if (projectTimestampRef.current) try { const m=JSON.parse(localStorage.getItem('xtec_file_paths')?? '{}'); m[String(projectTimestampRef.current)]=result.path; localStorage.setItem('xtec_file_paths',JSON.stringify(m)); } catch {}
+                setFileSynced(true);
             }
         } else {
             const blob = new Blob([JSON.stringify(stateForFileExport)], { type: 'application/json;charset=utf-8;' });
@@ -1723,6 +1734,7 @@ const renderTextSection = async (
             document.body.removeChild(link);
             URL.revokeObjectURL(link.href);
         }
+        } finally { isSavingRef.current = false; }
     };
 
     saveProjectRef.current = handleSaveProject;
