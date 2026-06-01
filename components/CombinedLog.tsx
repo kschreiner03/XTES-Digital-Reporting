@@ -279,6 +279,8 @@ const CombinedLog: React.FC<CombinedLogProps> = ({ onBack, onBackDirect, initial
     const [showSaveAsMenu, setShowSaveAsMenu] = useState(false);
     const saveAsMenuRef = useRef<HTMLDivElement>(null);
     const quickSaveRef = useRef<() => Promise<void>>();
+    const photosDataRef = useRef(photosData);
+    photosDataRef.current = photosData;
     const isSavingRef = useRef(false);
     const isDirtyRef = useRef(isDirty);
     isDirtyRef.current = isDirty;
@@ -522,7 +524,12 @@ const CombinedLog: React.FC<CombinedLogProps> = ({ onBack, onBackDirect, initial
     }, []);
 
     const renumberPhotos = (photos: PhotoData[]) => {
-        return photos.map((photo, index) => ({ ...photo, photoNumber: String(index + 1) }));
+        let siteCount = 0;
+        let mapCount = 0;
+        return photos.map(photo => ({
+            ...photo,
+            photoNumber: photo.isMap ? `Map ${++mapCount}` : String(++siteCount),
+        }));
     };
 
     const handleBatchImport = async (files: FileList | File[]) => {
@@ -1409,7 +1416,7 @@ Description: ${photo.description || 'N/A'}
 
     useEffect(() => {
         return () => {
-            photosData.forEach(p => { if (p.imageUrl) revokeImageUrl(p.imageUrl); });
+            photosDataRef.current.forEach(p => { if (p.imageUrl) revokeImageUrl(p.imageUrl); });
         };
     }, []);
 
