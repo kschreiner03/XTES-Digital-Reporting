@@ -148,7 +148,7 @@ const fmtDayHeading = (key: string) => {
 };
 
 // ─── Component ────────────────────────────────────────────────────────────────
-type PanelMode = 'day' | 'add';
+type PanelMode = 'day' | 'add' | 'edit';
 
 interface CalendarPlannerProps { onClose: () => void; }
 
@@ -181,6 +181,8 @@ const CalendarPlanner: React.FC<CalendarPlannerProps> = ({ onClose }) => {
     const [colorOpen,    setColorOpen]    = useState(false);
     const colorRef = useRef<HTMLDivElement>(null);
 
+    const [editingId,  setEditingId]  = useState<string | null>(null);
+    const [editingKey, setEditingKey] = useState<string | null>(null);
     const [newTask, setNewTask] = useState('');
     const pasteAreaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -277,6 +279,58 @@ const CalendarPlanner: React.FC<CalendarPlannerProps> = ({ onClose }) => {
     const removeEvent = (key: string, id: string) => {
         setData(prev => { const e={...empty(),...(prev[key]??{})}; return{...prev,[key]:{...e,schedule:e.schedule.filter(s=>s.id!==id)}}; });
     };
+
+    const startEdit = (key: string, s: ScheduleEntry) => {
+        setEditingId(s.id);
+        setEditingKey(key);
+        setEvtProject(s.projectNumber);
+        setEvtName(s.projectName);
+        setEvtLocation(s.location ?? '');
+        setEvtFrom(key);
+        setEvtTo(key);
+        setEvtStart(s.startTime);
+        setEvtEnd(s.endTime);
+        setEvtAllDay(s.allDay ?? false);
+        setEvtRecurring(false);
+        setEvtColorId(s.colorId);
+        setPanelMode('edit');
+    };
+
+    const saveEdit = () => {
+        if (!editingId || !editingKey) return;
+        const col = palette.find(p => p.id === evtColorId) ?? palette[0];
+        setData(prev => {
+            const e = { ...empty(), ...(prev[editingKey]??{}) };
+            return {
+                ...prev,
+                [editingKey]: {
+                    ...e,
+                    schedule: e.schedule.map(s => s.id === editingId ? {
+                        ...s,
+                        projectNumber: evtProject.trim(),
+                        projectName:   evtName.trim(),
+                        location:      evtLocation.trim(),
+                        startTime:     evtAllDay ? '' : evtStart,
+                        endTime:       evtAllDay ? '' : evtEnd,
+                        allDay:        evtAllDay,
+                        colorId:       col.id,
+                        color:         col.color,
+                        textColor:     textForBg(col.color),
+                    } : s).sort((a, b) => {
+                        if (a.allDay && !b.allDay) return -1;
+                        if (!a.allDay && b.allDay) return 1;
+                        if (!a.startTime && !b.startTime) return 0;
+                        if (!a.startTime) return 1; if (!b.startTime) return -1;
+                        return a.startTime.localeCompare(b.startTime);
+                    }),
+                },
+            };
+        });
+        setEditingId(null);
+        setEditingKey(null);
+        setPanelMode('day');
+    };
+
     const updateNotes = (notes: string) => {
         if (!selectedKey) return;
         setData(prev => ({...prev,[selectedKey]:{...empty(),...(prev[selectedKey]??{}),notes}}));
@@ -391,7 +445,7 @@ const CalendarPlanner: React.FC<CalendarPlannerProps> = ({ onClose }) => {
                         </span>
                     )}
                     <button onClick={()=>{setPanelMode('add');setEvtFrom(selectedKey);setEvtTo(selectedKey);}}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap ${panelMode==='add'?'bg-[#007D8C] text-white':'bg-[#007D8C]/10 text-[#007D8C] hover:bg-[#007D8C]/20'}`}>
+                        className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap ${panelMode==='add'||panelMode==='edit'?'bg-[#007D8C] text-white':'bg-[#007D8C]/10 text-[#007D8C] hover:bg-[#007D8C]/20'}`}>
                         <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
                         Add Event
                     </button>
@@ -517,15 +571,15 @@ const CalendarPlanner: React.FC<CalendarPlannerProps> = ({ onClose }) => {
               {/* ── Right Panel ──────────────────────────────────────────── */}
               <div className="w-80 shrink-0 border-l border-gray-100 dark:border-white/5 flex flex-col overflow-hidden bg-gray-50/40 dark:bg-white/[0.02]">
 
-                {panelMode === 'add' ? (
-                    /* ── Add Event ── */
+                {(panelMode === 'add' || panelMode === 'edit') ? (
+                    /* ── Add / Edit Event ── */
                     <>
                         <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-gray-100 dark:border-white/5 shrink-0">
                             <div>
-                                <p className="text-sm font-semibold text-gray-800 dark:text-white">Add Event</p>
-                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Fill in details and press Add</p>
+                                <p className="text-sm font-semibold text-gray-800 dark:text-white">{panelMode==='edit'?'Edit Event':'Add Event'}</p>
+                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{panelMode==='edit'?'Update the details below':'Fill in details and press Add'}</p>
                             </div>
-                            <button onClick={()=>setPanelMode('day')} className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/10 transition-colors">
+                            <button onClick={()=>{setPanelMode('day');setEditingId(null);setEditingKey(null);}} className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/10 transition-colors">
                                 <CloseIcon className="h-4 w-4"/>
                             </button>
                         </div>
@@ -573,18 +627,21 @@ const CalendarPlanner: React.FC<CalendarPlannerProps> = ({ onClose }) => {
                                     className="w-full text-sm px-3 py-2 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 text-gray-800 dark:text-white placeholder-gray-400 dark:placeholder-gray-600 focus:ring-2 focus:ring-[#007D8C]/40 focus:border-[#007D8C] outline-none transition"/>
                             </div>
 
-                            <div className="grid grid-cols-2 gap-3">
-                                <div>
-                                    <label className="block text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-1.5">From</label>
-                                    <input type="date" value={evtFrom} onChange={e=>{setEvtFrom(e.target.value);if(!evtTo||evtTo<e.target.value)setEvtTo(e.target.value);}}
-                                        className="w-full text-sm px-2.5 py-2 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 text-gray-800 dark:text-white focus:ring-2 focus:ring-[#007D8C]/40 focus:border-[#007D8C] outline-none transition"/>
+                            {/* Date range — hidden in edit mode (editing one specific day) */}
+                            {panelMode === 'add' && (
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="block text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-1.5">From</label>
+                                        <input type="date" value={evtFrom} onChange={e=>{setEvtFrom(e.target.value);if(!evtTo||evtTo<e.target.value)setEvtTo(e.target.value);}}
+                                            className="w-full text-sm px-2.5 py-2 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 text-gray-800 dark:text-white focus:ring-2 focus:ring-[#007D8C]/40 focus:border-[#007D8C] outline-none transition"/>
+                                    </div>
+                                    <div>
+                                        <label className="block text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-1.5">To</label>
+                                        <input type="date" value={evtTo} min={evtFrom} onChange={e=>setEvtTo(e.target.value)}
+                                            className="w-full text-sm px-2.5 py-2 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 text-gray-800 dark:text-white focus:ring-2 focus:ring-[#007D8C]/40 focus:border-[#007D8C] outline-none transition"/>
+                                    </div>
                                 </div>
-                                <div>
-                                    <label className="block text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-1.5">To</label>
-                                    <input type="date" value={evtTo} min={evtFrom} onChange={e=>setEvtTo(e.target.value)}
-                                        className="w-full text-sm px-2.5 py-2 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 text-gray-800 dark:text-white focus:ring-2 focus:ring-[#007D8C]/40 focus:border-[#007D8C] outline-none transition"/>
-                                </div>
-                            </div>
+                            )}
 
                             {/* Checkboxes */}
                             <div className="space-y-2">
@@ -593,11 +650,13 @@ const CalendarPlanner: React.FC<CalendarPlannerProps> = ({ onClose }) => {
                                         className="w-4 h-4 accent-[#007D8C] rounded"/>
                                     <span className="text-sm text-gray-700 dark:text-gray-200">All day</span>
                                 </label>
-                                <label className="flex items-center gap-2 cursor-pointer">
-                                    <input type="checkbox" checked={evtRecurring} onChange={e=>setEvtRecurring(e.target.checked)}
-                                        className="w-4 h-4 accent-[#007D8C] rounded"/>
-                                    <span className="text-sm text-gray-700 dark:text-gray-200">Repeat weekly <span className="text-gray-400 dark:text-gray-500 text-xs">(same day of week)</span></span>
-                                </label>
+                                {panelMode === 'add' && (
+                                    <label className="flex items-center gap-2 cursor-pointer">
+                                        <input type="checkbox" checked={evtRecurring} onChange={e=>setEvtRecurring(e.target.checked)}
+                                            className="w-4 h-4 accent-[#007D8C] rounded"/>
+                                        <span className="text-sm text-gray-700 dark:text-gray-200">Repeat weekly <span className="text-gray-400 dark:text-gray-500 text-xs">(same day of week)</span></span>
+                                    </label>
+                                )}
                             </div>
 
                             {/* Time fields — hidden when all day */}
@@ -618,15 +677,28 @@ const CalendarPlanner: React.FC<CalendarPlannerProps> = ({ onClose }) => {
                         </div>
 
                         <div className="px-5 pb-5 pt-2 shrink-0 border-t border-gray-100 dark:border-white/5">
-                            {addDays.length > 1 && (
+                            {panelMode === 'add' && addDays.length > 1 && (
                                 <p className="text-xs text-gray-500 dark:text-gray-400 mb-2 text-center">
                                     Adding to {addDays.length} days{evtRecurring ? ' (weekly)' : ''}
                                 </p>
                             )}
-                            <button onClick={addEvent} disabled={!evtProject.trim()&&!evtName.trim()}
-                                className="w-full py-2.5 bg-[#007D8C] hover:bg-[#006270] disabled:opacity-40 text-white text-sm font-semibold rounded-lg transition-colors">
-                                Add Event{addDays.length > 1 ? ` (${addDays.length})` : ''}
-                            </button>
+                            {panelMode === 'edit' ? (
+                                <div className="flex gap-2">
+                                    <button onClick={()=>{setPanelMode('day');setEditingId(null);setEditingKey(null);}}
+                                        className="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 dark:bg-white/5 dark:hover:bg-white/10 text-gray-700 dark:text-white text-sm font-semibold rounded-lg transition-colors">
+                                        Cancel
+                                    </button>
+                                    <button onClick={saveEdit} disabled={!evtProject.trim()&&!evtName.trim()}
+                                        className="flex-1 py-2.5 bg-[#007D8C] hover:bg-[#006270] disabled:opacity-40 text-white text-sm font-semibold rounded-lg transition-colors">
+                                        Save Changes
+                                    </button>
+                                </div>
+                            ) : (
+                                <button onClick={addEvent} disabled={!evtProject.trim()&&!evtName.trim()}
+                                    className="w-full py-2.5 bg-[#007D8C] hover:bg-[#006270] disabled:opacity-40 text-white text-sm font-semibold rounded-lg transition-colors">
+                                    Add Event{addDays.length > 1 ? ` (${addDays.length})` : ''}
+                                </button>
+                            )}
                         </div>
                     </>
                 ) : (
@@ -669,9 +741,14 @@ const CalendarPlanner: React.FC<CalendarPlannerProps> = ({ onClose }) => {
                                                     {s.location&&<p className="text-[10px] opacity-70 mt-0.5">📍 {s.location}</p>}
                                                     <p className="text-[10px] opacity-60 mt-0.5">{palette.find(p=>p.id===s.colorId)?.label??''}</p>
                                                 </div>
-                                                <button onClick={()=>removeEvent(selectedKey,s.id)} className="opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity shrink-0" style={{color:s.textColor}}>
-                                                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
-                                                </button>
+                                                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                                                    <button onClick={()=>startEdit(selectedKey,s)} style={{color:s.textColor}} title="Edit">
+                                                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125"/></svg>
+                                                    </button>
+                                                    <button onClick={()=>removeEvent(selectedKey,s.id)} style={{color:s.textColor}} title="Delete">
+                                                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                                                    </button>
+                                                </div>
                                             </div>
                                         ))}
 
@@ -684,9 +761,14 @@ const CalendarPlanner: React.FC<CalendarPlannerProps> = ({ onClose }) => {
                                                     <span className="text-xs font-semibold truncate">{s.projectName||'·'}</span>
                                                     {s.location&&<span className="text-[10px] opacity-70 truncate">📍{s.location}</span>}
                                                 </div>
-                                                <button onClick={()=>removeEvent(selectedKey,s.id)} className="opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity shrink-0" style={{color:s.textColor}}>
-                                                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
-                                                </button>
+                                                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                                                    <button onClick={()=>startEdit(selectedKey,s)} className="hover:opacity-70 transition-opacity" style={{color:s.textColor}} title="Edit">
+                                                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125"/></svg>
+                                                    </button>
+                                                    <button onClick={()=>removeEvent(selectedKey,s.id)} className="hover:opacity-70 transition-opacity" style={{color:s.textColor}} title="Delete">
+                                                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                                                    </button>
+                                                </div>
                                             </div>
                                         ))}
 
@@ -732,9 +814,14 @@ const CalendarPlanner: React.FC<CalendarPlannerProps> = ({ onClose }) => {
                                                     {s.location&&<p className="text-[10px] opacity-70 mt-0.5">📍 {s.location}</p>}
                                                     <p className="text-[10px] opacity-60 mt-0.5">{palette.find(p=>p.id===s.colorId)?.label??''}</p>
                                                 </div>
-                                                <button onClick={()=>removeEvent(selectedKey,s.id)} className="opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity shrink-0" style={{color:s.textColor}}>
-                                                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
-                                                </button>
+                                                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                                                    <button onClick={()=>startEdit(selectedKey,s)} style={{color:s.textColor}} title="Edit">
+                                                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125"/></svg>
+                                                    </button>
+                                                    <button onClick={()=>removeEvent(selectedKey,s.id)} style={{color:s.textColor}} title="Delete">
+                                                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                                                    </button>
+                                                </div>
                                             </div>
                                         ))}
                                     </div>
