@@ -288,6 +288,7 @@ const CombinedLog: React.FC<CombinedLogProps> = ({ onBack, onBackDirect, initial
     })());
     const photosDataRef = useRef(photosData);
     photosDataRef.current = photosData;
+    const [fileSynced, setFileSynced] = useState<boolean | null>(savedFilePathRef.current ? true : null);
     const isSavingRef = useRef(false);
     const isDirtyRef = useRef(isDirty);
     isDirtyRef.current = isDirty;
@@ -442,6 +443,23 @@ const CombinedLog: React.FC<CombinedLogProps> = ({ onBack, onBackDirect, initial
         };
     }, [isDirty]);
 
+
+    useEffect(() => {
+        const p = savedFilePathRef.current;
+        const ts = projectTimestamp ?? initialData?.timestamp;
+        if (p && ts) { try { const m=JSON.parse(localStorage.getItem('xtec_file_paths')?? '{}'); if(!m[String(ts)]){m[String(ts)]=p;localStorage.setItem('xtec_file_paths',JSON.stringify(m));} } catch {} }
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+    const syncToFile = async () => {
+        if (!savedFilePathRef.current) { handleSaveProject(); return; }
+        try {
+            const photosForExport = photosDataRef.current.map(({ imageId, ...p }: any) => p);
+            const fileState = JSON.stringify({ headerData, photosData: photosForExport });
+            await (window as any).electronAPI?.writeToFile?.(fileState, savedFilePathRef.current);
+            setFileSynced(true);
+        } catch (e) { console.error('Sync failed:', e); }
+    };
+
     const handleBack = () => {
         if (isDirty) {
             pendingCloseRef.current = false;
@@ -453,12 +471,12 @@ const CombinedLog: React.FC<CombinedLogProps> = ({ onBack, onBackDirect, initial
 
     const handleHeaderChange = (field: keyof HeaderData, value: string) => {
         setHeaderData(prev => ({ ...prev, [field]: value }));
-        setIsDirty(true);
+        setIsDirty(true); if (savedFilePathRef.current) setFileSynced(false);
     };
 
     const handlePhotoDataChange = useCallback((id: number, field: keyof Omit<PhotoData, 'id' | 'imageUrl' | 'imageId'>, value: string) => {
         setPhotosData(prev => prev.map(photo => photo.id === id ? { ...photo, [field]: value } : photo));
-        setIsDirty(true);
+        setIsDirty(true); if (savedFilePathRef.current) setFileSynced(false);
     }, []);
     
     const autoCropImage = (imageUrl: string): Promise<string> => {
@@ -519,12 +537,12 @@ const CombinedLog: React.FC<CombinedLogProps> = ({ onBack, onBackDirect, initial
             const dataUrl = e.target?.result as string;
             autoCropImage(dataUrl).then(croppedImageUrl => {
                 setPhotosData(prev => prev.map(photo => photo.id === id ? { ...photo, imageUrl: croppedImageUrl } : photo));
-                setIsDirty(true);
+                setIsDirty(true); if (savedFilePathRef.current) setFileSynced(false);
             }).catch(err => {
                 console.error("Image crop failed", err);
                 // Fall back to uncropped image
                 setPhotosData(prev => prev.map(photo => photo.id === id ? { ...photo, imageUrl: dataUrl } : photo));
-                setIsDirty(true);
+                setIsDirty(true); if (savedFilePathRef.current) setFileSynced(false);
             });
         };
         reader.readAsDataURL(file);
@@ -579,7 +597,7 @@ const CombinedLog: React.FC<CombinedLogProps> = ({ onBack, onBackDirect, initial
             });
         }
         setBatchProgress(null);
-        setIsDirty(true);
+        setIsDirty(true); if (savedFilePathRef.current) setFileSynced(false);
         toast(
             skipped > 0
                 ? `${valid.length} photo${valid.length !== 1 ? 's' : ''} added · ${skipped} skipped (unsupported format)`
@@ -633,14 +651,14 @@ const CombinedLog: React.FC<CombinedLogProps> = ({ onBack, onBackDirect, initial
             }
             return renumberPhotos(newPhotos);
         });
-        setIsDirty(true);
+        setIsDirty(true); if (savedFilePathRef.current) setFileSynced(false);
     };
 
     const removePhoto = useCallback((id: number) => {
         setPhotosData(prev => {
             return renumberPhotos(prev.filter(photo => photo.id !== id));
         });
-        setIsDirty(true);
+        setIsDirty(true); if (savedFilePathRef.current) setFileSynced(false);
     }, []);
 
     const handlePhotoDragEnd = (event: DragEndEvent) => {
@@ -649,7 +667,7 @@ const CombinedLog: React.FC<CombinedLogProps> = ({ onBack, onBackDirect, initial
             const oldIndex = photosData.findIndex(p => p.id === active.id);
             const newIndex = photosData.findIndex(p => p.id === over!.id);
             setPhotosData(renumberPhotos(arrayMove(photosData, oldIndex, newIndex)));
-            setIsDirty(true);
+            setIsDirty(true); if (savedFilePathRef.current) setFileSynced(false);
         }
     };
 
@@ -837,7 +855,8 @@ const CombinedLog: React.FC<CombinedLogProps> = ({ onBack, onBackDirect, initial
                         const photosForExport = photosDataRef.current.map(({ imageId, ...p }: any) => p);
                         const fileState = JSON.stringify({ headerData, photosData: photosForExport });
                         await (window as any).electronAPI?.writeToFile?.(fileState, savedFilePathRef.current);
-                    } catch (e) { console.error('File write failed:', e); }
+                        setFileSynced(true);
+                    } catch (e) { console.error('File write failed:', e); setFileSynced(false); }
                 }
                 toast('Saved ✓');
             } else {

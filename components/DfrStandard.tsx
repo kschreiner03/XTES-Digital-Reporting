@@ -410,6 +410,7 @@ const DfrStandard = ({ onBack, onBackDirect, initialData }: DfrStandardProps): R
         try { const m = JSON.parse(localStorage.getItem('xtec_file_paths') ?? '{}'); return m[String(ts)] ?? null; } catch { return null; }
     })());
     const photosDataRef = useRef(photosData);
+    const [fileSynced, setFileSynced] = useState<boolean | null>(savedFilePathRef.current ? true : null);
     photosDataRef.current = photosData;
     const projectTimestampRef = useRef<number | null>(initialData?.timestamp ?? null);
     const isSavingRef = useRef(false);
@@ -523,7 +524,7 @@ const DfrStandard = ({ onBack, onBackDirect, initialData }: DfrStandardProps): R
             setPhotosData(prev => prev.map(p =>
                 p.id === photoId ? { ...p, inlineComments: updater(p.inlineComments || []) } : p
             ));
-            setIsDirty(true);
+            setIsDirty(true); if (savedFilePathRef.current) setFileSynced(false);
             return;
         }
         const locId = getLocationActivityId(fieldId);
@@ -545,18 +546,18 @@ const DfrStandard = ({ onBack, onBackDirect, initialData }: DfrStandardProps): R
                 },
             }));
         }
-        setIsDirty(true);
+        setIsDirty(true); if (savedFilePathRef.current) setFileSynced(false);
     };
 
     // Photo comment/highlight change handlers
     const handlePhotoCommentsChange = useCallback((photoId: number, comments: TextComment[]) => {
         setPhotosData(prev => prev.map(p => p.id === photoId ? { ...p, inlineComments: comments } : p));
-        setIsDirty(true);
+        setIsDirty(true); if (savedFilePathRef.current) setFileSynced(false);
     }, []);
 
     const handlePhotoHighlightsChange = useCallback((photoId: number, highlights: TextHighlight[]) => {
         setPhotosData(prev => prev.map(p => p.id === photoId ? { ...p, highlights } : p));
-        setIsDirty(true);
+        setIsDirty(true); if (savedFilePathRef.current) setFileSynced(false);
     }, []);
 
     const handlePhotoAnchorPositionsChange = useCallback((id: number, anchors: CommentAnchorPosition[]) => {
@@ -875,6 +876,23 @@ const DfrStandard = ({ onBack, onBackDirect, initialData }: DfrStandardProps): R
         };
     }, [isDirty]);
 
+
+    useEffect(() => {
+        const p = savedFilePathRef.current;
+        const ts = projectTimestampRef.current ?? initialData?.timestamp;
+        if (p && ts) { try { const m=JSON.parse(localStorage.getItem('xtec_file_paths')?? '{}'); if(!m[String(ts)]){m[String(ts)]=p;localStorage.setItem('xtec_file_paths',JSON.stringify(m));} } catch {} }
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+    const syncToFile = async () => {
+        if (!savedFilePathRef.current) { handleSaveProject(); return; }
+        try {
+            const photosForExport = photosDataRef.current.map(({ imageId, ...p }: any) => p);
+            const fileState = JSON.stringify({ headerData, bodyData, photosData: photosForExport });
+            await (window as any).electronAPI?.writeToFile?.(fileState, savedFilePathRef.current);
+            setFileSynced(true);
+        } catch (e) { console.error('Sync failed:', e); }
+    };
+
     const handleBack = () => {
         if (isDirty) {
             pendingCloseRef.current = false;
@@ -886,17 +904,17 @@ const DfrStandard = ({ onBack, onBackDirect, initialData }: DfrStandardProps): R
 
     const handleHeaderChange = (field: keyof DfrHeaderData, value: string) => {
         setHeaderData(prev => ({ ...prev, [field]: value }));
-        setIsDirty(true);
+        setIsDirty(true); if (savedFilePathRef.current) setFileSynced(false);
     };
 
     const handleBodyDataChange = (field: keyof Omit<DfrStandardBodyData, 'activityBlocks' | 'generalActivity' | 'locationActivities' | 'comments'>, value: string) => {
         setBodyData(prev => ({ ...prev, [field]: value }));
-        setIsDirty(true);
+        setIsDirty(true); if (savedFilePathRef.current) setFileSynced(false);
     };
 
     const handleGeneralActivityChange = (value: string) => {
         setBodyData(prev => ({ ...prev, generalActivity: value }));
-        setIsDirty(true);
+        setIsDirty(true); if (savedFilePathRef.current) setFileSynced(false);
     };
 
     const toggleComment = (field: string) => {
@@ -919,7 +937,7 @@ const DfrStandard = ({ onBack, onBackDirect, initialData }: DfrStandardProps): R
                 [field]: value
             }
         }));
-        setIsDirty(true);
+        setIsDirty(true); if (savedFilePathRef.current) setFileSynced(false);
     };
 
     const handleHighlightsChange = (field: keyof DfrStandardBodyData, highlights: TextHighlight[]) => {
@@ -930,7 +948,7 @@ const DfrStandard = ({ onBack, onBackDirect, initialData }: DfrStandardProps): R
                 [field]: highlights
             }
         }));
-        setIsDirty(true);
+        setIsDirty(true); if (savedFilePathRef.current) setFileSynced(false);
     };
 
     const handleInlineCommentsChange = (field: keyof DfrStandardBodyData, comments: TextComment[]) => {
@@ -941,7 +959,7 @@ const DfrStandard = ({ onBack, onBackDirect, initialData }: DfrStandardProps): R
                 [field]: comments
             }
         }));
-        setIsDirty(true);
+        setIsDirty(true); if (savedFilePathRef.current) setFileSynced(false);
     };
 
     // --- Location Activity Handlers ---
@@ -972,7 +990,7 @@ const DfrStandard = ({ onBack, onBackDirect, initialData }: DfrStandardProps): R
                 block.id === id ? { ...block, [field]: value } : block
             )
         }));
-        setIsDirty(true);
+        setIsDirty(true); if (savedFilePathRef.current) setFileSynced(false);
     };
 
     const updateLocationActivityHighlights = (id: number, highlights: TextHighlight[]) => {
@@ -982,7 +1000,7 @@ const DfrStandard = ({ onBack, onBackDirect, initialData }: DfrStandardProps): R
                 block.id === id ? { ...block, highlights: { ...block.highlights, activities: highlights } } : block
             )
         }));
-        setIsDirty(true);
+        setIsDirty(true); if (savedFilePathRef.current) setFileSynced(false);
     };
 
     const updateLocationActivityInlineComments = (id: number, comments: TextComment[]) => {
@@ -992,7 +1010,7 @@ const DfrStandard = ({ onBack, onBackDirect, initialData }: DfrStandardProps): R
                 block.id === id ? { ...block, inlineComments: { ...block.inlineComments, activities: comments } } : block
             )
         }));
-        setIsDirty(true);
+        setIsDirty(true); if (savedFilePathRef.current) setFileSynced(false);
     };
 
     const moveLocationActivity = (id: number, direction: 'up' | 'down') => {
@@ -1011,7 +1029,7 @@ const DfrStandard = ({ onBack, onBackDirect, initialData }: DfrStandardProps): R
 
     const handlePhotoDataChange = useCallback((id: number, field: keyof Omit<PhotoData, 'id' | 'imageUrl' | 'imageId'>, value: string) => {
         setPhotosData(prev => prev.map(photo => photo.id === id ? { ...photo, [field]: value } : photo));
-        setIsDirty(true);
+        setIsDirty(true); if (savedFilePathRef.current) setFileSynced(false);
     }, []);
 
     const handleImageChange = useCallback((id: number, file: File) => {
@@ -1026,7 +1044,7 @@ const DfrStandard = ({ onBack, onBackDirect, initialData }: DfrStandardProps): R
              const dataUrl = e.target?.result as string;
              autoCropImage(dataUrl).then(croppedImageUrl => {
                 setPhotosData(prev => prev.map(photo => photo.id === id ? { ...photo, imageUrl: croppedImageUrl } : photo));
-                setIsDirty(true);
+                setIsDirty(true); if (savedFilePathRef.current) setFileSynced(false);
              });
         };
         reader.readAsDataURL(file);
@@ -1086,7 +1104,7 @@ const DfrStandard = ({ onBack, onBackDirect, initialData }: DfrStandardProps): R
             });
         }
         setBatchProgress(null);
-        setIsDirty(true);
+        setIsDirty(true); if (savedFilePathRef.current) setFileSynced(false);
         toast(
             skipped > 0
                 ? `${valid.length} photo${valid.length !== 1 ? 's' : ''} added · ${skipped} skipped (unsupported format)`
@@ -1141,7 +1159,7 @@ const DfrStandard = ({ onBack, onBackDirect, initialData }: DfrStandardProps): R
             }
             return renumberPhotos(newPhotos);
         });
-        setIsDirty(true);
+        setIsDirty(true); if (savedFilePathRef.current) setFileSynced(false);
     };
 
     const removePhoto = useCallback((id: number) => {
@@ -1153,7 +1171,7 @@ const DfrStandard = ({ onBack, onBackDirect, initialData }: DfrStandardProps): R
             }
             return renumberPhotos(prev.filter(photo => photo.id !== id));
         });
-        setIsDirty(true);
+        setIsDirty(true); if (savedFilePathRef.current) setFileSynced(false);
     }, []);
 
     const handlePhotoDragEnd = (event: DragEndEvent) => {
@@ -1162,7 +1180,7 @@ const DfrStandard = ({ onBack, onBackDirect, initialData }: DfrStandardProps): R
             const oldIndex = photosData.findIndex(p => p.id === active.id);
             const newIndex = photosData.findIndex(p => p.id === over!.id);
             setPhotosData(renumberPhotos(arrayMove(photosData, oldIndex, newIndex)));
-            setIsDirty(true);
+            setIsDirty(true); if (savedFilePathRef.current) setFileSynced(false);
         }
     };
     
@@ -1223,7 +1241,8 @@ const DfrStandard = ({ onBack, onBackDirect, initialData }: DfrStandardProps): R
                         const photosForExport = photosDataRef.current.map(({ imageId, ...p }: any) => p);
                         const fileState = JSON.stringify({ headerData, bodyData, photosData: photosForExport });
                         await (window as any).electronAPI?.writeToFile?.(fileState, savedFilePathRef.current);
-                    } catch (e) { console.error('File write failed:', e); }
+                        setFileSynced(true);
+                    } catch (e) { console.error('File write failed:', e); setFileSynced(false); }
                 }
                 toast('Saved ✓');
             } else {
@@ -2291,6 +2310,18 @@ Description: ${photo.description || 'N/A'}
                             </div>
                             <button onClick={handleQuickSave} title="Save (Ctrl+S)" className="bg-[#007D8C] hover:bg-[#006b7a] text-white font-semibold py-2 px-3 rounded-lg inline-flex items-center transition duration-200">
                                 <SaveIcon />
+                            </button>
+
+                            {/* File sync indicator */}
+                            <button onClick={syncToFile} title={fileSynced===null?'Link to a project file':'Sync changes to project file on disk'}
+                                className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all ${
+                                    fileSynced === true  ? 'text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800' :
+                                    fileSynced === false ? 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border-amber-300 dark:border-amber-700 animate-pulse' :
+                                                           'text-gray-500 dark:text-gray-400 border-gray-200 dark:border-white/10 hover:bg-gray-50 dark:hover:bg-white/5'
+                                }`}>
+                                {fileSynced === true  && <><svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>Synced</>}
+                                {fileSynced === false && <><svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/></svg>Sync to File</>}
+                                {fileSynced === null  && <><svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244"/></svg>Link to File</>}
                             </button>
                             <button onClick={handleOpenProject} className="border border-[#007D8C] text-[#007D8C] hover:bg-[#007D8C]/10 dark:hover:bg-[#007D8C]/10 font-semibold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
                                 <FolderOpenIcon /> <span>Open Project</span>
