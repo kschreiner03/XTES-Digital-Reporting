@@ -194,6 +194,8 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, onBackDirect, initialData }
     const [showSaveAsMenu, setShowSaveAsMenu] = useState(false);
     const saveAsMenuRef = useRef<HTMLDivElement>(null);
     const quickSaveRef = useRef<() => Promise<void>>();
+    const photosDataRef = useRef(photosData);
+    photosDataRef.current = photosData;
     const projectTimestampRef = useRef<number | null>(initialData?.timestamp ?? null);
     const isSavingRef = useRef(false);
     const isDirtyRef = useRef(isDirty);
@@ -213,6 +215,15 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, onBackDirect, initialData }
 
     const handleAnchorPositionsChange = useCallback((fieldId: string, anchors: CommentAnchorPosition[]) => {
         setCommentAnchors(prev => {
+            // Bail out if nothing actually changed to avoid unnecessary re-renders
+            const existing = [...prev.entries()].filter(([k]) => k.startsWith(`${fieldId}:`));
+            const unchanged = existing.length === anchors.length &&
+                anchors.every(a => {
+                    const p = prev.get(`${a.fieldId}:${a.commentId}`);
+                    return p && p.top === a.top && p.left === a.left && p.height === a.height;
+                });
+            if (unchanged) return prev;
+
             const newMap = new Map(prev);
             for (const key of newMap.keys()) {
                 if (key.startsWith(`${fieldId}:`)) newMap.delete(key);
@@ -562,7 +573,12 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, onBackDirect, initialData }
     }, []);
 
     const renumberPhotos = (photos: PhotoData[]) => {
-        return photos.map((photo, index) => ({ ...photo, photoNumber: String(index + 1) }));
+        let siteCount = 0;
+        let mapCount = 0;
+        return photos.map(photo => ({
+            ...photo,
+            photoNumber: photo.isMap ? `Map ${++mapCount}` : String(++siteCount),
+        }));
     };
 
     const handleBatchImport = async (files: FileList | File[]) => {
@@ -1411,7 +1427,7 @@ Description: ${photo.description || 'N/A'}
 
     useEffect(() => {
         return () => {
-            photosData.forEach(p => { if (p.imageUrl) revokeImageUrl(p.imageUrl); });
+            photosDataRef.current.forEach(p => { if (p.imageUrl) revokeImageUrl(p.imageUrl); });
         };
     }, []);
 

@@ -343,6 +343,10 @@ const DfrSaskpower = ({ onBack, onBackDirect, initialData }: DfrSaskpowerProps):
     const [showSaveAsMenu, setShowSaveAsMenu] = useState(false);
     const saveAsMenuRef = useRef<HTMLDivElement>(null);
     const quickSaveRef = useRef<() => Promise<void>>();
+    const saveProjectRef = useRef<() => Promise<void>>();
+    const savePdfRef = useRef<() => void>();
+    const photosDataRef = useRef(photosData);
+    photosDataRef.current = photosData;
     const projectTimestampRef = useRef<number | null>(initialData?.timestamp ?? null);
     const isSavingRef = useRef(false);
     const isDirtyRef = useRef(isDirty);
@@ -1626,11 +1630,11 @@ const renderTextSection = async (
 
     const handleConfirmFirstSave = async () => {
         setShowFirstSaveModal(false);
+        const mergedData = { ...data, ...firstSaveHeader }; // capture current state before scheduling update
         setData(d => ({ ...d, ...firstSaveHeader }));
         if (isSavingRef.current) return;
         isSavingRef.current = true;
         try {
-            const mergedData = { ...data, ...firstSaveHeader };
             const stateForRecentProjects = await prepareStateForRecentProjectStorage(mergedData);
             const formattedDate = formatDateForRecentProject(firstSaveHeader.date);
             const dateSuffix = formattedDate ? ` - ${formattedDate}` : '';
@@ -1649,6 +1653,8 @@ const renderTextSection = async (
         }
     };
     quickSaveRef.current = handleQuickSave;
+    saveProjectRef.current = handleSaveProject;
+    savePdfRef.current = handleSavePdf;
 
     useEffect(() => {
         if (!initialData?.autoPdfExport) return;
@@ -1795,22 +1801,18 @@ Description: ${photo.description || 'N/A'}
         }
         if (api?.onSaveProjectShortcut) {
             api.removeSaveProjectShortcutListener?.();
-            api.onSaveProjectShortcut(() => {
-                handleSaveProject();
-            });
+            api.onSaveProjectShortcut(() => { saveProjectRef.current?.(); });
         }
         if (api?.onExportPdfShortcut) {
             api.removeExportPdfShortcutListener?.();
-            api.onExportPdfShortcut(() => {
-                handleSavePdf();
-            });
+            api.onExportPdfShortcut(() => { savePdfRef.current?.(); });
         }
         return () => {
             api?.removeQuickSaveShortcutListener?.();
             api?.removeSaveProjectShortcutListener?.();
             api?.removeExportPdfShortcutListener?.();
         };
-    }, [data, photosData]);
+    }, []);
 
     // Project packaging — respond to Package Project… menu action
     useEffect(() => {
@@ -1867,7 +1869,7 @@ Description: ${photo.description || 'N/A'}
 
     useEffect(() => {
         return () => {
-            photosData.forEach(p => { if (p.imageUrl) revokeImageUrl(p.imageUrl); });
+            photosDataRef.current.forEach(p => { if (p.imageUrl) revokeImageUrl(p.imageUrl); });
         };
     }, []);
 
