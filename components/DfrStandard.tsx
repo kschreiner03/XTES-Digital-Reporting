@@ -883,15 +883,6 @@ const DfrStandard = ({ onBack, onBackDirect, initialData }: DfrStandardProps): R
         if (p && ts) { try { const m=JSON.parse(localStorage.getItem('xtec_file_paths')?? '{}'); if(!m[String(ts)]){m[String(ts)]=p;localStorage.setItem('xtec_file_paths',JSON.stringify(m));} } catch {} }
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-    const syncToFile = async () => {
-        if (!savedFilePathRef.current) { handleSaveProject(); return; }
-        try {
-            const photosForExport = photosDataRef.current.map(({ imageId, ...p }: any) => p);
-            const fileState = JSON.stringify({ headerData, bodyData, photosData: photosForExport });
-            await (window as any).electronAPI?.writeToFile?.(fileState, savedFilePathRef.current);
-            setFileSynced(true);
-        } catch (e) { console.error('Sync failed:', e); }
-    };
 
     const handleBack = () => {
         if (isDirty) {
@@ -2313,50 +2304,18 @@ Description: ${photo.description || 'N/A'}
                                     <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow transition duration-200 ${autosaveEnabled ? 'translate-x-4' : 'translate-x-0'}`} />
                                 </button>
                             </div>
-                            <button onClick={handleQuickSave} title="Save (Ctrl+S)" className="bg-[#007D8C] hover:bg-[#006b7a] text-white font-semibold py-2 px-3 rounded-lg inline-flex items-center transition duration-200">
-                                <SaveIcon />
+                            <button onClick={handleQuickSave} title="Save (Ctrl+S)"
+                                className={`inline-flex items-center gap-2 font-semibold py-2 px-4 rounded-lg transition-all duration-200 ${fileSynced===true?'bg-green-600 hover:bg-green-700 text-white':'bg-[#007D8C] hover:bg-[#006b7a] text-white'}`}>
+                                {fileSynced===true?<><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg><span>Saved</span></>:<><SaveIcon /><span>Save</span></>}
                             </button>
-
-                            {/* File sync indicator */}
-                            <button onClick={syncToFile} title={fileSynced===null?'Link to a project file':'Sync changes to project file on disk'}
-                                className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all ${
-                                    fileSynced === true  ? 'text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800' :
-                                    fileSynced === false ? 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border-amber-300 dark:border-amber-700 animate-pulse' :
-                                                           'text-gray-500 dark:text-gray-400 border-gray-200 dark:border-white/10 hover:bg-gray-50 dark:hover:bg-white/5'
-                                }`}>
-                                {fileSynced === true  && <><svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>Synced</>}
-                                {fileSynced === false && <><svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/></svg>Sync to File</>}
-                                {fileSynced === null  && <><svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244"/></svg>Link to File</>}
+                            <button onClick={handleSavePdf} title="Export PDF" className="bg-[#007D8C]/15 hover:bg-[#007D8C]/25 text-[#007D8C] dark:text-[#00bcd4] font-semibold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
+                                <DownloadIcon /> <span>PDF</span>
                             </button>
-                            <button onClick={handleOpenProject} className="border border-[#007D8C] text-[#007D8C] hover:bg-[#007D8C]/10 dark:hover:bg-[#007D8C]/10 font-semibold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
-                                <FolderOpenIcon /> <span>Open Project</span>
+                            <button onClick={handleOpenProject} className="border border-gray-300 dark:border-gray-600 bg-white dark:bg-[#1c1c1e] hover:bg-gray-50 dark:hover:bg-[#2a2a2e] text-gray-700 dark:text-gray-200 font-semibold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
+                                <FolderOpenIcon /> <span>Open</span>
                             </button>
                             <input type="file" ref={fileInputRef} onChange={handleFileSelected} style={{ display: 'none' }} accept=".dfr" />
-                            <div className="relative" ref={saveAsMenuRef}>
-                                <button
-                                    onClick={() => setShowSaveAsMenu(v => !v)}
-                                    className="border border-[#007D8C] text-[#007D8C] hover:bg-[#007D8C]/10 dark:hover:bg-[#007D8C]/10 font-semibold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200"
-                                >
-                                    <span>Save As...</span>
-                                    <ChevronDownIcon className="h-4 w-4" />
-                                </button>
-                                {showSaveAsMenu && (
-                                    <div className="absolute right-0 top-full mt-1 z-50 bg-white dark:bg-[#1c1c1e] border border-gray-200 dark:border-[#007D8C]/20 rounded-xl shadow-lg py-1 min-w-[160px]">
-                                        <button
-                                            onClick={() => { setShowSaveAsMenu(false); handleSaveProject(); }}
-                                            className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
-                                        >
-                                            <SaveIcon className="h-4 w-4 flex-shrink-0" /> Project File
-                                        </button>
-                                        <button
-                                            onClick={() => { setShowSaveAsMenu(false); handleSavePdf(); }}
-                                            className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
-                                        >
-                                            <DownloadIcon className="h-4 w-4 flex-shrink-0" /> PDF
-                                        </button>
-                                    </div>
-                                )}
-                            </div>
+
                             {/* @ts-ignore */}
                             {!window.electronAPI && (
                                 <button onClick={handleDownloadPhotos} className="border border-[#007D8C] text-[#007D8C] hover:bg-[#007D8C]/10 dark:hover:bg-[#007D8C]/10 font-semibold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
