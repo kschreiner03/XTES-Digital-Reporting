@@ -195,14 +195,14 @@ const ImportProjectsModal: React.FC<{
     return (
         <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
             <div className="xtec-report-card p-6 max-w-2xl w-full max-h-[80vh] flex flex-col transition-colors duration-200">
-                <div className="flex justify-between items-center border-b dark:border-gray-700 pb-3 mb-4">
+                <div className="flex justify-between items-center border-b dark:border-white/5 pb-3 mb-4">
                     <h2 className="text-xl font-bold text-gray-800 dark:text-white">Import Photos from Projects</h2>
                     <button onClick={onClose} className="text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"><CloseIcon /></button>
                 </div>
                 <p className="text-gray-600 dark:text-gray-300 mb-4">
                     Select projects to import photos from.
                 </p>
-                <div className="flex-grow overflow-y-auto border dark:border-gray-700 rounded-md p-2 bg-gray-50 dark:bg-gray-900">
+                <div className="flex-grow overflow-y-auto border dark:border-white/5 rounded-md p-2 bg-gray-50 dark:bg-white/5">
                     {allRecentProjects.length > 0 ? (
                         <ul className="divide-y divide-gray-200 dark:divide-gray-700">
                             {allRecentProjects.map(p => (
@@ -1547,7 +1547,7 @@ Description: ${photo.description || 'N/A'}
                                     >
                                         <FolderOpenIcon className="h-4 w-4 flex-shrink-0" /> Open Existing (.clog)
                                     </button>
-                                    <div className="my-1 border-t border-gray-100 dark:border-gray-700" />
+                                    <div className="my-1 border-t border-gray-100 dark:border-white/5" />
                                     <button
                                         onClick={() => { setShowImportMenu(false); setIsImportModalOpen(true); }}
                                         className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
@@ -1722,7 +1722,7 @@ Description: ${photo.description || 'N/A'}
                 return (
                     <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
                         <div role="alert" className="xtec-report-card rounded-xl shadow-2xl relative max-w-md w-full mx-4 overflow-hidden">
-                            <div className="flex items-center gap-4 p-5 border-b border-gray-200 dark:border-gray-700">
+                            <div className="flex items-center gap-4 p-5 border-b border-gray-100 dark:border-white/5">
                                 <SafeImage fileName="loading-error.gif" alt="Missing info" className="w-14 h-14 flex-shrink-0 rounded-lg" />
                                 <div className="flex-1 min-w-0">
                                     <h3 className="text-lg font-bold text-gray-800 dark:text-white">Missing Information</h3>
@@ -1795,23 +1795,23 @@ Description: ${photo.description || 'N/A'}
                         <div className="grid grid-cols-2 gap-3 mb-5">
                             <div>
                                 <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Proponent</label>
-                                <input type="text" value={firstSaveHeader.proponent} onChange={e => setFirstSaveHeader(h => ({...h, proponent: e.target.value}))} className="w-full border border-gray-300 dark:border-gray-600 rounded px-2 py-1.5 text-sm text-gray-800 dark:text-white bg-white dark:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-[#007D8C]" />
+                                <input type="text" value={firstSaveHeader.proponent} onChange={e => setFirstSaveHeader(h => ({...h, proponent: e.target.value}))} className="w-full border border-gray-200 dark:border-white/10 rounded-lg px-2 py-1.5 text-sm text-gray-800 dark:text-white bg-gray-50 dark:bg-transparent focus:outline-none focus:ring-2 focus:ring-[#007D8C]/40 focus:border-[#007D8C]" />
                             </div>
                             <div>
                                 <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Project #</label>
-                                <input type="text" value={firstSaveHeader.projectNumber} onChange={e => setFirstSaveHeader(h => ({...h, projectNumber: e.target.value}))} className="w-full border border-gray-300 dark:border-gray-600 rounded px-2 py-1.5 text-sm text-gray-800 dark:text-white bg-white dark:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-[#007D8C]" />
+                                <input type="text" value={firstSaveHeader.projectNumber} onChange={e => setFirstSaveHeader(h => ({...h, projectNumber: e.target.value}))} className="w-full border border-gray-200 dark:border-white/10 rounded-lg px-2 py-1.5 text-sm text-gray-800 dark:text-white bg-gray-50 dark:bg-transparent focus:outline-none focus:ring-2 focus:ring-[#007D8C]/40 focus:border-[#007D8C]" />
                             </div>
                             <div className="col-span-2">
                                 <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Project Name</label>
-                                <input type="text" value={firstSaveHeader.projectName} onChange={e => setFirstSaveHeader(h => ({...h, projectName: e.target.value}))} className="w-full border border-gray-300 dark:border-gray-600 rounded px-2 py-1.5 text-sm text-gray-800 dark:text-white bg-white dark:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-[#007D8C]" />
+                                <input type="text" value={firstSaveHeader.projectName} onChange={e => setFirstSaveHeader(h => ({...h, projectName: e.target.value}))} className="w-full border border-gray-200 dark:border-white/10 rounded-lg px-2 py-1.5 text-sm text-gray-800 dark:text-white bg-gray-50 dark:bg-transparent focus:outline-none focus:ring-2 focus:ring-[#007D8C]/40 focus:border-[#007D8C]" />
                             </div>
                             <div className="col-span-2">
                                 <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Location</label>
-                                <input type="text" value={firstSaveHeader.location} onChange={e => setFirstSaveHeader(h => ({...h, location: e.target.value}))} className="w-full border border-gray-300 dark:border-gray-600 rounded px-2 py-1.5 text-sm text-gray-800 dark:text-white bg-white dark:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-[#007D8C]" />
+                                <input type="text" value={firstSaveHeader.location} onChange={e => setFirstSaveHeader(h => ({...h, location: e.target.value}))} className="w-full border border-gray-200 dark:border-white/10 rounded-lg px-2 py-1.5 text-sm text-gray-800 dark:text-white bg-gray-50 dark:bg-transparent focus:outline-none focus:ring-2 focus:ring-[#007D8C]/40 focus:border-[#007D8C]" />
                             </div>
                             <div>
                                 <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Date</label>
-                                <input type="text" placeholder="e.g. October 1, 2025" value={firstSaveHeader.date} onChange={e => setFirstSaveHeader(h => ({...h, date: e.target.value}))} className="w-full border border-gray-300 dark:border-gray-600 rounded px-2 py-1.5 text-sm text-gray-800 dark:text-white bg-white dark:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-[#007D8C]" />
+                                <input type="text" placeholder="e.g. October 1, 2025" value={firstSaveHeader.date} onChange={e => setFirstSaveHeader(h => ({...h, date: e.target.value}))} className="w-full border border-gray-200 dark:border-white/10 rounded-lg px-2 py-1.5 text-sm text-gray-800 dark:text-white bg-gray-50 dark:bg-transparent focus:outline-none focus:ring-2 focus:ring-[#007D8C]/40 focus:border-[#007D8C]" />
                             </div>
                         </div>
                         <div className="flex justify-end gap-3">
@@ -1839,7 +1839,7 @@ Description: ${photo.description || 'N/A'}
                                         window.electronAPI?.cancelClose();
                                     }
                                 }}
-                                className="px-5 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-white font-semibold rounded-lg transition"
+                                className="px-5 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-white/5 dark:hover:bg-white/10 text-gray-800 dark:text-white font-semibold rounded-lg transition"
                             >
                                 Cancel
                             </button>
