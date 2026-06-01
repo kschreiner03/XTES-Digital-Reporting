@@ -194,7 +194,13 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, onBackDirect, initialData }
     const [showSaveAsMenu, setShowSaveAsMenu] = useState(false);
     const saveAsMenuRef = useRef<HTMLDivElement>(null);
     const quickSaveRef = useRef<() => Promise<void>>();
-    const savedFilePathRef = useRef<string | null>((initialData as any)?.filePath ?? null);
+    const savedFilePathRef = useRef<string | null>((() => {
+        const direct = (initialData as any)?.filePath ?? null;
+        if (direct) return direct;
+        const ts = initialData?.timestamp;
+        if (!ts) return null;
+        try { const m = JSON.parse(localStorage.getItem('xtec_file_paths') ?? '{}'); return m[String(ts)] ?? null; } catch { return null; }
+    })());
     const photosDataRef = useRef(photosData);
     photosDataRef.current = photosData;
     const projectTimestampRef = useRef<number | null>(initialData?.timestamp ?? null);
@@ -813,7 +819,10 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, onBackDirect, initialData }
         if (window.electronAPI) {
             // @ts-ignore
             const result = await window.electronAPI.saveProject(JSON.stringify(stateForFileExport), savedFilePathRef.current || filename);
-            if ((result as any)?.path) savedFilePathRef.current = (result as any).path;
+            if ((result as any)?.path) {
+                savedFilePathRef.current = (result as any).path;
+                if (projectTimestampRef.current) try { const m=JSON.parse(localStorage.getItem('xtec_file_paths')?? '{}'); m[String(projectTimestampRef.current)]=(result as any).path; localStorage.setItem('xtec_file_paths',JSON.stringify(m)); } catch {}
+            }
         } else {
             const blob = new Blob([JSON.stringify(stateForFileExport)], { type: 'application/json;charset=utf-8;' });
             const link = document.createElement('a');
