@@ -1291,6 +1291,17 @@ const DfrStandard = ({ onBack, onBackDirect, initialData }: DfrStandardProps): R
         return () => clearTimeout(t);
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+    useEffect(() => {
+        if (!(initialData as any)?.newDay) return;
+        const todayStr = new Date().toLocaleDateString('en-CA', { year:'numeric', month:'long', day:'numeric' });
+        setHeaderData(h => ({ ...h, date: todayStr }));
+        savedFilePathRef.current = null;
+        projectTimestampRef.current = null;
+        setFileSynced(null);
+        setAutosaveEnabled(false);
+        setIsDirty(true);
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
     const handleSaveProject = async () => {
         // Save As — always shows dialog so user can change location
         if (isSavingRef.current) return;
@@ -2314,7 +2325,7 @@ Description: ${photo.description || 'N/A'}
                                 className={`inline-flex items-center gap-2 font-semibold py-2 px-4 rounded-lg transition-all duration-200 ${fileSynced===true?'bg-green-600 hover:bg-green-700 text-white':'bg-[#007D8C] hover:bg-[#006b7a] text-white'}`}>
                                 {fileSynced===true?<><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg><span>Saved</span></>:<><SaveIcon /><span>Save</span></>}
                             </button>
-                            <button onClick={handleSavePdf} title="Export PDF" className="bg-[#007D8C]/15 hover:bg-[#007D8C]/25 text-[#007D8C] dark:text-[#00bcd4] font-semibold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
+                            <button onClick={handleSavePdf} title="Export PDF" className="bg-[#007D8C] hover:bg-[#006b7a] text-white font-semibold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
                                 <DownloadIcon /> <span>PDF</span>
                             </button>
                             <button onClick={handleOpenProject} className="border border-gray-300 dark:border-gray-600 bg-white dark:bg-[#1c1c1e] hover:bg-gray-50 dark:hover:bg-[#2a2a2e] text-gray-700 dark:text-gray-200 font-semibold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">

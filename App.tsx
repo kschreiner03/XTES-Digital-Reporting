@@ -207,7 +207,7 @@ const App: React.FC = () => {
                 throw new Error("Project data not found in the database.");
             }
             // Pass the timestamp along with the project data so the component knows its own ID
-            setProjectToOpen({ ...projectData, timestamp: project.timestamp });
+            setProjectToOpen({ ...projectData, timestamp: project.timestamp, newDay: (project as any).newDay ?? false });
             setSelectedApp(project.type);
         } catch (e) {
             console.error("Failed to load project data:", e);
