@@ -28,10 +28,27 @@ interface ScheduleEntry {
     id: string;
     projectNumber: string;
     projectName: string;
+    startTime: string;  // "HH:MM" 24h, empty = all day
+    endTime: string;    // "HH:MM" 24h, empty = no end time
     colorId: string;
     color: string;      // cached hex
     textColor: string;  // auto black/white
 }
+
+const fmt12 = (t: string): string => {
+    if (!t) return '';
+    const [hStr, mStr] = t.split(':');
+    const h = parseInt(hStr, 10);
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    const h12  = h % 12 === 0 ? 12 : h % 12;
+    return `${h12}:${mStr} ${ampm}`;
+};
+
+const timeLabel = (s: ScheduleEntry): string => {
+    if (!s.startTime && !s.endTime) return '';
+    if (s.startTime && s.endTime) return `${fmt12(s.startTime)} – ${fmt12(s.endTime)}`;
+    return fmt12(s.startTime || s.endTime);
+};
 
 interface DayEntry {
     notes: string;
@@ -53,7 +70,10 @@ const load = (): PlannerData => {
         const raw = JSON.parse(r) as Record<string, any>;
         const out: PlannerData = {};
         for (const [k, v] of Object.entries(raw)) {
-            out[k] = { notes: v?.notes ?? '', tasks: v?.tasks ?? [], schedule: v?.schedule ?? [] };
+            const sched = (v?.schedule ?? []).map((s: any) => ({
+                startTime: '', endTime: '', ...s,
+            }));
+            out[k] = { notes: v?.notes ?? '', tasks: v?.tasks ?? [], schedule: sched };
         }
         return out;
     } catch { return {}; }
@@ -129,6 +149,8 @@ const CalendarPlanner: React.FC<CalendarPlannerProps> = ({ onClose }) => {
     // New event form
     const [newProjectNum,  setNewProjectNum]  = useState('');
     const [newProjectName, setNewProjectName] = useState('');
+    const [newStartTime,   setNewStartTime]   = useState('');
+    const [newEndTime,     setNewEndTime]     = useState('');
     const [newColorId,     setNewColorId]     = useState(palette[0]?.id ?? '');
     const [newTask,        setNewTask]         = useState('');
 
@@ -156,20 +178,30 @@ const CalendarPlanner: React.FC<CalendarPlannerProps> = ({ onClose }) => {
     const addScheduleEntry = () => {
         if (!selectedKey || (!newProjectNum.trim() && !newProjectName.trim())) return;
         const colorEntry = palette.find(p=>p.id===newColorId) ?? palette[0];
-        const entry: ScheduleEntry = {
+        const newEntry: ScheduleEntry = {
             id: `s-${Date.now()}`,
             projectNumber: newProjectNum.trim(),
             projectName:   newProjectName.trim(),
+            startTime:     newStartTime,
+            endTime:       newEndTime,
             colorId:       colorEntry.id,
             color:         colorEntry.color,
             textColor:     textForBg(colorEntry.color),
         };
         setData(prev => {
             const e = {...empty(),...(prev[selectedKey]??{})};
-            return {...prev,[selectedKey]:{...e,schedule:[...e.schedule,entry]}};
+            const sorted = [...e.schedule, newEntry].sort((a,b) => {
+                if (!a.startTime && !b.startTime) return 0;
+                if (!a.startTime) return 1;
+                if (!b.startTime) return -1;
+                return a.startTime.localeCompare(b.startTime);
+            });
+            return {...prev,[selectedKey]:{...e,schedule:sorted}};
         });
         setNewProjectNum('');
         setNewProjectName('');
+        setNewStartTime('');
+        setNewEndTime('');
     };
 
     const removeSchedule = (sid:string) => {
@@ -252,6 +284,8 @@ const CalendarPlanner: React.FC<CalendarPlannerProps> = ({ onClose }) => {
                     id:`s-${Date.now()}-${ri}`,
                     projectNumber:'',
                     projectName:label,
+                    startTime:'',
+                    endTime:'',
                     colorId:matchedPalette.id,
                     color:matchedPalette.color,
                     textColor:textForBg(matchedPalette.color),
@@ -321,7 +355,7 @@ const CalendarPlanner: React.FC<CalendarPlannerProps> = ({ onClose }) => {
                 <div className="flex flex-1 min-h-0 overflow-hidden">
 
                     {/* ── Calendar ── */}
-                    <div className="flex flex-col border-r border-gray-100 dark:border-white/5" style={{width:'520px',minWidth:'520px'}}>
+                    <div className="w-[520px] min-w-[520px] flex flex-col border-r border-gray-100 dark:border-white/5">
                         {/* Month nav */}
                         <div className="flex items-center justify-between px-4 py-2 border-b border-gray-100 dark:border-white/5">
                             <button onClick={prevMonth} className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-white/10 text-gray-500 transition-colors">
@@ -342,13 +376,12 @@ const CalendarPlanner: React.FC<CalendarPlannerProps> = ({ onClose }) => {
                         </div>
 
                         {/* Calendar grid */}
-                        <div className="grid grid-cols-7 px-3 pb-3 gap-1 flex-1 auto-rows-fr">
+                        <div className="grid grid-cols-7 px-3 pb-3 gap-1 flex-1 auto-rows-[1fr]">
                             {cells.map((day,i)=>{
                                 if(!day) return <div key={i}/>;
                                 const de = dayEntry(day);
                                 const schedules = de?.schedule ?? [];
                                 const primaryColor = schedules[0]?.color;
-                                const primaryText  = schedules[0]?.textColor ?? '#1a1a1a';
                                 const selected = isSelected(day);
                                 const today_   = isToday(day);
 
@@ -373,9 +406,9 @@ const CalendarPlanner: React.FC<CalendarPlannerProps> = ({ onClose }) => {
                                         {schedules.length > 0 && (
                                             <div className="w-full flex flex-col gap-0.5">
                                                 {schedules.slice(0,3).map((s,si)=>(
-                                                    <div key={si} className="w-full rounded-sm px-1 truncate text-[9px] font-medium leading-tight py-0.5"
+                                                    <div key={si} className="w-full rounded-sm px-1 truncate text-[10px] font-medium leading-tight py-0.5"
                                                         style={{backgroundColor:s.color,color:s.textColor}}>
-                                                        {s.projectName || s.projectNumber || '·'}
+                                                        {s.startTime ? `${fmt12(s.startTime)} ` : ''}{s.projectName || s.projectNumber || '·'}
                                                     </div>
                                                 ))}
                                                 {schedules.length > 3 && (
@@ -395,7 +428,7 @@ const CalendarPlanner: React.FC<CalendarPlannerProps> = ({ onClose }) => {
 
                         {/* Color key / legend */}
                         <div className="px-3 pb-3 border-t border-gray-100 dark:border-white/5 pt-2">
-                            <p className="text-[9px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-1.5">Legend</p>
+                            <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-1.5">Legend</p>
                             <div className="flex flex-wrap gap-1.5">
                                 {palette.map(p=>(
                                     <div key={p.id} className="flex items-center gap-1">
@@ -422,7 +455,7 @@ const CalendarPlanner: React.FC<CalendarPlannerProps> = ({ onClose }) => {
 
                                     {/* Add schedule entry */}
                                     <div>
-                                        <p className="text-[11px] font-semibold uppercase tracking-wider text-[#007D8C] mb-3">Add to Schedule</p>
+                                        <p className="text-[11px] font-semibold uppercase tracking-widest text-[#007D8C] mb-3">Add Event</p>
                                         <div className="space-y-2">
                                             <div className="grid grid-cols-2 gap-2">
                                                 <div>
@@ -432,21 +465,31 @@ const CalendarPlanner: React.FC<CalendarPlannerProps> = ({ onClose }) => {
                                                         className="w-full text-sm px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 text-gray-800 dark:text-white placeholder-gray-400 dark:placeholder-gray-600 focus:ring-2 focus:ring-[#007D8C]/40 focus:border-[#007D8C] outline-none transition"/>
                                                 </div>
                                                 <div>
-                                                    <label className="block text-[10px] font-semibold text-gray-500 dark:text-gray-400 mb-1">Project Name</label>
+                                                    <label className="block text-[10px] font-semibold text-gray-500 dark:text-gray-400 mb-1">Project / Site Name</label>
                                                     <input value={newProjectName} onChange={e=>setNewProjectName(e.target.value)}
-                                                        onKeyDown={e=>{if(e.key==='Enter')addScheduleEntry();}}
-                                                        placeholder="e.g. Cenovus B1K"
+                                                        placeholder="e.g. Cenovus B1K Site 3"
                                                         className="w-full text-sm px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 text-gray-800 dark:text-white placeholder-gray-400 dark:placeholder-gray-600 focus:ring-2 focus:ring-[#007D8C]/40 focus:border-[#007D8C] outline-none transition"/>
+                                                </div>
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-2">
+                                                <div>
+                                                    <label className="block text-[10px] font-semibold text-gray-500 dark:text-gray-400 mb-1">Start Time</label>
+                                                    <input type="time" value={newStartTime} onChange={e=>setNewStartTime(e.target.value)}
+                                                        className="w-full text-sm px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 text-gray-800 dark:text-white focus:ring-2 focus:ring-[#007D8C]/40 focus:border-[#007D8C] outline-none transition"/>
+                                                </div>
+                                                <div>
+                                                    <label className="block text-[10px] font-semibold text-gray-500 dark:text-gray-400 mb-1">End Time <span className="font-normal opacity-60">(optional)</span></label>
+                                                    <input type="time" value={newEndTime} onChange={e=>setNewEndTime(e.target.value)}
+                                                        className="w-full text-sm px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 text-gray-800 dark:text-white focus:ring-2 focus:ring-[#007D8C]/40 focus:border-[#007D8C] outline-none transition"/>
                                                 </div>
                                             </div>
                                             <div>
                                                 <label className="block text-[10px] font-semibold text-gray-500 dark:text-gray-400 mb-1">PM / Color</label>
-                                                <div className="flex gap-2 flex-wrap">
+                                                <div className="flex gap-1.5 flex-wrap">
                                                     {palette.map(p=>(
                                                         <button key={p.id} onClick={()=>setNewColorId(p.id)} title={p.label}
-                                                            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all ${newColorId===p.id?'ring-2 ring-[#007D8C] ring-offset-1 dark:ring-offset-[#1c1c1e]':''}`}
-                                                            style={{backgroundColor:p.color+'22',borderColor:p.color+'66',color:p.color==='#FFFF00'||p.color==='#92D050'||p.color==='#55D4CF'?'#374151':p.color}}>
-                                                            <span className="w-2.5 h-2.5 rounded-sm" style={{backgroundColor:p.color}}/>
+                                                            className={`flex items-center gap-1.5 px-2 py-1 rounded-lg border text-xs font-medium transition-all text-gray-700 dark:text-gray-200 bg-white dark:bg-white/5 border-gray-200 dark:border-white/10 hover:border-gray-300 dark:hover:border-white/20 ${newColorId===p.id?'ring-2 ring-[#007D8C] ring-offset-1 dark:ring-offset-[#1c1c1e] !border-[#007D8C]/40':''}`}>
+                                                            <span className="w-3 h-3 rounded-sm shrink-0 border border-black/10 dark:border-white/10" style={{backgroundColor:p.color}}/>
                                                             {p.label}
                                                         </button>
                                                     ))}
@@ -455,7 +498,7 @@ const CalendarPlanner: React.FC<CalendarPlannerProps> = ({ onClose }) => {
                                             <button onClick={addScheduleEntry}
                                                 disabled={!newProjectNum.trim()&&!newProjectName.trim()}
                                                 className="w-full py-2 bg-[#007D8C] hover:bg-[#006270] disabled:opacity-40 text-white text-sm font-semibold rounded-lg transition-colors">
-                                                Add to {selectedDisplay.split(',')[0]}
+                                                Add Event
                                             </button>
                                         </div>
                                     </div>
@@ -463,17 +506,19 @@ const CalendarPlanner: React.FC<CalendarPlannerProps> = ({ onClose }) => {
                                     {/* Existing schedule entries */}
                                     {(entry.schedule??[]).length > 0 && (
                                         <div>
-                                            <p className="text-[11px] font-semibold uppercase tracking-wider text-[#007D8C] mb-2">Scheduled</p>
+                                            <p className="text-[11px] font-semibold uppercase tracking-widest text-[#007D8C] mb-2">Scheduled</p>
                                             <div className="space-y-1.5">
                                                 {(entry.schedule??[]).map(s=>(
                                                     <div key={s.id} className="group flex items-center gap-2 p-2.5 rounded-xl" style={{backgroundColor:s.color,color:s.textColor}}>
                                                         <div className="flex-1 min-w-0">
-                                                            <div className="flex items-center gap-2">
-                                                                {s.projectNumber && <span className="text-xs font-bold opacity-80">{s.projectNumber}</span>}
-                                                                {s.projectNumber && s.projectName && <span className="opacity-50 text-xs">·</span>}
-                                                                {s.projectName && <span className="text-sm font-semibold truncate">{s.projectName}</span>}
+                                                            {timeLabel(s) && (
+                                                                <p className="text-[10px] font-bold opacity-70 mb-0.5 tracking-wide">{timeLabel(s)}</p>
+                                                            )}
+                                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                                                {s.projectNumber && <span className="text-xs font-bold bg-black/20 dark:bg-white/20 rounded px-1">{s.projectNumber}</span>}
+                                                                {s.projectName && <span className="text-sm font-semibold">{s.projectName}</span>}
                                                             </div>
-                                                            <p className="text-[10px] opacity-70 mt-0.5">{palette.find(p=>p.id===s.colorId)?.label ?? ''}</p>
+                                                            <p className="text-[10px] opacity-60 mt-0.5">{palette.find(p=>p.id===s.colorId)?.label ?? ''}</p>
                                                         </div>
                                                         <button onClick={()=>removeSchedule(s.id)}
                                                             className="opacity-0 group-hover:opacity-70 hover:!opacity-100 shrink-0 transition-opacity"
@@ -488,7 +533,7 @@ const CalendarPlanner: React.FC<CalendarPlannerProps> = ({ onClose }) => {
 
                                     {/* Notes */}
                                     <div>
-                                        <p className="text-[11px] font-semibold uppercase tracking-wider text-[#007D8C] mb-2">Notes</p>
+                                        <p className="text-[11px] font-semibold uppercase tracking-widest text-[#007D8C] mb-2">Notes</p>
                                         <textarea value={entry.notes} onChange={e=>updateNotes(e.target.value)}
                                             placeholder="Add notes for this day..." rows={2}
                                             className="w-full text-sm px-3 py-2 rounded-lg border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 text-gray-800 dark:text-white placeholder-gray-400 dark:placeholder-gray-600 focus:ring-2 focus:ring-[#007D8C]/40 focus:border-[#007D8C] outline-none transition resize-none"/>
@@ -496,7 +541,7 @@ const CalendarPlanner: React.FC<CalendarPlannerProps> = ({ onClose }) => {
 
                                     {/* Tasks */}
                                     <div>
-                                        <p className="text-[11px] font-semibold uppercase tracking-wider text-[#007D8C] mb-2">Tasks</p>
+                                        <p className="text-[11px] font-semibold uppercase tracking-widest text-[#007D8C] mb-2">Tasks</p>
                                         <div className="space-y-1.5 mb-2">
                                             {!(entry.tasks??[]).length&&<p className="text-xs text-gray-400 dark:text-gray-600 italic">No tasks</p>}
                                             {(entry.tasks??[]).map(t=>(
