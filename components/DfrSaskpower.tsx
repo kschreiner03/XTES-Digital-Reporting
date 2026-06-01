@@ -1653,7 +1653,6 @@ const renderTextSection = async (
         }
     };
     quickSaveRef.current = handleQuickSave;
-    saveProjectRef.current = handleSaveProject;
     savePdfRef.current = handleSavePdf;
 
     useEffect(() => {
@@ -1685,6 +1684,8 @@ const renderTextSection = async (
             URL.revokeObjectURL(link.href);
         }
     };
+
+    saveProjectRef.current = handleSaveProject;
 
     const handleDownloadPhotos = useCallback(async () => {
         if (isDownloadingRef.current) return;
