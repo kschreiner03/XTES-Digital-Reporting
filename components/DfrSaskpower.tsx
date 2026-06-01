@@ -1652,10 +1652,20 @@ const renderTextSection = async (
             } else {
                 // Path known — write directly, no dialog (Word behaviour: subsequent Ctrl+S)
                 // @ts-ignore
-                await window.electronAPI?.writeToFile?.(filePayload, filePath);
+                if ((window as any).electronAPI?.writeToFile) {
+                    const writeResult = await (window as any).electronAPI.writeToFile(filePayload, filePath);
+                    if (writeResult && !writeResult.success) {
+                        throw new Error(writeResult.error || 'Could not write to file');
+                    }
+                } else {
+                    // Fallback if handler not yet loaded (restart app to get write-to-file)
+                    // @ts-ignore
+                    await window.electronAPI?.saveProject?.(filePayload, filePath);
+                }
             }
 
-            // Update recent projects list
+            // Update recent projects list (non-critical — don't let it abort the save)
+            try {
             const stateForRecent = await prepareStateForRecentProjectStorage(currentData);
             const formattedDate = formatDateForRecentProject(currentData.date);
             const dateSuffix = formattedDate ? ` - ${formattedDate}` : '';
@@ -1666,13 +1676,17 @@ const renderTextSection = async (
                 try { const m=JSON.parse(localStorage.getItem('xtec_file_paths')?? '{}'); m[String(savedTs)]=filePath!; localStorage.setItem('xtec_file_paths',JSON.stringify(m)); } catch {}
             }
 
+            } catch (recentsErr) {
+                console.warn('Recent projects update failed (file was saved):', recentsErr);
+            }
+
             setIsDirty(false);
             setFileSynced(true);
             setAutosaveEnabled(true);
             toast('Saved ✓');
         } catch (e) {
             console.error('Save failed:', e);
-            toast('Save failed — please try again.', 'error');
+            toast(`Save failed — ${e instanceof Error ? e.message : 'please try again.'}`, 'error');
         } finally {
             isSavingRef.current = false;
         }
