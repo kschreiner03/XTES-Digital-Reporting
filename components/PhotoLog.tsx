@@ -495,16 +495,6 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, onBackDirect, initialData }
         if (p && ts) { try { const m=JSON.parse(localStorage.getItem('xtec_file_paths')?? '{}'); if(!m[String(ts)]){m[String(ts)]=p;localStorage.setItem('xtec_file_paths',JSON.stringify(m));} } catch {} }
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-    const syncToFile = async () => {
-        if (!savedFilePathRef.current) { handleSaveProject(); return; }
-        try {
-            const photosForExport = photosDataRef.current.map(({ imageId, ...p }: any) => p);
-            const fileState = JSON.stringify({ headerData, photosData: photosForExport });
-            await (window as any).electronAPI?.writeToFile?.(fileState, savedFilePathRef.current);
-            setFileSynced(true);
-            (window as any).__toast?.('File saved ✓');
-        } catch (e) { console.error('Sync failed:', e); }
-    };
 
     const handleBack = () => {
         if (isDirty) {
@@ -1578,38 +1568,28 @@ Description: ${photo.description || 'N/A'}
                                 <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow transition duration-200 ${autosaveEnabled ? 'translate-x-4' : 'translate-x-0'}`} />
                             </button>
                         </div>
-                        <button onClick={handleQuickSave} title="Save (Ctrl+S)" className="bg-[#007D8C] hover:bg-[#006b7a] text-white font-semibold py-2 px-3 rounded-lg inline-flex items-center transition duration-200">
-                            <SaveIcon />
+                        <button onClick={handleQuickSave} title="Save (Ctrl+S)"
+                            className={`inline-flex items-center gap-2 font-semibold py-2 px-4 rounded-lg transition-all duration-200 ${fileSynced===true?'bg-green-600 hover:bg-green-700 text-white':'bg-[#007D8C] hover:bg-[#006b7a] text-white'}`}>
+                            {fileSynced===true?<><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg><span>Saved</span></>:<><SaveIcon /><span>Save</span></>}
                         </button>
-                        <button onClick={handleOpenProject} className="border border-[#007D8C] text-[#007D8C] hover:bg-[#007D8C]/10 dark:hover:bg-[#007D8C]/10 font-semibold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
+                        {/* Sync status icon — non-interactive */}
+                        {fileSynced !== null && (
+                            <div title={fileSynced ? 'File saved' : 'Changes not yet saved to file'}
+                                className={`flex items-center ${fileSynced ? 'text-green-500 dark:text-green-400' : 'text-amber-400 dark:text-amber-300 animate-pulse'}`}>
+                                {fileSynced
+                                    ? <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                    : <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"/></svg>
+                                }
+                            </div>
+                        )}
+                        <button onClick={handleSavePdf} title="Export PDF" className="bg-[#007D8C]/15 hover:bg-[#007D8C]/25 text-[#007D8C] dark:text-[#00bcd4] font-semibold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
+                            <DownloadIcon /> <span>PDF</span>
+                        </button>
+                        <button onClick={handleOpenProject} className="border border-gray-300 dark:border-gray-600 bg-white dark:bg-[#1c1c1e] hover:bg-gray-50 dark:hover:bg-[#2a2a2e] text-gray-700 dark:text-gray-200 font-semibold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
                             <FolderOpenIcon /> <span>Open</span>
                         </button>
                         <input type="file" ref={fileInputRef} onChange={handleFileSelected} style={{ display: 'none' }} accept=".plog" />
-                        <div className="relative" ref={saveAsMenuRef}>
-                            <button
-                                onClick={() => setShowSaveAsMenu(v => !v)}
-                                className="border border-[#007D8C] text-[#007D8C] hover:bg-[#007D8C]/10 dark:hover:bg-[#007D8C]/10 font-semibold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200"
-                            >
-                                <span>Save As...</span>
-                                <ChevronDownIcon className="h-4 w-4" />
-                            </button>
-                            {showSaveAsMenu && (
-                                <div className="absolute right-0 top-full mt-1 z-50 bg-white dark:bg-[#1c1c1e] border border-gray-200 dark:border-[#007D8C]/20 rounded-xl shadow-lg py-1 min-w-[160px]">
-                                    <button
-                                        onClick={() => { setShowSaveAsMenu(false); handleSaveProject(); }}
-                                        className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
-                                    >
-                                        <SaveIcon className="h-4 w-4 flex-shrink-0" /> Project File
-                                    </button>
-                                    <button
-                                        onClick={() => { setShowSaveAsMenu(false); handleSavePdf(); }}
-                                        className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
-                                    >
-                                        <DownloadIcon className="h-4 w-4 flex-shrink-0" /> PDF
-                                    </button>
-                                </div>
-                            )}
-                        </div>
+
                         {/* @ts-ignore */}
                         {!window.electronAPI && (
                             <button onClick={handleDownloadPhotos} className="border border-[#007D8C] text-[#007D8C] hover:bg-[#007D8C]/10 dark:hover:bg-[#007D8C]/10 font-semibold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
