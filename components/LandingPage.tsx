@@ -560,7 +560,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSelectApp, onOpenProject, s
                     >
                         <div role="menu" aria-orientation="vertical">
                             <button
-                                onClick={() => { setOpenMenuTimestamp(null); onOpenProject({ ...project, timestamp: Date.now(), filePath: undefined } as any); }}
+                                onClick={() => { setOpenMenuTimestamp(null); onOpenProject({ ...project, newDay: true } as any); }}
                                 className="w-full text-left block px-4 py-2.5 text-sm text-gray-700 dark:text-white hover:bg-[#007D8C]/8 dark:hover:bg-[#007D8C]/15 hover:text-[#007D8C] dark:hover:text-[#007D8C] transition-colors"
                                 role="menuitem"
                             >
