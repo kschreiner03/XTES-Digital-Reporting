@@ -24,13 +24,13 @@ const XterraLogo: React.FC<{ isPrintable?: boolean }> = ({ isPrintable = false }
     </div>
 );
 
-const EditableField: React.FC<{ 
-    label: string; 
-    value: string; 
-    onChange: (value: string) => void; 
-    isPrintable?: boolean; 
-    isInvalid?: boolean; 
-    isTextArea?: boolean; 
+const EditableField: React.FC<{
+    label: string;
+    value: string;
+    onChange: (value: string) => void;
+    isPrintable?: boolean;
+    isInvalid?: boolean;
+    isTextArea?: boolean;
     placeholder?: string;
 }> = ({ label, value, onChange, isPrintable = false, isInvalid = false, isTextArea = false, placeholder = '' }) => {
     const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -42,33 +42,29 @@ const EditableField: React.FC<{
             textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
         }
     }, [value]);
-    
+
     if (isPrintable) {
         return (
             <div className="flex items-baseline gap-1">
                 <span className="text-base font-bold text-black flex-shrink-0 whitespace-nowrap">{label}:</span>
-                <span className="text-base font-normal text-black break-words">{value || '\u00A0'}</span>
+                <span className="text-base font-normal text-black break-words">{value || ' '}</span>
             </div>
         );
     }
 
-    const commonInputClasses = `p-1 w-full border-b-2 focus:outline-none focus:border-[#007D8C]
-        transition duration-200 bg-transparent text-base font-normal min-w-0
-        text-black dark:text-gray-100
-        ${isInvalid ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'}`;
-    
-    const labelClasses = "text-base font-bold text-black dark:text-gray-200 flex-shrink-0 whitespace-nowrap";
+    const boxClass = `block w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#007D8C]/40 focus:border-[#007D8C] outline-none transition bg-gray-50 dark:bg-transparent text-gray-800 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 ${isInvalid ? 'border-red-500' : 'border-gray-200 dark:border-white/10'}`;
+    const labelClass = "block text-sm font-semibold text-gray-500 dark:text-gray-400 mb-1";
 
     if (isTextArea) {
         return (
-            <div className="flex items-start gap-2">
-                <label className={`${labelClasses} pt-1`}>{label}:</label>
+            <div>
+                <label className={labelClass}>{label}</label>
                 <textarea
                     ref={textareaRef}
                     value={value}
                     onChange={(e) => onChange(e.target.value)}
                     rows={1}
-                    className={`${commonInputClasses} resize-none overflow-hidden`}
+                    className={`${boxClass} resize-none overflow-hidden`}
                     placeholder={placeholder}
                     spellCheck={true}
                 />
@@ -77,14 +73,14 @@ const EditableField: React.FC<{
     }
 
     return (
-        <div className="flex items-baseline gap-2">
-            <label className={labelClasses}>{label}:</label>
+        <div>
+            <label className={labelClass}>{label}</label>
             <input
                 ref={inputRef}
                 type="text"
                 value={value}
                 onChange={(e) => onChange(e.target.value)}
-                className={commonInputClasses}
+                className={boxClass}
                 placeholder={placeholder}
                 spellCheck={true}
             />
@@ -94,8 +90,8 @@ const EditableField: React.FC<{
 
 const Header: React.FC<HeaderProps> = ({ data, onDataChange, isPrintable = false, errors }) => {
     return (
-        <div className={`bg-white dark:bg-gray-800 transition-colors duration-200 ${isPrintable ? 'p-0 shadow-none mb-2' : 'p-6 shadow-md rounded-lg mb-4'}`}>
-            <div className={`grid grid-cols-1 md:grid-cols-[1fr,auto,1fr] md:items-center pb-4 gap-4`}>
+        <div className={`transition-colors duration-200 ${isPrintable ? 'p-0' : 'xtec-report-card p-6'}`}>
+            <div className="grid grid-cols-1 md:grid-cols-[1fr,auto,1fr] md:items-center pb-3 gap-4">
                 <div className="flex justify-center md:justify-start">
                     <XterraLogo isPrintable={isPrintable} />
                 </div>
@@ -104,29 +100,26 @@ const Header: React.FC<HeaderProps> = ({ data, onDataChange, isPrintable = false
                 </h1>
                 <div></div>
             </div>
-            
-            <div className="xtec-divider"></div>
 
-            <div className={`max-w-5xl mx-auto flex flex-col ${isPrintable ? 'gap-y-1 pt-3 pb-2' : 'gap-y-2 pt-3 pb-2'}`}>
-                <div className={`grid grid-cols-1 md:grid-cols-2 ${isPrintable ? 'gap-x-4 gap-y-1' : 'gap-x-8 gap-y-2'}`}>
-                    {/* Left column */}
-                    <div className={`flex flex-col ${isPrintable ? 'gap-1' : 'gap-2'}`}>
-                        <EditableField label="Proponent" value={data.proponent} onChange={(value) => onDataChange('proponent', value)} isPrintable={isPrintable} isInvalid={errors?.has('proponent')}/>
-                        <EditableField label="Location" value={data.location} onChange={(value) => onDataChange('location', value)} isPrintable={isPrintable} isInvalid={errors?.has('location')} isTextArea/>
+            <div className="xtec-divider mb-3"></div>
+
+            <div className={`${isPrintable ? 'py-2' : 'pt-3 pb-2'}`}>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2">
+                    <div className="flex flex-col gap-y-2">
+                        <EditableField label="Proponent" value={data.proponent} onChange={(v) => onDataChange('proponent', v)} isPrintable={isPrintable} isInvalid={errors?.has('proponent')} />
+                        <EditableField label="Location" value={data.location} onChange={(v) => onDataChange('location', v)} isPrintable={isPrintable} isInvalid={errors?.has('location')} isTextArea />
                     </div>
-                    {/* Right column */}
-                    <div className={`flex flex-col ${isPrintable ? 'gap-1' : 'gap-2'}`}>
-                        <EditableField label="Date" value={data.date} onChange={(value) => onDataChange('date', value)} isPrintable={isPrintable} isInvalid={errors?.has('date')} placeholder="October 1, 2025"/>
-                        <EditableField label="Project" value={data.projectNumber} onChange={(value) => onDataChange('projectNumber', value)} isPrintable={isPrintable} isInvalid={errors?.has('projectNumber')}/>
+                    <div className="flex flex-col gap-y-2">
+                        <EditableField label="Date" value={data.date} onChange={(v) => onDataChange('date', v)} isPrintable={isPrintable} isInvalid={errors?.has('date')} placeholder="October 1, 2025" />
+                        <EditableField label="Project #" value={data.projectNumber} onChange={(v) => onDataChange('projectNumber', v)} isPrintable={isPrintable} isInvalid={errors?.has('projectNumber')} />
                     </div>
-                </div>
-                {/* Full width */}
-                <div>
-                     <EditableField label="Project Name" value={data.projectName} onChange={(value) => onDataChange('projectName', value)} isPrintable={isPrintable} isInvalid={errors?.has('projectName')}/>
+                    <div className="md:col-span-2">
+                        <EditableField label="Project Name" value={data.projectName} onChange={(v) => onDataChange('projectName', v)} isPrintable={isPrintable} isInvalid={errors?.has('projectName')} isTextArea />
+                    </div>
                 </div>
             </div>
-            
-            <div className="xtec-divider"></div>
+
+            <div className={`xtec-divider ${isPrintable ? '' : 'mt-2'}`}></div>
         </div>
     );
 };
