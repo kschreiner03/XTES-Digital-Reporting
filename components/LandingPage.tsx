@@ -559,8 +559,19 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSelectApp, onOpenProject, s
                     >
                         <div role="menu" aria-orientation="vertical">
                             <button
+                                onClick={() => { setOpenMenuTimestamp(null); onOpenProject({ ...project, timestamp: Date.now(), filePath: undefined } as any); }}
+                                className="w-full text-left block px-4 py-2.5 text-sm text-gray-700 dark:text-white hover:bg-[#007D8C]/8 dark:hover:bg-[#007D8C]/15 hover:text-[#007D8C] dark:hover:text-[#007D8C] transition-colors"
+                                role="menuitem"
+                            >
+                                <span className="flex items-center gap-2">
+                                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/></svg>
+                                    Open as New Day
+                                </span>
+                            </button>
+                            <div className="mx-3 border-t border-gray-200 dark:border-[#3d3d3d]" />
+                            <button
                                 onClick={() => handleRemoveFromRecent(project.timestamp)}
-                                className="w-full text-left block px-4 py-2.5 text-sm text-gray-700 dark:text-white hover:bg-blue-50 dark:hover:bg-[#363636] hover:text-gray-900 dark:hover:text-white transition-colors"
+                                className="w-full text-left block px-4 py-2.5 text-sm text-gray-700 dark:text-white hover:bg-gray-50 dark:hover:bg-[#363636] hover:text-gray-900 dark:hover:text-white transition-colors"
                                 role="menuitem"
                             >
                                 Remove from recent
