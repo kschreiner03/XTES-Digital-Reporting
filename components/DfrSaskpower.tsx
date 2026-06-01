@@ -345,6 +345,7 @@ const DfrSaskpower = ({ onBack, onBackDirect, initialData }: DfrSaskpowerProps):
     const quickSaveRef = useRef<() => Promise<void>>();
     const saveProjectRef = useRef<() => Promise<void>>();
     const savePdfRef = useRef<() => void>();
+    const savedFilePathRef = useRef<string | null>((initialData as any)?.filePath ?? null);
     const photosDataRef = useRef(photosData);
     photosDataRef.current = photosData;
     const projectTimestampRef = useRef<number | null>(initialData?.timestamp ?? null);
@@ -1619,6 +1620,14 @@ const renderTextSection = async (
             if (savedTs) {
                 projectTimestampRef.current = savedTs;
                 setIsDirty(false);
+                // Also write to the project file if a path is known
+                if (savedFilePathRef.current) {
+                    try {
+                        const photosForExport = photosDataRef.current.map(({ imageId, ...p }) => p);
+                        const fileState = JSON.stringify({ ...data, photosData: photosForExport });
+                        await (window as any).electronAPI?.writeToFile?.(fileState, savedFilePathRef.current);
+                    } catch (e) { console.error('File write failed:', e); }
+                }
                 toast('Saved ✓');
             } else {
                 toast('Save failed — please try again.', 'error');
@@ -1672,7 +1681,8 @@ const renderTextSection = async (
         // @ts-ignore
         if (window.electronAPI) {
             // @ts-ignore
-            await window.electronAPI.saveProject(JSON.stringify(stateForFileExport), filename);
+            const result = await window.electronAPI.saveProject(JSON.stringify(stateForFileExport), savedFilePathRef.current || filename);
+            if (result?.path) savedFilePathRef.current = result.path;
         } else {
             const blob = new Blob([JSON.stringify(stateForFileExport)], { type: 'application/json;charset=utf-8;' });
             const link = document.createElement('a');
