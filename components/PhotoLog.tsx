@@ -1464,7 +1464,7 @@ Description: ${photo.description || 'N/A'}
 
     return (
         <div
-            className="bg-gray-50 dark:bg-[#111] min-h-screen transition-colors duration-200 relative"
+            className="bg-gray-50 dark:bg-[#161618] min-h-screen transition-colors duration-200 relative"
             onDragOver={handleFileDragOver}
             onDragLeave={handleFileDragLeave}
             onDrop={handleFileDrop}
@@ -1497,7 +1497,7 @@ Description: ${photo.description || 'N/A'}
             
             <div className="flex justify-center gap-2 lg:gap-4 p-2 sm:p-4 lg:p-6 xl:p-8">
                 <div className="flex-1 min-w-0 max-w-7xl">
-                <div className="sticky top-0 z-40 bg-gray-50/95 dark:bg-[#111]/95 backdrop-blur-sm py-2.5 mb-4 border-b border-gray-200/60 dark:border-white/5">
+                <div className="sticky top-0 z-40 bg-gray-50/95 dark:bg-[#161618]/95 backdrop-blur-sm py-2.5 mb-4 border-b border-gray-200/60 dark:border-white/5">
                 <div className="flex flex-wrap justify-between items-center gap-2">
                     <button onClick={handleBack} className="border border-gray-300 dark:border-gray-600 bg-white dark:bg-[#1c1c1e] hover:bg-gray-50 dark:hover:bg-[#2a2a2e] text-gray-700 dark:text-gray-200 font-semibold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
                         <ArrowLeftIcon /> <span>Home</span>
