@@ -194,6 +194,7 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, onBackDirect, initialData }
     const [showSaveAsMenu, setShowSaveAsMenu] = useState(false);
     const saveAsMenuRef = useRef<HTMLDivElement>(null);
     const quickSaveRef = useRef<() => Promise<void>>();
+    const savedFilePathRef = useRef<string | null>((initialData as any)?.filePath ?? null);
     const photosDataRef = useRef(photosData);
     photosDataRef.current = photosData;
     const projectTimestampRef = useRef<number | null>(initialData?.timestamp ?? null);
@@ -747,6 +748,13 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, onBackDirect, initialData }
             if (savedTs) {
                 projectTimestampRef.current = savedTs;
                 setIsDirty(false);
+                if (savedFilePathRef.current) {
+                    try {
+                        const photosForExport = photosDataRef.current.map(({ imageId, ...p }: any) => p);
+                        const fileState = JSON.stringify({ headerData, photosData: photosForExport });
+                        await (window as any).electronAPI?.writeToFile?.(fileState, savedFilePathRef.current);
+                    } catch (e) { console.error('File write failed:', e); }
+                }
                 toast('Saved ✓');
             } else {
                 toast('Save failed — please try again.', 'error');
@@ -804,7 +812,8 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, onBackDirect, initialData }
         // @ts-ignore
         if (window.electronAPI) {
             // @ts-ignore
-            await window.electronAPI.saveProject(JSON.stringify(stateForFileExport), filename);
+            const result = await window.electronAPI.saveProject(JSON.stringify(stateForFileExport), savedFilePathRef.current || filename);
+            if ((result as any)?.path) savedFilePathRef.current = (result as any).path;
         } else {
             const blob = new Blob([JSON.stringify(stateForFileExport)], { type: 'application/json;charset=utf-8;' });
             const link = document.createElement('a');

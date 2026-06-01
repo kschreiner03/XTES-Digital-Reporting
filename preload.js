@@ -17,6 +17,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
   saveProject: (data, defaultPath) =>
     ipcRenderer.invoke("save-project", data, defaultPath),
 
+  writeToFile: (data, filePath) =>
+    ipcRenderer.invoke("write-to-file", data, filePath),
+
   loadProject: (fileType) =>
     ipcRenderer.invoke("load-project", fileType),
 
