@@ -4,20 +4,50 @@ All notable changes to X-TEC Digital Reporting are documented here.
 
 ---
 
-## [1.1.6] — May 2026
+## [1.1.6] — June 2026
 
 ### Added
 
-- Missing Information modal — validation error modal redesigned with the GIF alongside a grouped list of missing fields (Report / Photo N) shown as red pill badges, so you can see exactly what needs filling in before exporting.
+- **Field Planner** — calendar on the landing page (bottom-left button) with month view, color-coded schedule entries per day, task checklists, and notes. PM/person colors are configurable (Jeff K., Lacey Teasdale, Tyson Doering, Jostein Kevinsen, Brian, Kirsten, Off). Events support start/end times, all-day toggle, location, and weekly recurrence. Paste your Excel schedule directly — the app finds your name, imports your rows, and matches Excel cell colors to the palette automatically. Click any day to view/edit events; hover events to reveal edit and delete buttons.
+- **File sync save** — Save button now works like Word/Excel. First click shows a Save dialog to pick the file location; all subsequent saves write directly to the same file with no dialog. File path is remembered across sessions so opening from Recent Projects also saves to the correct file. Save button turns green "Saved" when the file is current and shows a small sync icon when there are unsaved changes.
+- **Open as New Day** — right-click any project in Recent Projects → "Open as New Day" to open a copy with today's date as a fresh unsaved draft. All text and project info is preserved; just change what's different.
+- **MOE File #** added to the Env File type dropdown in Standard DFR headers.
+- **UI redesign** — comprehensive visual overhaul across all screens:
+  - Report cards use a landing-page-style gradient background with teal glow (`xtec-report-card`)
+  - Section headings changed to small uppercase teal labels matching settings modal style
+  - Teal accent dividers (2 px, solid) replace the old 4 px solid bars in report headers
+  - Settings modal fully redesigned with sidebar icons, gradient title, teal-tinted borders, and a color usage bar for storage
+  - All report view toolbars now use consistent `bg-gray-50 dark:bg-[#161618]` background
+  - Modals across the app updated to `dark:bg-[#1c1c1e]` with teal-tinted borders
+  - Photo Log and Combined Log headers redesigned to match Standard DFR style
+  - SaskPower DFR header compacted to match Standard DFR proportions; radio buttons now use `accent-[#007D8C]` (no more purple fill)
+  - Landing page app card borders softened; color key updated; empty state icon uses teal
+  - `xtec-divider` CSS class for gradient teal accent lines used throughout report headers
+- Missing Information modal — validation error modal redesigned with the GIF alongside a grouped list of missing fields (Report / Photo N) shown as red pill badges.
+
+### Changed
+
+- Save workflow simplified — "Save As" under the ⋯ overflow button is now the only way to change the file location. The main Save button always saves to the linked file.
+- Report toolbars streamlined: `[Save] [sync icon] [PDF] [Open] [⋯]` — removed the separate Sync indicator button and Save As dropdown.
+- Save dialog now opens in the Documents folder by default, preventing the slow Windows picker that occurred when the last-used location was a network share.
+- Standard DFR header fields updated to match SaskPower DFR style (stacked label + bordered input).
+- All focus rings unified to teal — comment annotation boxes no longer show a yellow focus ring.
+- BulletPointEditor native outline suppressed to prevent OS-level yellow/gold focus ring.
 
 ### Fixed
 
-- Drag-and-drop hang — a missing `FileReader` error handler caused the batch photo import loop to hang permanently if any file failed to read (e.g. drag interrupted mid-drop). The failed photo placeholder is now cleaned up automatically and the import continues with remaining photos.
-- Phantom photo bug — a drag-and-drop photo upload that hung could leave an invisible incomplete photo entry in the project data, causing a false "Missing Information" error on PDF export with nothing visibly highlighted. Phantom entries (no image and no stored image ID) are now stripped on project load and skipped during validation across all report types (Standard DFR, SaskPower DFR, Photo Log, Combined Log).
-- Photo entry fields not highlighting red — Date, Location, and Description fields in photo entries now turn red on a failed export attempt; previously only Direction was highlighted. Photo cards with missing fields also show a red outline and a "Missing: …" banner.
-- App crash 10 seconds after cancelling close — clicking Cancel on the unsaved changes modal was not notifying the main process, so the 10-second force-close timeout still fired and crashed the app. Cancel now clears the timeout immediately.
-- macOS Gatekeeper warning on DMG download — the app bundle was notarized but the DMG itself was not, causing macOS to show a malware warning when opening the downloaded DMG. The DMG is now notarized and stapled separately.
-- Several reliability fixes from code review: broken blob URLs no longer hang photo crop indefinitely; IndexedDB resets and retries on initialisation failure; auto-PDF export timer is cleaned up on unmount to prevent state updates on an unmounted component; recent projects list now uses hydrated photo data; duplicate file-open IPC listeners no longer accumulate; asset paths use consistent per-segment encoding in packaged builds; stale close timeout and force-close state are cleared when a new window is created on macOS.
+- Drag-and-drop hang — a missing `FileReader` error handler caused the batch photo import loop to hang permanently if any file failed to read. The failed photo placeholder is now cleaned up automatically and the import continues with remaining photos.
+- Phantom photo bug — a drag-and-drop photo upload that hung could leave an invisible incomplete photo entry causing a false "Missing Information" error on PDF export with nothing highlighted. Phantom entries are now stripped on load and skipped during validation.
+- Photo entry fields not highlighting red — Date, Location, and Description now turn red on a failed export; photo cards show a red outline and a "Missing: …" banner.
+- App crash 10 seconds after cancelling close — Cancel now clears the force-close timeout immediately.
+- macOS Gatekeeper warning on DMG download — DMG is now separately notarized and stapled.
+- Memory leak on report close — blob URL cleanup `useEffect` had an empty dep array that closed over the initial empty photo array. Now uses a ref so all current photos are revoked on unmount.
+- Shortcut listeners (Ctrl+S, Export PDF) were re-registered on every keystroke due to a large dep array. Now uses refs so the effect runs once at mount.
+- `renumberPhotos` in Photo Log and Combined Log now correctly numbers map photos as "Map 1", "Map 2" instead of sequential numbers.
+- `handleConfirmFirstSave` stale closure — merged data was captured after `setData()` was scheduled; now captured before to prevent one-render-behind data being saved to recent projects.
+- Resolve button in Comments Rail was clipped when Find + Edit + Reply were all visible; now wraps to a second line.
+- CommentsRail avatar background changed from `bg-blue-500` to brand teal.
+- Several reliability fixes from AI code review: broken blob URLs no longer hang photo crop; IndexedDB resets on failure; auto-PDF export timer cleaned up on unmount; recent projects list uses hydrated photo data; duplicate file-open IPC listeners prevented; asset paths use consistent per-segment encoding; stale close state cleared on new window.
 
 ---
 
