@@ -51,7 +51,7 @@ const EditableField: React.FC<{
   }, [value]);
 
   const commonClasses = "p-1 w-full bg-transparent focus:outline-none transition text-base min-w-0 placeholder-gray-400 dark:placeholder-gray-500";
-  const labelClasses = "block text-base font-bold text-black dark:text-gray-200 whitespace-nowrap";
+  const labelClasses = `block text-base font-bold whitespace-nowrap ${isInvalid ? 'text-red-600 dark:text-red-400' : 'text-black dark:text-gray-200'}`;
 
   if (printable) {
     return (
@@ -65,7 +65,7 @@ const EditableField: React.FC<{
   if (readOnly) {
     return (
       <div className="flex items-baseline gap-2">
-        <label className={labelClasses}>{label}:</label>
+        <label className={`block text-base font-bold text-black dark:text-gray-200 whitespace-nowrap`}>{label}:</label>
         <span className="p-1 w-full text-base text-gray-500">{value}</span>
       </div>
     );
@@ -81,8 +81,8 @@ const EditableField: React.FC<{
           onChange={(e) => setLocalValue(e.target.value)}
           onBlur={() => { focusedRef.current = false; onChange(localValue); }}
           onFocus={() => { focusedRef.current = true; }}
-          className={`mt-1 ${commonClasses} border-b ${
-            isInvalid ? "border-red-500" : "border-gray-300 dark:border-gray-600 focus:border-[#007D8C]"
+          className={`mt-1 ${commonClasses} border-b-2 ${
+            isInvalid ? "border-red-500 focus:border-[#007D8C]" : "border-gray-300 dark:border-gray-600 focus:border-[#007D8C]"
           }`}
           placeholder={placeholder}
           spellCheck={true}
@@ -100,8 +100,8 @@ const EditableField: React.FC<{
         onChange={(e) => setLocalValue(e.target.value)}
         onBlur={() => { focusedRef.current = false; onChange(localValue); }}
         onFocus={() => { focusedRef.current = true; }}
-        className={`${commonClasses} border-b ${
-          isInvalid ? "border-red-500" : "border-gray-300 dark:border-gray-600 focus:border-[#007D8C]"
+        className={`${commonClasses} border-b-2 ${
+          isInvalid ? "border-red-500 focus:border-[#007D8C]" : "border-gray-300 dark:border-gray-600 focus:border-[#007D8C]"
         }`}
         placeholder={placeholder}
         spellCheck={true}
@@ -158,8 +158,28 @@ const PhotoEntry: React.FC<PhotoEntryProps> = ({
     ? "ring-2 ring-red-500 bg-gray-50 dark:bg-gray-700"
     : "bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600";
 
+  const hasErrors = !printable && errors && errors.size > 0;
+  const missingLabels: string[] = [];
+  if (hasErrors) {
+    if (errors.has('date')) missingLabels.push('Date');
+    if (errors.has('location')) missingLabels.push('Location');
+    if (errors.has('description')) missingLabels.push('Description');
+    if (errors.has('imageUrl')) missingLabels.push('Image');
+    if (errors.has('direction')) missingLabels.push('Direction');
+  }
+
   return (
-    <div ref={setNodeRef} style={sortableStyle} className="bg-white dark:bg-gray-800 p-6 shadow-md rounded-lg break-inside-avoid">
+    <div ref={setNodeRef} style={sortableStyle} className={`xtec-report-card p-6 break-inside-avoid ${hasErrors ? '!border-red-400 dark:!border-red-500 ring-2 ring-red-500' : ''}`}>
+      {hasErrors && (
+        <div className="mb-4 flex items-center gap-2 flex-wrap">
+          <span className="text-red-600 dark:text-red-400 font-semibold text-sm">Missing:</span>
+          {missingLabels.map(l => (
+            <span key={l} className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 rounded text-xs font-medium border border-red-300 dark:border-red-700">
+              {l}
+            </span>
+          ))}
+        </div>
+      )}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
 
         {/* LEFT COLUMN */}
@@ -214,6 +234,7 @@ const PhotoEntry: React.FC<PhotoEntryProps> = ({
               value={data.date}
               onChange={(v) => onDataChange(data.id, "date", v)}
               printable={printable}
+              isInvalid={errors?.has('date')}
             />
 
             {!printable && (
@@ -234,6 +255,7 @@ const PhotoEntry: React.FC<PhotoEntryProps> = ({
               readOnly={isLocationLocked}
               onChange={(v) => onDataChange(data.id, "location", v)}
               printable={printable}
+              isInvalid={errors?.has('location')}
             />
 
             {!printable && (
@@ -268,6 +290,7 @@ const PhotoEntry: React.FC<PhotoEntryProps> = ({
               onAnchorPositionsChange={onAnchorPositionsChange ? (anchors) => onAnchorPositionsChange(data.id, anchors) : undefined}
               hoveredCommentId={hoveredCommentId}
               rows={4}
+              isInvalid={errors?.has('description')}
             />
           )}
 

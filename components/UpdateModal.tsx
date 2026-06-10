@@ -55,11 +55,11 @@ const UpdateModal: React.FC<UpdateModalProps> = ({ onClose, isDownloaded }) => {
     return (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
             <div
-                className="xtec-modal-enter bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-md w-full flex flex-col overflow-hidden"
+                className="xtec-modal-enter bg-white dark:bg-[#1c1c1e] rounded-2xl shadow-2xl max-w-md w-full flex flex-col overflow-hidden border border-gray-200 dark:border-[#007D8C]/20"
                 onClick={(e) => e.stopPropagation()}
             >
                 {/* Header */}
-                <div className="px-6 pt-6 pb-4 border-b border-gray-200 dark:border-gray-700 flex items-start justify-between">
+                <div className="px-6 pt-6 pb-4 border-b border-gray-100 dark:border-white/5 flex items-start justify-between">
                     <div className="flex items-center gap-3">
                         {/* Update icon */}
                         <div className="w-10 h-10 rounded-xl bg-[#007D8C]/10 flex items-center justify-center flex-shrink-0">
@@ -85,14 +85,14 @@ const UpdateModal: React.FC<UpdateModalProps> = ({ onClose, isDownloaded }) => {
                 {/* Content */}
                 <div className="px-6 py-5">
                     {stage === 'available' && (
-                        <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">
+                        <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
                             A new version of X-Tec Digital Reporting is available. Would you like to download and install it now, or update later when you close the app?
                         </p>
                     )}
 
                     {stage === 'downloading' && (
                         <div className="space-y-3">
-                            <p className="text-sm text-gray-600 dark:text-gray-300">Downloading update...</p>
+                            <p className="text-sm text-gray-600 dark:text-gray-400">Downloading update...</p>
                             {/* Indeterminate progress bar */}
                             <div className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
                                 <div className="h-full bg-[#007D8C] rounded-full animate-progress-indeterminate" />

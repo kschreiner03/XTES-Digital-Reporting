@@ -207,19 +207,19 @@ const formatDateForFilename = (dateString: string): string => {
 
 // --- UI Components ---
 const Section: React.FC<{ title: string; children: React.ReactNode; }> = ({ title, children }) => (
-    <div className="bg-white dark:bg-gray-800 p-6 shadow-md rounded-lg transition-colors duration-200" style={{ overflow: 'visible' }}>
-        <h2 className="text-xl font-bold text-gray-800 dark:text-gray-100 border-b-2 border-gray-200 dark:border-gray-700 pb-2 mb-4">{title}</h2>
+    <div className="xtec-report-card p-6 transition-colors duration-200" style={{ overflow: 'visible' }}>
+        <p className="text-xs font-semibold uppercase tracking-wider text-[#007D8C] border-b border-gray-100 dark:border-white/5 pb-3 mb-4">{title}</p>
         <div className="space-y-4" style={{ overflow: 'visible' }}>{children}</div>
     </div>
 );
 
 const EditableField: React.FC<{ label: string; value: string; onChange: (value: string) => void; type?: string; isTextArea?: boolean; rows?: number; placeholder?: string; isInvalid?: boolean; }> = ({ label, value, onChange, type = 'text', isTextArea = false, rows = 1, placeholder = '', isInvalid = false }) => {
-    const commonClasses = `block w-full p-2 border rounded-md shadow-sm focus:ring-2 focus:ring-[#007D8C] focus:border-[#007D8C] transition bg-white dark:bg-gray-700 text-black dark:text-white dark:placeholder-gray-400 ${isInvalid ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'}`;
+    const commonClasses = `block w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#007D8C]/40 focus:border-[#007D8C] outline-none transition bg-gray-50 dark:bg-white/5 text-gray-800 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 ${isInvalid ? 'border-red-500' : 'border-gray-200 dark:border-white/10'}`;
     const elementRef = React.useRef<HTMLInputElement & HTMLTextAreaElement>(null);
 
     return (
         <div>
-            {label && <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{label}</label>}
+            {label && <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">{label}</label>}
             {isTextArea ? (
                 <textarea
                     ref={elementRef}
@@ -246,18 +246,18 @@ const EditableField: React.FC<{ label: string; value: string; onChange: (value: 
 };
 
 const ChecklistRow: React.FC<{ label: string; value: ChecklistOption; onChange: (value: ChecklistOption) => void; isInvalid?: boolean; }> = ({ label, value, onChange, isInvalid = false }) => (
-    <div className={`flex flex-col sm:flex-row items-start sm:items-center justify-between py-2 border-b last:border-b-0 ${isInvalid ? 'border-red-500 bg-red-50 dark:bg-red-900/20 px-2 rounded' : 'border-gray-200 dark:border-gray-700'}`}>
-        <span className={`font-medium mb-2 sm:mb-0 ${isInvalid ? 'text-red-600 dark:text-red-400' : 'text-gray-800 dark:text-gray-200'}`}>{label}</span>
-        <div className="flex items-center space-x-6">
+    <div className={`flex flex-col sm:flex-row items-start sm:items-center justify-between py-2 border-b last:border-b-0 ${isInvalid ? 'border-red-500 bg-red-50 dark:bg-red-900/20 px-2 rounded-lg' : 'border-gray-100 dark:border-white/5'}`}>
+        <span className={`text-sm font-medium mb-2 sm:mb-0 ${isInvalid ? 'text-red-600 dark:text-red-400' : 'text-gray-700 dark:text-gray-200'}`}>{label}</span>
+        <div className="flex items-center space-x-4">
             {(['Yes', 'No', 'NA'] as ChecklistOption[]).map(option => (
-                <label key={option} className="flex items-center space-x-2 cursor-pointer text-gray-600 dark:text-gray-300">
+                <label key={option} className="flex items-center space-x-1.5 cursor-pointer text-sm text-gray-600 dark:text-gray-400">
                     <input
                         type="radio"
                         name={label}
                         value={option}
                         checked={value === option}
                         onChange={() => onChange(option)}
-                        className="h-5 w-5 text-[#007D8C] border-gray-300 focus:ring-[#006b7a]"
+                        className="h-4 w-4 accent-[#007D8C] focus:ring-[#007D8C]/40"
                     />
                     <span>{option}</span>
                 </label>
@@ -341,8 +341,23 @@ const DfrSaskpower = ({ onBack, onBackDirect, initialData }: DfrSaskpowerProps):
     const [autosaveEnabled, setAutosaveEnabled] = useState(initialData?.timestamp != null);
     const [autosaveIntervalMs, setAutosaveIntervalMs] = useState(() => parseInt(localStorage.getItem(AUTOSAVE_INTERVAL_KEY) || '30') * 1000);
     const [showSaveAsMenu, setShowSaveAsMenu] = useState(false);
+    const [showMoreMenu, setShowMoreMenu] = useState(false);
     const saveAsMenuRef = useRef<HTMLDivElement>(null);
+    const moreMenuRef = useRef<HTMLDivElement>(null);
     const quickSaveRef = useRef<() => Promise<void>>();
+    const saveProjectRef = useRef<() => Promise<void>>();
+    const savePdfRef = useRef<() => void>();
+    const savedFilePathRef = useRef<string | null>((() => {
+        const direct = (initialData as any)?.filePath ?? null;
+        if (direct) return direct;
+        const ts = initialData?.timestamp;
+        if (!ts) return null;
+        try { const m = JSON.parse(localStorage.getItem('xtec_file_paths') ?? '{}'); return m[String(ts)] ?? null; } catch { return null; }
+    })());
+    const photosDataRef = useRef(photosData);
+    photosDataRef.current = photosData;
+    // fileSynced: true=in sync with file, false=pending sync, null=no file linked
+    const [fileSynced, setFileSynced] = useState<boolean | null>(savedFilePathRef.current ? true : null);
     const projectTimestampRef = useRef<number | null>(initialData?.timestamp ?? null);
     const isSavingRef = useRef(false);
     const isDirtyRef = useRef(isDirty);
@@ -488,7 +503,7 @@ const DfrSaskpower = ({ onBack, onBackDirect, initialData }: DfrSaskpowerProps):
                 },
             }));
         }
-        setIsDirty(true);
+        setIsDirty(true); if (savedFilePathRef.current) setFileSynced(false);
     };
 
     // Comment action handlers for CommentsRail
@@ -617,11 +632,11 @@ const DfrSaskpower = ({ onBack, onBackDirect, initialData }: DfrSaskpowerProps):
                     return photo;
                 })
             );
-            setPhotosData(hydratedPhotos);
+            setPhotosData(hydratedPhotos.filter(p => p.imageUrl || p.imageId));
         } else {
             setPhotosData([]);
         }
-        
+
         return finalData;
     };
 
@@ -697,6 +712,35 @@ const DfrSaskpower = ({ onBack, onBackDirect, initialData }: DfrSaskpowerProps):
         };
     }, [isDirty]);
 
+    // Persist initial file path to localStorage on mount so future sessions can find it
+    useEffect(() => {
+        const p = savedFilePathRef.current;
+        const ts = projectTimestampRef.current ?? initialData?.timestamp;
+        if (p && ts) { try { const m=JSON.parse(localStorage.getItem('xtec_file_paths')?? '{}'); if(!m[String(ts)]){m[String(ts)]=p;localStorage.setItem('xtec_file_paths',JSON.stringify(m));} } catch {} }
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+    useEffect(() => {
+        if (!(initialData as any)?.newDay) return;
+        const todayStr = new Date().toLocaleDateString('en-CA', { year:'numeric', month:'long', day:'numeric' });
+        setData(d => ({ ...d, date: todayStr }));
+        savedFilePathRef.current = null;
+        projectTimestampRef.current = null;
+        setFileSynced(null);
+        setAutosaveEnabled(false);
+        setIsDirty(true);
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+    const syncToFile = async () => {
+        if (!savedFilePathRef.current) { handleSaveProject(); return; }
+        try {
+            const photosForExport = photosDataRef.current.map(({ imageId, ...p }) => p);
+            const fileState = JSON.stringify({ ...data, photosData: photosForExport });
+            await (window as any).electronAPI?.writeToFile?.(fileState, savedFilePathRef.current);
+            setFileSynced(true);
+            toast('File saved ✓');
+        } catch (e) { console.error('Sync failed:', e); toast('File save failed', 'error'); }
+    };
+
     const handleBack = () => {
         if (isDirty) {
             pendingCloseRef.current = false;
@@ -708,7 +752,7 @@ const DfrSaskpower = ({ onBack, onBackDirect, initialData }: DfrSaskpowerProps):
 
     const handleChange = (field: keyof Omit<DfrSaskpowerData, 'comments' | 'highlights'>, value: string | ChecklistOption | TextHighlight[]) => {
         setData(prev => ({ ...prev, [field]: value }));
-        setIsDirty(true);
+        setIsDirty(true); if (savedFilePathRef.current) setFileSynced(false);
     };
 
     const handleHighlightsChange = (field: keyof Omit<DfrSaskpowerData, 'comments'>, highlights: TextHighlight[]) => {
@@ -719,7 +763,7 @@ const DfrSaskpower = ({ onBack, onBackDirect, initialData }: DfrSaskpowerProps):
                 [field]: highlights
             }
         }));
-        setIsDirty(true);
+        setIsDirty(true); if (savedFilePathRef.current) setFileSynced(false);
     };
 
     const handleInlineCommentsChange = (field: keyof Omit<DfrSaskpowerData, 'comments'>, comments: TextComment[]) => {
@@ -730,7 +774,7 @@ const DfrSaskpower = ({ onBack, onBackDirect, initialData }: DfrSaskpowerProps):
                 [field]: comments
             }
         }));
-        setIsDirty(true);
+        setIsDirty(true); if (savedFilePathRef.current) setFileSynced(false);
     };
     const toggleComment = (field: string) => {
         setOpenComments(prev => {
@@ -752,23 +796,23 @@ const DfrSaskpower = ({ onBack, onBackDirect, initialData }: DfrSaskpowerProps):
                 [field]: value
             }
         }));
-        setIsDirty(true);
+        setIsDirty(true); if (savedFilePathRef.current) setFileSynced(false);
     };
 
     // --- Photo Handlers ---
     const handlePhotoDataChange = useCallback((id: number, field: keyof Omit<PhotoData, 'id' | 'imageUrl' | 'imageId'>, value: string) => {
         setPhotosData(prev => prev.map(photo => photo.id === id ? { ...photo, [field]: value } : photo));
-        setIsDirty(true);
+        setIsDirty(true); if (savedFilePathRef.current) setFileSynced(false);
     }, []);
 
     const handlePhotoCommentsChange = useCallback((photoId: number, comments: TextComment[]) => {
         setPhotosData(prev => prev.map(p => p.id === photoId ? { ...p, inlineComments: comments } : p));
-        setIsDirty(true);
+        setIsDirty(true); if (savedFilePathRef.current) setFileSynced(false);
     }, []);
 
     const handlePhotoHighlightsChange = useCallback((photoId: number, highlights: TextHighlight[]) => {
         setPhotosData(prev => prev.map(p => p.id === photoId ? { ...p, highlights } : p));
-        setIsDirty(true);
+        setIsDirty(true); if (savedFilePathRef.current) setFileSynced(false);
     }, []);
 
     const handlePhotoAnchorPositionsChange = useCallback((id: number, anchors: CommentAnchorPosition[]) => {
@@ -787,7 +831,7 @@ const DfrSaskpower = ({ onBack, onBackDirect, initialData }: DfrSaskpowerProps):
              const dataUrl = e.target?.result as string;
              autoCropImage(dataUrl).then(croppedImageUrl => {
                 setPhotosData(prev => prev.map(photo => photo.id === id ? { ...photo, imageUrl: croppedImageUrl } : photo));
-                setIsDirty(true);
+                setIsDirty(true); if (savedFilePathRef.current) setFileSynced(false);
              });
         };
         reader.readAsDataURL(file);
@@ -838,11 +882,16 @@ const DfrSaskpower = ({ onBack, onBackDirect, initialData }: DfrSaskpowerProps):
                     setBatchProgress({ current: i + 1, total: valid.length });
                     resolve();
                 };
+                reader.onerror = () => {
+                    setPhotosData(prev => prev.filter(p => p.id !== targetId));
+                    setBatchProgress({ current: i + 1, total: valid.length });
+                    resolve();
+                };
                 reader.readAsDataURL(valid[i]);
             });
         }
         setBatchProgress(null);
-        setIsDirty(true);
+        setIsDirty(true); if (savedFilePathRef.current) setFileSynced(false);
         toast(
             skipped > 0
                 ? `${valid.length} photo${valid.length !== 1 ? 's' : ''} added · ${skipped} skipped (unsupported format)`
@@ -897,7 +946,7 @@ const DfrSaskpower = ({ onBack, onBackDirect, initialData }: DfrSaskpowerProps):
             }
             return renumberPhotos(newPhotos);
         });
-        setIsDirty(true);
+        setIsDirty(true); if (savedFilePathRef.current) setFileSynced(false);
     };
 
     const removePhoto = useCallback((id: number) => {
@@ -909,7 +958,7 @@ const DfrSaskpower = ({ onBack, onBackDirect, initialData }: DfrSaskpowerProps):
             }
             return renumberPhotos(prev.filter(photo => photo.id !== id));
         });
-        setIsDirty(true);
+        setIsDirty(true); if (savedFilePathRef.current) setFileSynced(false);
     }, []);
 
     const handlePhotoDragEnd = (event: DragEndEvent) => {
@@ -918,7 +967,7 @@ const DfrSaskpower = ({ onBack, onBackDirect, initialData }: DfrSaskpowerProps):
             const oldIndex = photosData.findIndex(p => p.id === active.id);
             const newIndex = photosData.findIndex(p => p.id === over!.id);
             setPhotosData(renumberPhotos(arrayMove(photosData, oldIndex, newIndex)));
-            setIsDirty(true);
+            setIsDirty(true); if (savedFilePathRef.current) setFileSynced(false);
         }
     };
 
@@ -969,7 +1018,7 @@ const DfrSaskpower = ({ onBack, onBackDirect, initialData }: DfrSaskpowerProps):
             }
         });
 
-        photosData.forEach(photo => {
+        photosData.filter(p => p.imageUrl || p.imageId).forEach(photo => {
             const prefix = `photo-${photo.id}-`;
             if (!photo.date) newErrors.add(`${prefix}date`);
             if (!photo.location) newErrors.add(`${prefix}location`);
@@ -1593,57 +1642,95 @@ const renderTextSection = async (
         }
     };
 
-    const handleQuickSave = async () => {
+    // Core save — works like Word/Excel Ctrl+S.
+    // First call with no file path → shows Save dialog.
+    // All subsequent calls → writes directly to the same file.
+    const performSave = async (currentData: DfrSaskpowerData) => {
         if (isSavingRef.current) return;
-        if (projectTimestampRef.current === null) {
-            setFirstSaveHeader({ proponent: data.proponent, projectName: data.projectName, location: data.location, date: data.date, projectNumber: data.projectNumber });
-            setShowFirstSaveModal(true);
-            return;
-        }
         isSavingRef.current = true;
         try {
-            const stateForRecentProjects = await prepareStateForRecentProjectStorage(data);
-            const formattedDate = formatDateForRecentProject(data.date);
+            const photosForExport = photosDataRef.current.map(({ imageId, ...p }) => p);
+            const filePayload = JSON.stringify({ ...currentData, photosData: photosForExport });
+            let filePath = savedFilePathRef.current;
+
+            if (!filePath) {
+                // No file linked yet — show Save dialog (Word behaviour: first Ctrl+S)
+                const sanitize = (s: string) => s.replace(/[^a-z0-9_]/gi, '-').toLowerCase();
+                const fname = `${sanitize(currentData.projectName || 'project')}_${formatDateForFilename(currentData.date)}.spdfr`;
+                // @ts-ignore
+                const result = await window.electronAPI?.saveProject?.(filePayload, fname);
+                if (!result?.path) return; // user cancelled dialog
+                filePath = result.path;
+                savedFilePathRef.current = filePath;
+            } else {
+                // Path known — write directly, no dialog (Word behaviour: subsequent Ctrl+S)
+                // @ts-ignore
+                if ((window as any).electronAPI?.writeToFile) {
+                    const writeResult = await (window as any).electronAPI.writeToFile(filePayload, filePath);
+                    if (writeResult && !writeResult.success) {
+                        throw new Error(writeResult.error || 'Could not write to file');
+                    }
+                } else {
+                    // Fallback if handler not yet loaded (restart app to get write-to-file)
+                    // @ts-ignore
+                    await window.electronAPI?.saveProject?.(filePayload, filePath);
+                }
+            }
+
+            // Persist file path immediately after successful write — use any known timestamp
+            const persistPath = (ts: number | string | null | undefined, path: string) => {
+                if (!ts || !path) return;
+                try { const m=JSON.parse(localStorage.getItem('xtec_file_paths')?? '{}'); m[String(ts)]=path; localStorage.setItem('xtec_file_paths',JSON.stringify(m)); } catch {}
+            };
+            const knownTs = projectTimestampRef.current ?? (initialData as any)?.timestamp;
+            persistPath(knownTs, filePath!);
+
+            // Update recent projects list (non-critical — don't let it abort the save)
+            try {
+            const stateForRecent = await prepareStateForRecentProjectStorage(currentData);
+            const formattedDate = formatDateForRecentProject(currentData.date);
             const dateSuffix = formattedDate ? ` - ${formattedDate}` : '';
-            const projectName = `${data.projectName || 'Untitled SaskPower DFR'}${dateSuffix}`;
-            const savedTs = await addRecentProject(stateForRecentProjects, { type: 'dfrSaskpower', name: projectName, projectNumber: data.projectNumber, proponent: data.proponent, date: data.date }, projectTimestampRef.current ?? undefined);
+            const projectName = `${currentData.projectName || 'Untitled SaskPower DFR'}${dateSuffix}`;
+            const savedTs = await addRecentProject(stateForRecent, { type: 'dfrSaskpower', name: projectName, projectNumber: currentData.projectNumber, proponent: currentData.proponent, date: currentData.date }, projectTimestampRef.current ?? undefined);
             if (savedTs) {
                 projectTimestampRef.current = savedTs;
-                setIsDirty(false);
-                toast('Saved ✓');
-            } else {
-                toast('Save failed — please try again.', 'error');
+                persistPath(savedTs, filePath!); // also store under the canonical Recent Projects timestamp
             }
+            } catch (recentsErr) {
+                console.warn('Recent projects update failed (file was saved):', recentsErr);
+            }
+
+            setIsDirty(false);
+            setFileSynced(true);
+            setAutosaveEnabled(true);
+            toast('Saved ✓');
+        } catch (e) {
+            console.error('Save failed:', e);
+            toast(`Save failed — ${e instanceof Error ? e.message : 'please try again.'}`, 'error');
         } finally {
             isSavingRef.current = false;
         }
     };
 
+    const handleQuickSave = async () => {
+        if (isSavingRef.current) return;
+        // If no project info yet, collect it first (like Word prompting for document title)
+        if (!data.projectName.trim() && !data.projectNumber.trim() && !savedFilePathRef.current) {
+            setFirstSaveHeader({ proponent: data.proponent, projectName: data.projectName, location: data.location, date: data.date, projectNumber: data.projectNumber });
+            setShowFirstSaveModal(true);
+            return;
+        }
+        await performSave(data);
+    };
+
     const handleConfirmFirstSave = async () => {
         setShowFirstSaveModal(false);
+        const mergedData = { ...data, ...firstSaveHeader };
         setData(d => ({ ...d, ...firstSaveHeader }));
-        if (isSavingRef.current) return;
-        isSavingRef.current = true;
-        try {
-            const mergedData = { ...data, ...firstSaveHeader };
-            const stateForRecentProjects = await prepareStateForRecentProjectStorage(mergedData);
-            const formattedDate = formatDateForRecentProject(firstSaveHeader.date);
-            const dateSuffix = formattedDate ? ` - ${formattedDate}` : '';
-            const projectName = `${firstSaveHeader.projectName || 'Untitled SaskPower DFR'}${dateSuffix}`;
-            const savedTs = await addRecentProject(stateForRecentProjects, { type: 'dfrSaskpower', name: projectName, projectNumber: firstSaveHeader.projectNumber, proponent: firstSaveHeader.proponent, date: firstSaveHeader.date });
-            if (savedTs) {
-                projectTimestampRef.current = savedTs;
-                setIsDirty(false);
-                setAutosaveEnabled(true);
-                toast('Saved ✓');
-            } else {
-                toast('Save failed — please try again.', 'error');
-            }
-        } finally {
-            isSavingRef.current = false;
-        }
+        await performSave(mergedData);
     };
     quickSaveRef.current = handleQuickSave;
+    savePdfRef.current = handleSavePdf;
 
     useEffect(() => {
         if (!initialData?.autoPdfExport) return;
@@ -1652,7 +1739,10 @@ const renderTextSection = async (
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
     const handleSaveProject = async () => {
-        await handleQuickSave();
+        // Save As — always shows the dialog so user can pick a new location
+        if (isSavingRef.current) return;
+        isSavingRef.current = true;
+        try {
         const photosForExport = photosData.map(({ imageId, ...photo }) => photo);
         const stateForFileExport = { ...data, photosData: photosForExport };
         const sanitize = (name: string) => name.replace(/[^a-z0-9_]/gi, '-').toLowerCase();
@@ -1662,7 +1752,12 @@ const renderTextSection = async (
         // @ts-ignore
         if (window.electronAPI) {
             // @ts-ignore
-            await window.electronAPI.saveProject(JSON.stringify(stateForFileExport), filename);
+            const result = await window.electronAPI.saveProject(JSON.stringify(stateForFileExport), savedFilePathRef.current || filename);
+            if (result?.path) {
+                savedFilePathRef.current = result.path;
+                if (projectTimestampRef.current) try { const m=JSON.parse(localStorage.getItem('xtec_file_paths')?? '{}'); m[String(projectTimestampRef.current)]=result.path; localStorage.setItem('xtec_file_paths',JSON.stringify(m)); } catch {}
+                setFileSynced(true);
+            }
         } else {
             const blob = new Blob([JSON.stringify(stateForFileExport)], { type: 'application/json;charset=utf-8;' });
             const link = document.createElement('a');
@@ -1672,6 +1767,40 @@ const renderTextSection = async (
             link.click();
             document.body.removeChild(link);
             URL.revokeObjectURL(link.href);
+        }
+        } finally { isSavingRef.current = false; }
+    };
+
+    saveProjectRef.current = handleSaveProject;
+
+    // New Day — copies current report with today's date, starts as new unsaved draft
+    const handleNewDay = () => {
+        const todayStr = new Date().toLocaleDateString('en-CA', { year:'numeric', month:'long', day:'numeric' });
+        setData(d => ({ ...d, date: todayStr }));
+        savedFilePathRef.current = null;
+        projectTimestampRef.current = null;
+        setIsDirty(true);
+        setFileSynced(null);
+        setAutosaveEnabled(false);
+        toast(`New draft for ${todayStr} — click Save to save it`);
+    };
+
+    // Save a Copy — saves current content to a NEW file, keeps working on original
+    const handleSaveCopy = async () => {
+        if (isSavingRef.current) return;
+        isSavingRef.current = true;
+        try {
+            const photosForExport = photosData.map(({ imageId, ...p }) => p);
+            const stateForCopy = { ...data, photosData: photosForExport };
+            const sanitize = (s: string) => s.replace(/[^a-z0-9_]/gi, '-').toLowerCase();
+            const fname = `${sanitize(data.projectName || 'project')}_copy_${sanitize(data.date || 'date')}.spdfr`;
+            // @ts-ignore
+            await window.electronAPI?.saveProject?.(JSON.stringify(stateForCopy), fname);
+            toast('Copy saved ✓');
+        } catch (e) {
+            console.error('Save copy failed:', e);
+        } finally {
+            isSavingRef.current = false;
         }
     };
 
@@ -1790,22 +1919,18 @@ Description: ${photo.description || 'N/A'}
         }
         if (api?.onSaveProjectShortcut) {
             api.removeSaveProjectShortcutListener?.();
-            api.onSaveProjectShortcut(() => {
-                handleSaveProject();
-            });
+            api.onSaveProjectShortcut(() => { saveProjectRef.current?.(); });
         }
         if (api?.onExportPdfShortcut) {
             api.removeExportPdfShortcutListener?.();
-            api.onExportPdfShortcut(() => {
-                handleSavePdf();
-            });
+            api.onExportPdfShortcut(() => { savePdfRef.current?.(); });
         }
         return () => {
             api?.removeQuickSaveShortcutListener?.();
             api?.removeSaveProjectShortcutListener?.();
             api?.removeExportPdfShortcutListener?.();
         };
-    }, [data, photosData]);
+    }, []);
 
     // Project packaging — respond to Package Project… menu action
     useEffect(() => {
@@ -1853,6 +1978,17 @@ Description: ${photo.description || 'N/A'}
     }, [showSaveAsMenu]);
 
     useEffect(() => {
+        if (!showMoreMenu) return;
+        const handler = (e: MouseEvent) => {
+            if (moreMenuRef.current && !moreMenuRef.current.contains(e.target as Node)) {
+                setShowMoreMenu(false);
+            }
+        };
+        document.addEventListener('mousedown', handler);
+        return () => document.removeEventListener('mousedown', handler);
+    }, [showMoreMenu]);
+
+    useEffect(() => {
         const name = data.projectName || '';
         const num = data.projectNumber || '';
         const prefix = [num, name].filter(Boolean).join(' – ');
@@ -1862,7 +1998,7 @@ Description: ${photo.description || 'N/A'}
 
     useEffect(() => {
         return () => {
-            photosData.forEach(p => { if (p.imageUrl) revokeImageUrl(p.imageUrl); });
+            photosDataRef.current.forEach(p => { if (p.imageUrl) revokeImageUrl(p.imageUrl); });
         };
     }, []);
 
@@ -1902,7 +2038,7 @@ Description: ${photo.description || 'N/A'}
 
     return (
         <div
-            className="bg-gray-100 dark:bg-gray-900 min-h-screen transition-colors duration-200 relative"
+            className="bg-gray-50 dark:bg-[#161618] min-h-screen transition-colors duration-200 relative"
             onDragOver={handleFileDragOver}
             onDragLeave={handleFileDragLeave}
             onDrop={handleFileDrop}
@@ -1938,23 +2074,18 @@ Description: ${photo.description || 'N/A'}
                 {/* Main content column - scales down on laptops to fit comments */}
                 <div className="flex-1 min-w-0 max-w-[1400px]">
                 {showMigrationNotice && (
-                    <div className="bg-blue-100 border-l-4 border-blue-500 text-blue-700 p-4 mb-6 rounded-md shadow-sm" role="alert">
-                        <div className="flex">
-                            <div className="py-1">
-                                <svg className="fill-current h-6 w-6 text-blue-500 mr-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M2.93 17.07A10 10 0 1 1 17.07 2.93 10 10 0 0 1 2.93 17.07zm12.73-1.41A8 8 0 1 0 4.34 4.34a8 8 0 0 0 11.32 11.32zM9 11V9h2v6H9v-4zm0-6h2v2H9V5z"/></svg>
-                            </div>
-                            <div>
-                                <p className="font-bold">Project format updated</p>
-                                <p className="text-sm">This project was opened in an older format and has been automatically updated. Please save the project to keep these changes.</p>
-                            </div>
-                            <button onClick={() => setShowMigrationNotice(false)} className="ml-auto -mx-1.5 -my-1.5 bg-blue-100 text-blue-500 rounded-lg focus:ring-2 focus:ring-blue-400 p-1.5 hover:bg-blue-200 inline-flex h-8 w-8" aria-label="Dismiss">
-                                <span className="sr-only">Dismiss</span>
-                                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd"></path></svg>
-                            </button>
+                    <div className="flex items-start gap-3 bg-[#007D8C]/8 dark:bg-[#007D8C]/10 border border-[#007D8C]/25 p-3.5 mb-6 rounded-xl" role="alert">
+                        <svg className="h-5 w-5 text-[#007D8C] shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" /></svg>
+                        <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-gray-800 dark:text-white">Project format updated</p>
+                            <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5">Opened in an older format and automatically updated. Save the project to keep these changes.</p>
                         </div>
+                        <button onClick={() => setShowMigrationNotice(false)} className="shrink-0 p-1 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-white hover:bg-[#007D8C]/10 transition-colors focus:outline-none focus:ring-2 focus:ring-[#007D8C]/40" aria-label="Dismiss">
+                            <CloseIcon className="h-4 w-4" />
+                        </button>
                     </div>
                 )}
-                <div className="sticky top-0 z-40 bg-gray-100 dark:bg-gray-900 py-2 mb-4 border-b border-gray-200 dark:border-gray-700">
+                <div className="sticky top-0 z-40 bg-gray-50/95 dark:bg-[#161618]/95 backdrop-blur-sm py-2.5 mb-4 border-b border-gray-200/60 dark:border-white/5">
                     <div className="flex flex-wrap justify-between items-center gap-2">
                         <button onClick={handleBack} className="border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 font-semibold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
                             <ArrowLeftIcon /> <span>Home</span>
@@ -1977,38 +2108,53 @@ Description: ${photo.description || 'N/A'}
                                     <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow transition duration-200 ${autosaveEnabled ? 'translate-x-4' : 'translate-x-0'}`} />
                                 </button>
                             </div>
-                            <button onClick={handleQuickSave} title="Save (Ctrl+S)" className="bg-[#007D8C] hover:bg-[#006b7a] text-white font-semibold py-2 px-3 rounded-lg inline-flex items-center transition duration-200">
-                                <SaveIcon />
+                            {/* Save — primary action, handles first-save dialog automatically */}
+                            <button onClick={handleQuickSave} title="Save (Ctrl+S)"
+                                className={`inline-flex items-center gap-2 font-semibold py-2 px-4 rounded-lg transition-all duration-200 ${
+                                    fileSynced === true
+                                        ? 'bg-green-600 hover:bg-green-700 text-white'
+                                        : 'bg-[#007D8C] hover:bg-[#006b7a] text-white'
+                                }`}>
+                                {fileSynced === true
+                                    ? <><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>Saved</>
+                                    : <><SaveIcon /><span>Save</span></>
+                                }
                             </button>
-                            <button onClick={handleOpenProject} className="border border-[#007D8C] text-[#007D8C] hover:bg-[#007D8C]/10 dark:hover:bg-[#007D8C]/10 font-semibold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
-                                <FolderOpenIcon /> <span>Open Project</span>
+                            {/* Sync status icon — non-interactive, shows file sync state */}
+                            {fileSynced !== null && (
+                                <div title={fileSynced ? 'File saved' : 'Changes not yet saved to file'}
+                                    className={`flex items-center ${fileSynced ? 'text-green-500 dark:text-green-400' : 'text-amber-400 dark:text-amber-300 animate-pulse'}`}>
+                                    {fileSynced
+                                        ? <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                        : <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"/></svg>
+                                    }
+                                </div>
+                            )}
+                            {/* Export PDF */}
+                            <button onClick={handleSavePdf} title="Export PDF"
+                                className="bg-[#007D8C] hover:bg-[#006b7a] text-white font-semibold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
+                                <DownloadIcon /> <span>PDF</span>
                             </button>
-                            <input type="file" ref={fileInputRef} onChange={handleFileSelected} style={{ display: 'none' }} accept=".spdfr" />
-                            <div className="relative" ref={saveAsMenuRef}>
-                                <button
-                                    onClick={() => setShowSaveAsMenu(v => !v)}
-                                    className="border border-[#007D8C] text-[#007D8C] hover:bg-[#007D8C]/10 dark:hover:bg-[#007D8C]/10 font-semibold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200"
-                                >
-                                    <span>Save As...</span>
-                                    <ChevronDownIcon className="h-4 w-4" />
+                            <button onClick={handleOpenProject} className="border border-gray-300 dark:border-gray-600 bg-white dark:bg-[#1c1c1e] hover:bg-gray-50 dark:hover:bg-[#2a2a2e] text-gray-700 dark:text-gray-200 font-semibold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
+                                <FolderOpenIcon /> <span>Open</span>
+                            </button>
+
+                            <div className="relative" ref={moreMenuRef}>
+                                <button onClick={() => setShowMoreMenu(v => !v)} title="More options"
+                                    className="border border-gray-300 dark:border-gray-600 bg-white dark:bg-[#1c1c1e] hover:bg-gray-50 dark:hover:bg-[#2a2a2e] text-gray-500 dark:text-gray-400 py-2 px-2 rounded-lg inline-flex items-center transition duration-200">
+                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M6.75 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0zM12.75 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0zM18.75 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0z"/></svg>
                                 </button>
-                                {showSaveAsMenu && (
-                                    <div className="absolute right-0 top-full mt-1 z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 min-w-[160px]">
-                                        <button
-                                            onClick={() => { setShowSaveAsMenu(false); handleSaveProject(); }}
-                                            className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
-                                        >
-                                            <SaveIcon className="h-4 w-4 flex-shrink-0" /> Project File
-                                        </button>
-                                        <button
-                                            onClick={() => { setShowSaveAsMenu(false); handleSavePdf(); }}
-                                            className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
-                                        >
-                                            <DownloadIcon className="h-4 w-4 flex-shrink-0" /> PDF
+                                {showMoreMenu && (
+                                    <div className="absolute right-0 top-full mt-1 z-50 bg-white dark:bg-[#1c1c1e] border border-gray-200 dark:border-[#007D8C]/20 rounded-xl shadow-xl py-1 min-w-[160px]">
+                                        <button onClick={() => { setShowMoreMenu(false); handleSaveProject(); }}
+                                            className="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-white/5 flex items-center gap-2.5">
+                                            <SaveIcon className="w-4 h-4 shrink-0 text-gray-400" />
+                                            Save As…
                                         </button>
                                     </div>
                                 )}
                             </div>
+                            <input type="file" ref={fileInputRef} onChange={handleFileSelected} style={{ display: 'none' }} accept=".spdfr" />
                             {/* @ts-ignore */}
                             {!window.electronAPI && (
                                 <button onClick={handleDownloadPhotos} className="border border-[#007D8C] text-[#007D8C] hover:bg-[#007D8C]/10 dark:hover:bg-[#007D8C]/10 font-semibold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
@@ -2021,21 +2167,21 @@ Description: ${photo.description || 'N/A'}
 
                 {/* Zoom Controls */}
                 <div className="flex items-center justify-end gap-1 mb-4">
-                    <button onClick={handleZoomOut} className="p-1.5 rounded-md bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 transition" title="Zoom out">
+                    <button onClick={handleZoomOut} className="p-1.5 rounded-md bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-400 transition focus:outline-none focus:ring-2 focus:ring-[#007D8C]/40" title="Zoom out">
                         <ZoomOutIcon className="h-4 w-4" />
                     </button>
-                    <button onClick={handleZoomReset} className="px-2 py-1 text-xs font-medium rounded-md bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 transition min-w-[3rem]" title="Reset zoom">
+                    <button onClick={handleZoomReset} className="px-2 py-1 text-xs font-medium rounded-md bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-400 transition min-w-[3rem] focus:outline-none focus:ring-2 focus:ring-[#007D8C]/40" title="Reset zoom">
                         {zoomLevel}%
                     </button>
-                    <button onClick={handleZoomIn} className="p-1.5 rounded-md bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 transition" title="Zoom in">
+                    <button onClick={handleZoomIn} className="p-1.5 rounded-md bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-400 transition focus:outline-none focus:ring-2 focus:ring-[#007D8C]/40" title="Zoom in">
                         <ZoomInIcon className="h-4 w-4" />
                     </button>
                 </div>
 
                 <div className="main-content space-y-8" style={{ overflow: 'visible', transform: `scale(${zoomLevel / 100})`, transformOrigin: 'top left', width: `${10000 / zoomLevel}%` }}>
                     {/* Header Section */}
-                    <div className="bg-white dark:bg-gray-800 p-6 shadow-md rounded-lg transition-colors duration-200" style={{ overflow: 'visible' }}>
-                        <div className="grid grid-cols-1 md:grid-cols-[1fr,auto,1fr] md:items-center pb-4 gap-4">
+                    <div id="report-fields-section" className="xtec-report-card p-6 transition-colors duration-200" style={{ overflow: 'visible' }}>
+                        <div className="grid grid-cols-1 md:grid-cols-[1fr,auto,1fr] md:items-center pb-3 gap-4">
                             <div className="flex justify-center md:justify-start">
                                 <SafeImage fileName="xterra-logo.png" alt="X-TERRA Logo" className="h-14 w-auto dark:hidden" />
                                 <SafeImage fileName="xterra-white.png" alt="X-TERRA Logo" className="h-14 w-auto hidden dark:block" />
@@ -2045,24 +2191,25 @@ Description: ${photo.description || 'N/A'}
                             </h1>
                             <div></div>
                         </div>
-                        <div className="border-t-4 border-[#007D8C] mb-4"></div>
-                        
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="xtec-divider mb-3"></div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2 pt-3 pb-2">
                              {/* Col 1 */}
-                            <div className="space-y-4">
+                            <div className="flex flex-col gap-y-2">
                                 <EditableField label="PROPONENT" value={data.proponent} onChange={(v) => handleChange('proponent', v)} isInvalid={errors.has('proponent')} />
                                 <EditableField label="PROJECT" value={data.projectName} onChange={(v) => handleChange('projectName', v)} isInvalid={errors.has('projectName')} />
                                 <EditableField label="LOCATION" value={data.location} onChange={(v) => handleChange('location', v)} isTextArea isInvalid={errors.has('location')} />
                                 <EditableField label="ENV FILE NUMBER" value={data.envFileNumber} onChange={(v) => handleChange('envFileNumber', v)} isInvalid={errors.has('envFileNumber')} />
                             </div>
                             {/* Col 2 */}
-                             <div className="space-y-4">
+                            <div className="flex flex-col gap-y-2">
                                 <EditableField label="DATE" value={data.date} onChange={(v) => handleChange('date', v)} placeholder="Month Day, Year" isInvalid={errors.has('date')} />
                                 <EditableField label="X-TERRA PROJECT #" value={data.projectNumber} onChange={(v) => handleChange('projectNumber', v)} isInvalid={errors.has('projectNumber')} />
                                 <EditableField label="MONITOR" value={data.environmentalMonitor} onChange={(v) => handleChange('environmentalMonitor', v)} isInvalid={errors.has('environmentalMonitor')} />
                                 <EditableField label="VENDOR & FOREMAN" value={data.vendorAndForeman} onChange={(v) => handleChange('vendorAndForeman', v)} isInvalid={errors.has('vendorAndForeman')} />
                             </div>
                         </div>
+                        <div className="xtec-divider mt-2"></div>
                     </div>
 
                     {/* Project Activities */}
@@ -2074,7 +2221,7 @@ Description: ${photo.description || 'N/A'}
                             </button>
                         </div>
                          {openComments.has('generalActivity') && (
-                            <textarea value={data.comments?.generalActivity || ''} onChange={(e) => handleCommentChange('generalActivity', e.target.value)} placeholder="Add a comment for editing purposes..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 text-gray-900 rounded-md shadow-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition mb-2" spellCheck={true} />
+                            <textarea value={data.comments?.generalActivity || ''} onChange={(e) => handleCommentChange('generalActivity', e.target.value)} placeholder="Add a comment for editing purposes..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 dark:bg-yellow-900/20 dark:border-yellow-700/50 text-gray-900 dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-[#007D8C]/40 focus:border-[#007D8C] outline-none transition mb-2" spellCheck={true} />
                         )}
                         <BulletPointEditor label="" fieldId="generalActivity" value={data.generalActivity} highlights={data.highlights?.generalActivity} inlineComments={data.inlineComments?.generalActivity} onChange={(v) => handleChange('generalActivity', v)} onHighlightsChange={(h) => handleHighlightsChange('generalActivity', h)} onInlineCommentsChange={(c) => handleInlineCommentsChange('generalActivity', c)} onAnchorPositionsChange={(a) => handleAnchorPositionsChange('generalActivity', a)} hoveredCommentId={hoveredCommentId} rows={15} placeholder={saskPowerPlaceholders.generalActivity} isInvalid={errors.has('generalActivity')} />
                     </Section>
@@ -2090,7 +2237,7 @@ Description: ${photo.description || 'N/A'}
                                     </button>
                                 </div>
                                 {openComments.has('equipmentOnsite') && (
-                                    <textarea value={data.comments?.equipmentOnsite || ''} onChange={(e) => handleCommentChange('equipmentOnsite', e.target.value)} placeholder="Add a comment..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 text-gray-900 rounded-md shadow-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition mb-2" spellCheck={true} />
+                                    <textarea value={data.comments?.equipmentOnsite || ''} onChange={(e) => handleCommentChange('equipmentOnsite', e.target.value)} placeholder="Add a comment..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 dark:bg-yellow-900/20 dark:border-yellow-700/50 text-gray-900 dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-[#007D8C]/40 focus:border-[#007D8C] outline-none transition mb-2" spellCheck={true} />
                                 )}
                                 <BulletPointEditor label="" fieldId="equipmentOnsite" value={data.equipmentOnsite} highlights={data.highlights?.equipmentOnsite} inlineComments={data.inlineComments?.equipmentOnsite} onChange={(v) => handleChange('equipmentOnsite', v)} onHighlightsChange={(h) => handleHighlightsChange('equipmentOnsite', h)} onInlineCommentsChange={(c) => handleInlineCommentsChange('equipmentOnsite', c)} onAnchorPositionsChange={(a) => handleAnchorPositionsChange('equipmentOnsite', a)} hoveredCommentId={hoveredCommentId} rows={3} placeholder={saskPowerPlaceholders.equipmentOnsite} isInvalid={errors.has('equipmentOnsite')} />
                             </div>
@@ -2103,7 +2250,7 @@ Description: ${photo.description || 'N/A'}
                                     </button>
                                 </div>
                                 {openComments.has('weatherAndGroundConditions') && (
-                                    <textarea value={data.comments?.weatherAndGroundConditions || ''} onChange={(e) => handleCommentChange('weatherAndGroundConditions', e.target.value)} placeholder="Add a comment..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 text-gray-900 rounded-md shadow-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition mb-2" spellCheck={true} />
+                                    <textarea value={data.comments?.weatherAndGroundConditions || ''} onChange={(e) => handleCommentChange('weatherAndGroundConditions', e.target.value)} placeholder="Add a comment..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 dark:bg-yellow-900/20 dark:border-yellow-700/50 text-gray-900 dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-[#007D8C]/40 focus:border-[#007D8C] outline-none transition mb-2" spellCheck={true} />
                                 )}
                                 <BulletPointEditor label="" fieldId="weatherAndGroundConditions" value={data.weatherAndGroundConditions} highlights={data.highlights?.weatherAndGroundConditions} inlineComments={data.inlineComments?.weatherAndGroundConditions} onChange={(v) => handleChange('weatherAndGroundConditions', v)} onHighlightsChange={(h) => handleHighlightsChange('weatherAndGroundConditions', h)} onInlineCommentsChange={(c) => handleInlineCommentsChange('weatherAndGroundConditions', c)} onAnchorPositionsChange={(a) => handleAnchorPositionsChange('weatherAndGroundConditions', a)} hoveredCommentId={hoveredCommentId} rows={3} placeholder={saskPowerPlaceholders.weatherAndGroundConditions} isInvalid={errors.has('weatherAndGroundConditions')} />
                             </div>
@@ -2116,7 +2263,7 @@ Description: ${photo.description || 'N/A'}
                                     </button>
                                 </div>
                                 {openComments.has('environmentalProtection') && (
-                                    <textarea value={data.comments?.environmentalProtection || ''} onChange={(e) => handleCommentChange('environmentalProtection', e.target.value)} placeholder="Add a comment..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 text-gray-900 rounded-md shadow-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition mb-2" spellCheck={true} />
+                                    <textarea value={data.comments?.environmentalProtection || ''} onChange={(e) => handleCommentChange('environmentalProtection', e.target.value)} placeholder="Add a comment..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 dark:bg-yellow-900/20 dark:border-yellow-700/50 text-gray-900 dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-[#007D8C]/40 focus:border-[#007D8C] outline-none transition mb-2" spellCheck={true} />
                                 )}
                                 <BulletPointEditor label="" fieldId="environmentalProtection" value={data.environmentalProtection} highlights={data.highlights?.environmentalProtection} inlineComments={data.inlineComments?.environmentalProtection} onChange={(v) => handleChange('environmentalProtection', v)} onHighlightsChange={(h) => handleHighlightsChange('environmentalProtection', h)} onInlineCommentsChange={(c) => handleInlineCommentsChange('environmentalProtection', c)} onAnchorPositionsChange={(a) => handleAnchorPositionsChange('environmentalProtection', a)} hoveredCommentId={hoveredCommentId} rows={3} placeholder={saskPowerPlaceholders.environmentalProtection} isInvalid={errors.has('environmentalProtection')} />
                             </div>
@@ -2129,7 +2276,7 @@ Description: ${photo.description || 'N/A'}
                                     </button>
                                 </div>
                                 {openComments.has('wildlifeObservations') && (
-                                    <textarea value={data.comments?.wildlifeObservations || ''} onChange={(e) => handleCommentChange('wildlifeObservations', e.target.value)} placeholder="Add a comment..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 text-gray-900 rounded-md shadow-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition mb-2" spellCheck={true} />
+                                    <textarea value={data.comments?.wildlifeObservations || ''} onChange={(e) => handleCommentChange('wildlifeObservations', e.target.value)} placeholder="Add a comment..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 dark:bg-yellow-900/20 dark:border-yellow-700/50 text-gray-900 dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-[#007D8C]/40 focus:border-[#007D8C] outline-none transition mb-2" spellCheck={true} />
                                 )}
                                 <BulletPointEditor label="" fieldId="wildlifeObservations" value={data.wildlifeObservations} highlights={data.highlights?.wildlifeObservations} inlineComments={data.inlineComments?.wildlifeObservations} onChange={(v) => handleChange('wildlifeObservations', v)} onHighlightsChange={(h) => handleHighlightsChange('wildlifeObservations', h)} onInlineCommentsChange={(c) => handleInlineCommentsChange('wildlifeObservations', c)} onAnchorPositionsChange={(a) => handleAnchorPositionsChange('wildlifeObservations', a)} hoveredCommentId={hoveredCommentId} rows={3} placeholder={saskPowerPlaceholders.wildlifeObservations} isInvalid={errors.has('wildlifeObservations')} />
                             </div>
@@ -2142,7 +2289,7 @@ Description: ${photo.description || 'N/A'}
                                     </button>
                                 </div>
                                 {openComments.has('futureMonitoring') && (
-                                    <textarea value={data.comments?.futureMonitoring || ''} onChange={(e) => handleCommentChange('futureMonitoring', e.target.value)} placeholder="Add a comment..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 text-gray-900 rounded-md shadow-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition mb-2" spellCheck={true} />
+                                    <textarea value={data.comments?.futureMonitoring || ''} onChange={(e) => handleCommentChange('futureMonitoring', e.target.value)} placeholder="Add a comment..." rows={2} className="block w-full p-2 border border-yellow-300 bg-yellow-50 dark:bg-yellow-900/20 dark:border-yellow-700/50 text-gray-900 dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-[#007D8C]/40 focus:border-[#007D8C] outline-none transition mb-2" spellCheck={true} />
                                 )}
                                 <BulletPointEditor label="" fieldId="futureMonitoring" value={data.futureMonitoring} highlights={data.highlights?.futureMonitoring} inlineComments={data.inlineComments?.futureMonitoring} onChange={(v) => handleChange('futureMonitoring', v)} onHighlightsChange={(h) => handleHighlightsChange('futureMonitoring', h)} onInlineCommentsChange={(c) => handleInlineCommentsChange('futureMonitoring', c)} onAnchorPositionsChange={(a) => handleAnchorPositionsChange('futureMonitoring', a)} hoveredCommentId={hoveredCommentId} rows={3} placeholder={saskPowerPlaceholders.futureMonitoring} isInvalid={errors.has('futureMonitoring')} />
                             </div>
@@ -2164,14 +2311,14 @@ Description: ${photo.description || 'N/A'}
                         </Section>
                     </div>
 
-                    <div className="border-t-4 border-[#007D8C] my-10" />
+                    <div className="border-t border-gray-200 dark:border-white/10 my-10" />
 
                     <h2 className="text-3xl font-bold text-gray-700 dark:text-white text-center">Photographic Log</h2>
                     
                     <DndContext collisionDetection={closestCenter} onDragEnd={handlePhotoDragEnd}>
                       <SortableContext items={photosData.map(p => p.id)} strategy={verticalListSortingStrategy}>
                         {photosData.map((photo, index) => (
-                           <div key={photo.id}>
+                           <div key={photo.id} id={`photo-entry-${photo.id}`}>
                                 <PhotoEntry
                                     data={photo}
                                     onDataChange={handlePhotoDataChange}
@@ -2192,7 +2339,7 @@ Description: ${photo.description || 'N/A'}
                                 {index < photosData.length - 1 && (
                                      <div className="relative my-6 flex items-center justify-center">
                                         <div className="absolute inset-0 flex items-center" aria-hidden="true">
-                                            <div className="w-full border-t-2 border-gray-300 dark:border-gray-600"></div>
+                                            <div className="w-full border-t border-gray-200 dark:border-white/10"></div>
                                         </div>
                                         <div className="relative">
                                             <button
@@ -2244,7 +2391,7 @@ Description: ${photo.description || 'N/A'}
                         )}
                     </div>
                 </div>
-                {photosData.length > 0 && <div className="border-t-4 border-[#007D8C] my-8" />}
+                {photosData.length > 0 && <div className="border-t border-gray-200 dark:border-white/10 my-8" />}
                 <footer className="text-center text-gray-500 dark:text-gray-400 text-sm py-4">
                     X-TES Digital Reporting v1.1.5
                 </footer>
@@ -2275,63 +2422,128 @@ Description: ${photo.description || 'N/A'}
             {/* Modals */}
              {showUnsupportedFileModal && (
                 <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 transition-opacity duration-300">
-                    <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-2xl text-center relative max-w-md transform scale-95 hover:scale-100 transition-transform duration-300">
+                    <div className="bg-white dark:bg-[#1c1c1e] p-6 rounded-xl shadow-2xl text-center relative max-w-md">
                         <button onClick={() => setShowUnsupportedFileModal(false)} className="absolute top-2 right-2 p-1 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors">
                             <CloseIcon className="h-6 w-6" />
                         </button>
                         <SafeImage fileName="loading-error.gif" alt="Unsupported file type" className="mx-auto mb-4 w-40 h-40" />
                         <h3 className="text-2xl font-bold mb-2 text-gray-800 dark:text-white">Unsupported File Type</h3>
-                        <p className="text-gray-600 dark:text-gray-300">Please upload a supported image file (JPG, PNG).</p>
+                        <p className="text-gray-600 dark:text-gray-400">Please upload a supported image file (JPG, PNG).</p>
                     </div>
                 </div>
             )}
-            {showValidationErrorModal && (
-                <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 transition-opacity duration-300">
-                    <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-2xl text-center relative max-w-md transform scale-95 hover:scale-100 transition-transform duration-300">
-                        <button onClick={() => setShowValidationErrorModal(false)} className="absolute top-2 right-2 p-1 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors">
-                            <CloseIcon className="h-6 w-6" />
-                        </button>
-                        <SafeImage fileName="loading-error.gif" alt="Missing info" className="mx-auto mb-4 w-40 h-40" />
-                        <h3 className="text-2xl font-bold mb-2 text-gray-800 dark:text-white">Missing Information</h3>
-                        <p className="text-gray-600 dark:text-gray-300">Please fill in all required fields (highlighted in red).</p>
+            {showValidationErrorModal && (() => {
+                const reportLabels: Record<string, string> = {
+                    date: 'Date', location: 'Location', projectName: 'Project Name',
+                    vendorAndForeman: 'Vendor & Foreman', projectNumber: 'Project Number',
+                    environmentalMonitor: 'Environmental Monitor', envFileNumber: 'Env. File Number',
+                    generalActivity: 'General Activity', totalHoursWorked: 'Total Hours Worked',
+                    equipmentOnsite: 'Equipment Onsite', weatherAndGroundConditions: 'Weather & Ground Conditions',
+                    environmentalProtection: 'Environmental Protection', wildlifeObservations: 'Wildlife Observations',
+                    futureMonitoring: 'Future Monitoring', completedTailgate: 'Completed Tailgate',
+                    reviewedTailgate: 'Reviewed Tailgate', reviewedPermits: 'Reviewed Permits',
+                };
+                const photoFieldLabels: Record<string, string> = {
+                    date: 'Date', location: 'Location', description: 'Description',
+                    imageUrl: 'Image', direction: 'Direction',
+                };
+                const missingReport = Array.from(errors).filter(k => !k.startsWith('photo-')).map(k => reportLabels[k] || k);
+                const photoErrors: Record<string, string[]> = {};
+                Array.from(errors).filter(k => k.startsWith('photo-')).forEach(k => {
+                    const match = k.match(/^photo-(\d+)-(.+)$/);
+                    if (match) {
+                        const photo = photosData.find(p => p.id === Number(match[1]));
+                        const label = photo ? `Photo ${photo.photoNumber}` : 'Photo';
+                        if (!photoErrors[label]) photoErrors[label] = [];
+                        photoErrors[label].push(photoFieldLabels[match[2]] || match[2]);
+                    }
+                });
+                const badgeClass = "inline-flex items-center gap-1.5 px-3 py-1 bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-full text-xs font-medium border border-red-200 dark:border-red-800";
+                return (
+                    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
+                        <div role="alert" className="bg-white dark:bg-[#1c1c1e] rounded-xl shadow-2xl relative max-w-md w-full mx-4 overflow-hidden">
+                            <div className="flex items-center gap-4 p-5 border-b border-gray-100 dark:border-white/5">
+                                <SafeImage fileName="loading-error.gif" alt="Missing info" className="w-14 h-14 flex-shrink-0 rounded-lg" />
+                                <div className="flex-1 min-w-0">
+                                    <h3 className="text-lg font-bold text-gray-800 dark:text-white">Missing Information</h3>
+                                    <p className="text-sm text-gray-500 dark:text-gray-400">Fields highlighted in red need to be filled in.</p>
+                                </div>
+                                <button onClick={() => setShowValidationErrorModal(false)} className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 flex-shrink-0">
+                                    <CloseIcon className="h-5 w-5" />
+                                </button>
+                            </div>
+                            <div className="p-5 space-y-4 max-h-72 overflow-y-auto">
+                                {missingReport.length > 0 && (
+                                    <div>
+                                        <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-2">Report</p>
+                                        <div className="flex flex-wrap gap-2">
+                                            {missingReport.map(label => (
+                                                <span key={label} className={badgeClass}>
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0" />
+                                                    {label}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                                {Object.entries(photoErrors).map(([photoLabel, fields]) => (
+                                    <div key={photoLabel}>
+                                        <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-2">{photoLabel}</p>
+                                        <div className="flex flex-wrap gap-2">
+                                            {fields.map(f => (
+                                                <span key={f} className={badgeClass}>
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0" />
+                                                    {f}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                            <div className="px-5 pb-5 pt-1">
+                                <button onClick={() => setShowValidationErrorModal(false)} className="w-full bg-[#007D8C] hover:bg-[#006270] text-white font-semibold py-2.5 px-4 rounded-lg transition-colors text-sm">
+                                    OK
+                                </button>
+                            </div>
+                        </div>
                     </div>
-                </div>
-            )}
+                );
+            })()}
             {showNoInternetModal && (
                 <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
-                     <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-2xl text-center relative max-w-md">
+                     <div className="bg-white dark:bg-[#1c1c1e] p-6 rounded-xl shadow-2xl text-center relative max-w-md">
                         <button onClick={() => setShowNoInternetModal(false)} className="absolute top-2 right-2 p-1 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"><CloseIcon className="h-6 w-6" /></button>
                         <h3 className="text-2xl font-bold mb-2 text-gray-800 dark:text-white">No Internet Connection</h3>
-                        <p className="text-gray-600 dark:text-gray-300">Internet is required for PDF generation.</p>
+                        <p className="text-gray-600 dark:text-gray-400">Internet is required for PDF generation.</p>
                     </div>
                 </div>
             )}
 
             {showFirstSaveModal && (
                 <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[200]">
-                    <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-2xl relative max-w-lg w-full">
+                    <div className="bg-white dark:bg-[#1c1c1e] p-6 rounded-xl shadow-2xl relative max-w-lg w-full border border-gray-200 dark:border-[#007D8C]/20">
                         <h3 className="text-lg font-bold mb-1 text-gray-800 dark:text-white">Save Project</h3>
                         <p className="text-gray-500 dark:text-gray-400 text-xs mb-4">Confirm project details before saving. Autosave will activate after this.</p>
                         <div className="grid grid-cols-2 gap-3 mb-5">
                             <div>
                                 <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Proponent</label>
-                                <input type="text" value={firstSaveHeader.proponent} onChange={e => setFirstSaveHeader(h => ({...h, proponent: e.target.value}))} className="w-full border border-gray-300 dark:border-gray-600 rounded px-2 py-1.5 text-sm text-gray-800 dark:text-white bg-white dark:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-[#007D8C]" />
+                                <input type="text" value={firstSaveHeader.proponent} onChange={e => setFirstSaveHeader(h => ({...h, proponent: e.target.value}))} className="w-full border border-gray-200 dark:border-white/10 rounded-lg px-2 py-1.5 text-sm text-gray-800 dark:text-white bg-gray-50 dark:bg-transparent focus:outline-none focus:ring-2 focus:ring-[#007D8C]/40 focus:border-[#007D8C]" />
                             </div>
                             <div>
                                 <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Project #</label>
-                                <input type="text" value={firstSaveHeader.projectNumber} onChange={e => setFirstSaveHeader(h => ({...h, projectNumber: e.target.value}))} className="w-full border border-gray-300 dark:border-gray-600 rounded px-2 py-1.5 text-sm text-gray-800 dark:text-white bg-white dark:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-[#007D8C]" />
+                                <input type="text" value={firstSaveHeader.projectNumber} onChange={e => setFirstSaveHeader(h => ({...h, projectNumber: e.target.value}))} className="w-full border border-gray-200 dark:border-white/10 rounded-lg px-2 py-1.5 text-sm text-gray-800 dark:text-white bg-gray-50 dark:bg-transparent focus:outline-none focus:ring-2 focus:ring-[#007D8C]/40 focus:border-[#007D8C]" />
                             </div>
                             <div className="col-span-2">
                                 <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Project Name</label>
-                                <input type="text" value={firstSaveHeader.projectName} onChange={e => setFirstSaveHeader(h => ({...h, projectName: e.target.value}))} className="w-full border border-gray-300 dark:border-gray-600 rounded px-2 py-1.5 text-sm text-gray-800 dark:text-white bg-white dark:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-[#007D8C]" />
+                                <input type="text" value={firstSaveHeader.projectName} onChange={e => setFirstSaveHeader(h => ({...h, projectName: e.target.value}))} className="w-full border border-gray-200 dark:border-white/10 rounded-lg px-2 py-1.5 text-sm text-gray-800 dark:text-white bg-gray-50 dark:bg-transparent focus:outline-none focus:ring-2 focus:ring-[#007D8C]/40 focus:border-[#007D8C]" />
                             </div>
                             <div className="col-span-2">
                                 <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Location</label>
-                                <input type="text" value={firstSaveHeader.location} onChange={e => setFirstSaveHeader(h => ({...h, location: e.target.value}))} className="w-full border border-gray-300 dark:border-gray-600 rounded px-2 py-1.5 text-sm text-gray-800 dark:text-white bg-white dark:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-[#007D8C]" />
+                                <input type="text" value={firstSaveHeader.location} onChange={e => setFirstSaveHeader(h => ({...h, location: e.target.value}))} className="w-full border border-gray-200 dark:border-white/10 rounded-lg px-2 py-1.5 text-sm text-gray-800 dark:text-white bg-gray-50 dark:bg-transparent focus:outline-none focus:ring-2 focus:ring-[#007D8C]/40 focus:border-[#007D8C]" />
                             </div>
                             <div>
                                 <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Date</label>
-                                <input type="text" placeholder="e.g. October 1, 2025" value={firstSaveHeader.date} onChange={e => setFirstSaveHeader(h => ({...h, date: e.target.value}))} className="w-full border border-gray-300 dark:border-gray-600 rounded px-2 py-1.5 text-sm text-gray-800 dark:text-white bg-white dark:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-[#007D8C]" />
+                                <input type="text" placeholder="e.g. October 1, 2025" value={firstSaveHeader.date} onChange={e => setFirstSaveHeader(h => ({...h, date: e.target.value}))} className="w-full border border-gray-200 dark:border-white/10 rounded-lg px-2 py-1.5 text-sm text-gray-800 dark:text-white bg-gray-50 dark:bg-transparent focus:outline-none focus:ring-2 focus:ring-[#007D8C]/40 focus:border-[#007D8C]" />
                             </div>
                         </div>
                         <div className="flex justify-end gap-3">
@@ -2344,9 +2556,9 @@ Description: ${photo.description || 'N/A'}
 
             {showUnsavedModal && (
                 <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[200]">
-                    <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-2xl text-center relative max-w-md">
-                        <h3 className="text-xl font-bold mb-3 text-gray-800 dark:text-white">Unsaved Changes</h3>
-                        <p className="text-gray-600 dark:text-gray-300 mb-6">
+                    <div className="bg-white dark:bg-[#1c1c1e] p-6 rounded-xl shadow-2xl text-center relative max-w-md">
+                        <h3 className="text-base font-semibold mb-2 text-gray-800 dark:text-white">Unsaved Changes</h3>
+                        <p className="text-gray-600 dark:text-gray-400 mb-5">
                             You have unsaved changes. Are you sure you want to leave? Your changes will be lost.
                         </p>
                         <div className="flex justify-center gap-3">

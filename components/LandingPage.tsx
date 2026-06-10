@@ -6,6 +6,7 @@ import { AppType } from '../App';
 import { deleteImage, deleteProject, deleteThumbnail, retrieveProject, getAllProjectKeys } from './db';
 import SafeImage, { getAssetUrl } from './SafeImage';
 import WhatsNewModal from './WhatsNewModal';
+import CalendarPlanner from './CalendarPlanner';
 import { safeSet } from './safeStorage';
 
 // Photo contest credits — only contest-winning photos get credit overlays
@@ -111,7 +112,7 @@ const getReportTypeName = (type: AppType): string => {
 const AppSelectionCard: React.FC<{ title: string; description: string; icon: React.ReactNode; onClick: () => void; keepIconColor?: boolean; isDark?: boolean; }> = ({ title, description, icon, onClick, isDark }) => (
     <button
         onClick={onClick}
-        className="p-3 sm:p-4 md:p-6 flex flex-col items-center text-center group w-full h-full backdrop-blur-sm border border-[#007D8C] rounded-2xl xtec-card"
+        className="p-3 sm:p-4 md:p-6 flex flex-col items-center text-center group w-full h-full backdrop-blur-sm border border-gray-200/80 dark:border-[#007D8C]/25 rounded-2xl xtec-card"
         style={isDark
             ? { background: 'rgba(28,32,36,0.75)', boxShadow: '0 0 24px rgba(0,125,140,0.10)' }
             : { background: 'rgba(255,255,255,0.75)', boxShadow: '0 0 24px rgba(0,125,140,0.18)' }
@@ -127,11 +128,12 @@ const AppSelectionCard: React.FC<{ title: string; description: string; icon: Rea
             </div>
         </div>
         <h3 className="text-base font-bold text-gray-900 dark:text-white mb-1 group-hover:text-[#007D8C] transition-colors duration-200 min-h-[2.5rem] flex items-center justify-center">{title}</h3>
-        <p className="text-gray-600 dark:text-slate-300 text-xs leading-relaxed">{description}</p>
+        <p className="text-gray-600 dark:text-gray-400 text-xs leading-relaxed">{description}</p>
     </button>
 );
 
 const LandingPage: React.FC<LandingPageProps> = ({ onSelectApp, onOpenProject, showWhatsNew, onCloseWhatsNew }) => {
+    const [showCalendar, setShowCalendar] = useState(false);
     const [recentProjects, setRecentProjects] = useState<RecentProject[]>([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [openMenuTimestamp, setOpenMenuTimestamp] = useState<number | null>(null);
@@ -361,7 +363,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSelectApp, onOpenProject, s
                     className="rounded-3xl p-4 sm:p-5 md:p-6 flex flex-col backdrop-blur-xl dark:backdrop-blur-none"
                     style={isDark ? {
                         background: 'linear-gradient(180deg, rgba(24,28,32,0.92) 0%, rgba(18,22,26,0.95) 100%)',
-                        border: '1px solid rgba(255,255,255,0.07)',
+                        border: '1px solid rgba(0,125,140,0.18)',
                         boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.04), 0 8px 32px rgba(0,0,0,0.30)',
                     } : {
                         background: 'linear-gradient(180deg, rgba(255,255,255,0.75) 0%, rgba(249,250,251,0.82) 100%)',
@@ -385,7 +387,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSelectApp, onOpenProject, s
                         <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 dark:from-white dark:to-slate-200 bg-clip-text text-transparent md:text-4xl tracking-tight">
                             Create a New Report
                         </h1>
-                        <p className="mt-2 text-sm text-gray-600 dark:text-slate-300 max-w-lg mx-auto">
+                        <p className="mt-2 text-sm text-gray-600 dark:text-gray-400 max-w-lg mx-auto">
                             Select a report type to begin a new project.
                         </p>
                         <div style={{ width: 80, height: 2, background: 'linear-gradient(90deg, #007D8C, rgba(0,125,140,0.25))', margin: '10px auto 0', borderRadius: 1 }} />
@@ -517,7 +519,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSelectApp, onOpenProject, s
                                         <div className="absolute top-1/2 right-3 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
                                             <button
                                                 onClick={(e) => handleToggleMenu(e, project.timestamp)}
-                                                className="p-1.5 text-gray-500 dark:text-[#aaa] hover:text-[#007D8C] dark:hover:text-[#007D8C] rounded-lg hover:bg-blue-50 dark:hover:bg-[#363636] focus:outline-none transition-all duration-200"
+                                                className="p-1.5 text-gray-500 dark:text-[#aaa] hover:text-[#007D8C] dark:hover:text-[#007D8C] rounded-lg hover:bg-teal-50 dark:hover:bg-[#073d44] focus:outline-none transition-all duration-200"
                                                 aria-haspopup="true"
                                                 aria-expanded={openMenuTimestamp === project.timestamp}
                                             >
@@ -529,8 +531,8 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSelectApp, onOpenProject, s
                             </ul>
                         ) : (
                             <div className="text-center py-12 px-6">
-                                <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-gray-200 to-gray-100 dark:from-slate-700 dark:to-slate-600 flex items-center justify-center mx-auto mb-3">
-                                    <FolderOpenIcon className="h-6 w-6 text-gray-400 dark:text-slate-400" />
+                                <div className="w-12 h-12 rounded-xl bg-teal-50 dark:bg-[#073d44] flex items-center justify-center mx-auto mb-3">
+                                    <FolderOpenIcon className="h-6 w-6 text-[#007D8C]" />
                                 </div>
                                 <h3 className="text-sm font-semibold text-gray-500 dark:text-slate-300">
                                     {searchTerm ? 'No matching projects' : 'No Recent Projects'}
@@ -558,8 +560,19 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSelectApp, onOpenProject, s
                     >
                         <div role="menu" aria-orientation="vertical">
                             <button
+                                onClick={() => { setOpenMenuTimestamp(null); onOpenProject({ ...project, newDay: true } as any); }}
+                                className="w-full text-left block px-4 py-2.5 text-sm text-gray-700 dark:text-white hover:bg-[#007D8C]/8 dark:hover:bg-[#007D8C]/15 hover:text-[#007D8C] dark:hover:text-[#007D8C] transition-colors"
+                                role="menuitem"
+                            >
+                                <span className="flex items-center gap-2">
+                                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/></svg>
+                                    Open as New Day
+                                </span>
+                            </button>
+                            <div className="mx-3 border-t border-gray-200 dark:border-[#3d3d3d]" />
+                            <button
                                 onClick={() => handleRemoveFromRecent(project.timestamp)}
-                                className="w-full text-left block px-4 py-2.5 text-sm text-gray-700 dark:text-white hover:bg-blue-50 dark:hover:bg-[#363636] hover:text-gray-900 dark:hover:text-white transition-colors"
+                                className="w-full text-left block px-4 py-2.5 text-sm text-gray-700 dark:text-white hover:bg-gray-50 dark:hover:bg-[#363636] hover:text-gray-900 dark:hover:text-white transition-colors"
                                 role="menuitem"
                             >
                                 Remove from recent
@@ -589,6 +602,19 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSelectApp, onOpenProject, s
             {showWhatsNew && (
                 <WhatsNewModal onClose={onCloseWhatsNew} />
             )}
+
+            {/* Calendar planner button — bottom-left floating */}
+            <button
+                onClick={() => setShowCalendar(true)}
+                title="Field Planner"
+                className="fixed bottom-5 left-5 z-10 w-10 h-10 rounded-xl bg-white/80 dark:bg-[#1c1c1e]/80 backdrop-blur-sm border border-gray-200/80 dark:border-[#007D8C]/25 shadow-md hover:shadow-lg hover:border-[#007D8C]/60 dark:hover:border-[#007D8C]/50 text-gray-500 dark:text-gray-400 hover:text-[#007D8C] dark:hover:text-[#007D8C] transition-all duration-200 flex items-center justify-center"
+            >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.75} stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
+                </svg>
+            </button>
+
+            {showCalendar && <CalendarPlanner onClose={() => setShowCalendar(false)} />}
         </div>
     );
 };

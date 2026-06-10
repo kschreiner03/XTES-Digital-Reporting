@@ -192,8 +192,20 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, onBackDirect, initialData }
     const [autosaveEnabled, setAutosaveEnabled] = useState(initialData?.timestamp != null);
     const [autosaveIntervalMs, setAutosaveIntervalMs] = useState(() => parseInt(localStorage.getItem(AUTOSAVE_INTERVAL_KEY) || '30') * 1000);
     const [showSaveAsMenu, setShowSaveAsMenu] = useState(false);
+    const [showMoreMenu, setShowMoreMenu] = useState(false);
+    const moreMenuRef = useRef<HTMLDivElement>(null);
     const saveAsMenuRef = useRef<HTMLDivElement>(null);
     const quickSaveRef = useRef<() => Promise<void>>();
+    const savedFilePathRef = useRef<string | null>((() => {
+        const direct = (initialData as any)?.filePath ?? null;
+        if (direct) return direct;
+        const ts = initialData?.timestamp;
+        if (!ts) return null;
+        try { const m = JSON.parse(localStorage.getItem('xtec_file_paths') ?? '{}'); return m[String(ts)] ?? null; } catch { return null; }
+    })());
+    const photosDataRef = useRef(photosData);
+    photosDataRef.current = photosData;
+    const [fileSynced, setFileSynced] = useState<boolean | null>(savedFilePathRef.current ? true : null);
     const projectTimestampRef = useRef<number | null>(initialData?.timestamp ?? null);
     const isSavingRef = useRef(false);
     const isDirtyRef = useRef(isDirty);
@@ -213,6 +225,15 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, onBackDirect, initialData }
 
     const handleAnchorPositionsChange = useCallback((fieldId: string, anchors: CommentAnchorPosition[]) => {
         setCommentAnchors(prev => {
+            // Bail out if nothing actually changed to avoid unnecessary re-renders
+            const existing = [...prev.entries()].filter(([k]) => k.startsWith(`${fieldId}:`));
+            const unchanged = existing.length === anchors.length &&
+                anchors.every(a => {
+                    const p = prev.get(`${a.fieldId}:${a.commentId}`);
+                    return p && p.top === a.top && p.left === a.left && p.height === a.height;
+                });
+            if (unchanged) return prev;
+
             const newMap = new Map(prev);
             for (const key of newMap.keys()) {
                 if (key.startsWith(`${fieldId}:`)) newMap.delete(key);
@@ -232,12 +253,12 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, onBackDirect, initialData }
 
     const handlePhotoCommentsChange = useCallback((photoId: number, comments: TextComment[]) => {
         setPhotosData(prev => prev.map(p => p.id === photoId ? { ...p, inlineComments: comments } : p));
-        setIsDirty(true);
+        setIsDirty(true); if (savedFilePathRef.current) setFileSynced(false);
     }, []);
 
     const handlePhotoHighlightsChange = useCallback((photoId: number, highlights: TextHighlight[]) => {
         setPhotosData(prev => prev.map(p => p.id === photoId ? { ...p, highlights } : p));
-        setIsDirty(true);
+        setIsDirty(true); if (savedFilePathRef.current) setFileSynced(false);
     }, []);
 
     const handlePhotoAnchorPositionsChange = useCallback((id: number, anchors: CommentAnchorPosition[]) => {
@@ -256,7 +277,7 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, onBackDirect, initialData }
         setPhotosData(prev => prev.map(p =>
             p.id === photoId ? { ...p, inlineComments: updater(p.inlineComments || []) } : p
         ));
-        setIsDirty(true);
+        setIsDirty(true); if (savedFilePathRef.current) setFileSynced(false);
     };
 
     const fieldLabels: Record<string, string> = useMemo(() => {
@@ -380,7 +401,7 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, onBackDirect, initialData }
                         return photo;
                     })
                 );
-                setPhotosData(hydratedPhotos);
+                setPhotosData(hydratedPhotos.filter(p => p.imageUrl || p.imageId));
 
                 const formattedDate = formatDateForRecentProject(loadedHeader.date);
                 const dateSuffix = formattedDate ? ` - ${formattedDate}` : '';
@@ -418,7 +439,7 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, onBackDirect, initialData }
                             return photo;
                         })
                     );
-                    setPhotosData(hydratedPhotos);
+                    setPhotosData(hydratedPhotos.filter(p => p.imageUrl || p.imageId));
                 } else {
                     setPhotosData(initialData.photosData || []);
                 }
@@ -469,6 +490,14 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, onBackDirect, initialData }
         };
     }, [isDirty]);
 
+
+    useEffect(() => {
+        const p = savedFilePathRef.current;
+        const ts = projectTimestampRef.current ?? initialData?.timestamp;
+        if (p && ts) { try { const m=JSON.parse(localStorage.getItem('xtec_file_paths')?? '{}'); if(!m[String(ts)]){m[String(ts)]=p;localStorage.setItem('xtec_file_paths',JSON.stringify(m));} } catch {} }
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+
     const handleBack = () => {
         if (isDirty) {
             pendingCloseRef.current = false;
@@ -480,12 +509,12 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, onBackDirect, initialData }
 
     const handleHeaderChange = (field: keyof HeaderData, value: string) => {
         setHeaderData(prev => ({ ...prev, [field]: value }));
-        setIsDirty(true);
+        setIsDirty(true); if (savedFilePathRef.current) setFileSynced(false);
     };
 
     const handlePhotoDataChange = useCallback((id: number, field: keyof Omit<PhotoData, 'id' | 'imageUrl' | 'imageId'>, value: string) => {
         setPhotosData(prev => prev.map(photo => photo.id === id ? { ...photo, [field]: value } : photo));
-        setIsDirty(true);
+        setIsDirty(true); if (savedFilePathRef.current) setFileSynced(false);
     }, []);
     
     const autoCropImage = (imageUrl: string): Promise<string> => {
@@ -554,7 +583,7 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, onBackDirect, initialData }
                     // Fall back to uncropped image
                     setPhotosData(prev => prev.map(photo => photo.id === id ? { ...photo, imageUrl: dataUrl } : photo));
                 }
-                setIsDirty(true);
+                setIsDirty(true); if (savedFilePathRef.current) setFileSynced(false);
             };
             img.src = dataUrl;
         };
@@ -562,7 +591,12 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, onBackDirect, initialData }
     }, []);
 
     const renumberPhotos = (photos: PhotoData[]) => {
-        return photos.map((photo, index) => ({ ...photo, photoNumber: String(index + 1) }));
+        let siteCount = 0;
+        let mapCount = 0;
+        return photos.map(photo => ({
+            ...photo,
+            photoNumber: photo.isMap ? `Map ${++mapCount}` : String(++siteCount),
+        }));
     };
 
     const handleBatchImport = async (files: FileList | File[]) => {
@@ -596,11 +630,16 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, onBackDirect, initialData }
                     setBatchProgress({ current: i + 1, total: valid.length });
                     resolve();
                 };
+                reader.onerror = () => {
+                    setPhotosData(prev => prev.filter(p => p.id !== targetId));
+                    setBatchProgress({ current: i + 1, total: valid.length });
+                    resolve();
+                };
                 reader.readAsDataURL(valid[i]);
             });
         }
         setBatchProgress(null);
-        setIsDirty(true);
+        setIsDirty(true); if (savedFilePathRef.current) setFileSynced(false);
         toast(
             skipped > 0
                 ? `${valid.length} photo${valid.length !== 1 ? 's' : ''} added · ${skipped} skipped (unsupported format)`
@@ -654,7 +693,7 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, onBackDirect, initialData }
             }
             return renumberPhotos(newPhotos);
         });
-        setIsDirty(true);
+        setIsDirty(true); if (savedFilePathRef.current) setFileSynced(false);
     };
 
     const removePhoto = useCallback((id: number) => {
@@ -666,7 +705,7 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, onBackDirect, initialData }
             }
             return renumberPhotos(prev.filter(photo => photo.id !== id));
         });
-        setIsDirty(true);
+        setIsDirty(true); if (savedFilePathRef.current) setFileSynced(false);
     }, []);
 
     const handlePhotoDragEnd = (event: DragEndEvent) => {
@@ -675,7 +714,7 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, onBackDirect, initialData }
             const oldIndex = photosData.findIndex(p => p.id === active.id);
             const newIndex = photosData.findIndex(p => p.id === over!.id);
             setPhotosData(renumberPhotos(arrayMove(photosData, oldIndex, newIndex)));
-            setIsDirty(true);
+            setIsDirty(true); if (savedFilePathRef.current) setFileSynced(false);
         }
     };
 
@@ -686,7 +725,7 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, onBackDirect, initialData }
                 newErrors.add(key);
             }
         });
-        photosData.forEach(photo => {
+        photosData.filter(p => p.imageUrl || p.imageId).forEach(photo => {
             const prefix = `photo-${photo.id}-`;
             if (!photo.date) newErrors.add(`${prefix}date`);
             if (!photo.location) newErrors.add(`${prefix}location`);
@@ -703,67 +742,106 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, onBackDirect, initialData }
         return true;
     };
 
-    const handleQuickSave = async () => {
+    const performSave = async (hd = headerData) => {
         if (isSavingRef.current) return;
-        if (projectTimestampRef.current === null) {
-            setFirstSaveHeader({ proponent: headerData.proponent, projectName: headerData.projectName, location: headerData.location, date: headerData.date, projectNumber: headerData.projectNumber });
-            setShowFirstSaveModal(true);
-            return;
-        }
         isSavingRef.current = true;
         try {
-            const stateForRecentProjects = await prepareStateForRecentProjectStorage(headerData, photosData);
-            const formattedDate = formatDateForRecentProject(headerData.date);
-            const dateSuffix = formattedDate ? ` - ${formattedDate}` : '';
-            const projectName = `${headerData.projectName || 'Untitled Photo Log'}${dateSuffix}`;
-            const savedTs = await addRecentProject(stateForRecentProjects, {
-                type: 'photoLog',
-                name: projectName,
-                projectNumber: headerData.projectNumber,
-                proponent: headerData.proponent,
-                date: headerData.date,
-            }, projectTimestampRef.current ?? undefined);
-            if (savedTs) {
-                projectTimestampRef.current = savedTs;
-                setIsDirty(false);
-                toast('Saved ✓');
+            const photosForExport = photosDataRef.current.map(({ imageId, ...p }: any) => p);
+            const filePayload = JSON.stringify({ headerData: hd, photosData: photosForExport });
+            let filePath = savedFilePathRef.current;
+
+            if (!filePath) {
+                const sanitize = (s: string) => s.replace(/[^a-z0-9_]/gi, '-').toLowerCase();
+                const fname = `${sanitize(hd.projectName || 'project')}_${formatDateForFilename(hd.date)}.plog`;
+                // @ts-ignore
+                const result = await window.electronAPI?.saveProject?.(filePayload, fname);
+                if (!result?.path) return;
+                filePath = result.path;
+                savedFilePathRef.current = filePath;
             } else {
-                toast('Save failed — please try again.', 'error');
+                // @ts-ignore
+                if ((window as any).electronAPI?.writeToFile) {
+                    const writeResult = await (window as any).electronAPI.writeToFile(filePayload, filePath);
+                    if (writeResult && !writeResult.success) {
+                        throw new Error(writeResult.error || 'Could not write to file');
+                    }
+                } else {
+                    // Fallback if handler not yet loaded (restart app to get write-to-file)
+                    // @ts-ignore
+                    await window.electronAPI?.saveProject?.(filePayload, filePath);
+                }
             }
+
+            const persistPath = (ts: number | string | null | undefined, path: string) => {
+                if (!ts || !path) return;
+                try { const m=JSON.parse(localStorage.getItem('xtec_file_paths')?? '{}'); m[String(ts)]=path; localStorage.setItem('xtec_file_paths',JSON.stringify(m)); } catch {}
+            };
+            persistPath(projectTimestampRef.current ?? (initialData as any)?.timestamp, filePath!);
+
+            try {
+            const stateForRecent = await prepareStateForRecentProjectStorage(hd, photosData);
+            const formattedDate = formatDateForRecentProject(hd.date);
+            const dateSuffix = formattedDate ? ` - ${formattedDate}` : '';
+            const projectName = `${hd.projectName || 'Untitled Photo Log'}${dateSuffix}`;
+            const savedTs = await addRecentProject(stateForRecent, {
+                type: 'photoLog', name: projectName, projectNumber: hd.projectNumber, proponent: hd.proponent, date: hd.date,
+            }, projectTimestampRef.current ?? undefined);
+            if (savedTs) { projectTimestampRef.current = savedTs; persistPath(savedTs, filePath!); }
+
+            } catch (recentsErr) {
+                console.warn('Recent projects update failed (file was saved):', recentsErr);
+            }
+
+            setIsDirty(false);
+            setFileSynced(true);
+            setAutosaveEnabled(true);
+            toast('Saved ✓');
+        } catch (e) {
+            console.error('Save failed:', e);
+            toast(`Save failed — ${e instanceof Error ? e.message : 'please try again.'}`, 'error');
         } finally {
             isSavingRef.current = false;
         }
     };
 
+    const handleQuickSave = async () => {
+        if (isSavingRef.current) return;
+        if (!headerData.projectName.trim() && !headerData.projectNumber?.trim() && !savedFilePathRef.current) {
+            setFirstSaveHeader({ proponent: headerData.proponent, projectName: headerData.projectName, location: headerData.location, date: headerData.date, projectNumber: headerData.projectNumber });
+            setShowFirstSaveModal(true);
+            return;
+        }
+        await performSave();
+    };
+
     const handleConfirmFirstSave = async () => {
         setShowFirstSaveModal(false);
         setHeaderData(h => ({ ...h, ...firstSaveHeader }));
+        await performSave({ ...headerData, ...firstSaveHeader } as any);
+    };
+
+    const handleNewDay = () => {
+        const todayStr = new Date().toLocaleDateString('en-CA', { year:'numeric', month:'long', day:'numeric' });
+        setHeaderData(h => ({ ...h, date: todayStr }));
+        savedFilePathRef.current = null;
+        projectTimestampRef.current = null;
+        setIsDirty(true);
+        setFileSynced(null);
+        setAutosaveEnabled(false);
+        toast(`New draft for ${todayStr} — click Save to save it`);
+    };
+    const handleSaveCopy = async () => {
         if (isSavingRef.current) return;
         isSavingRef.current = true;
         try {
-            const mergedHeader = { ...headerData, ...firstSaveHeader };
-            const stateForRecentProjects = await prepareStateForRecentProjectStorage(mergedHeader, photosData);
-            const formattedDate = formatDateForRecentProject(firstSaveHeader.date);
-            const dateSuffix = formattedDate ? ` - ${formattedDate}` : '';
-            const projectName = `${firstSaveHeader.projectName || 'Untitled Photo Log'}${dateSuffix}`;
-            const savedTs = await addRecentProject(stateForRecentProjects, {
-                type: 'photoLog',
-                name: projectName,
-                projectNumber: firstSaveHeader.projectNumber,
-                proponent: firstSaveHeader.proponent,
-                date: firstSaveHeader.date,
-            });
-            if (savedTs) {
-                projectTimestampRef.current = savedTs;
-                setIsDirty(false);
-                setAutosaveEnabled(true);
-                toast('Saved ✓');
-            } else {
-                toast('Save failed — please try again.', 'error');
-            }
-        } finally {
-            isSavingRef.current = false;
-        }
+            const photosForExport = photosData.map(({ imageId, ...p }: any) => p);
+            const stateForCopy = { ...headerData, photosData: photosForExport };
+            const sanitize = (s: string) => s.replace(/[^a-z0-9_]/gi, '-').toLowerCase();
+            const fName = `${sanitize(headerData.projectName || 'project')}_copy.plog`;
+            // @ts-ignore
+            await window.electronAPI?.saveProject?.(JSON.stringify(stateForCopy), fName);
+            toast('Copy saved ✓');
+        } catch (e) { console.error('Save copy failed:', e); } finally { isSavingRef.current = false; }
     };
     quickSaveRef.current = handleQuickSave;
 
@@ -774,8 +852,19 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, onBackDirect, initialData }
         return () => clearTimeout(t);
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+    useEffect(() => {
+        if (!(initialData as any)?.newDay) return;
+        const todayStr = new Date().toLocaleDateString('en-CA', { year:'numeric', month:'long', day:'numeric' });
+        setHeaderData(h => ({ ...h, date: todayStr }));
+        savedFilePathRef.current = null;
+        projectTimestampRef.current = null;
+        setFileSynced(null);
+        setAutosaveEnabled(false);
+        setIsDirty(true);
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
     const handleSaveProject = async () => {
-        await handleQuickSave();
+        if (isSavingRef.current) return;
         const photosForExport = photosData.map(({ imageId, ...photo }) => photo);
         const stateForFileExport = { headerData, photosData: photosForExport };
         const sanitize = (name: string) => name.replace(/[^a-z0-9_]/gi, '-').toLowerCase();
@@ -783,7 +872,11 @@ const PhotoLog: React.FC<PhotoLogProps> = ({ onBack, onBackDirect, initialData }
         // @ts-ignore
         if (window.electronAPI) {
             // @ts-ignore
-            await window.electronAPI.saveProject(JSON.stringify(stateForFileExport), filename);
+            const result = await window.electronAPI.saveProject(JSON.stringify(stateForFileExport), savedFilePathRef.current || filename);
+            if ((result as any)?.path) {
+                savedFilePathRef.current = (result as any).path;
+                if (projectTimestampRef.current) try { const m=JSON.parse(localStorage.getItem('xtec_file_paths')?? '{}'); m[String(projectTimestampRef.current)]=(result as any).path; localStorage.setItem('xtec_file_paths',JSON.stringify(m)); } catch {}
+            }
         } else {
             const blob = new Blob([JSON.stringify(stateForFileExport)], { type: 'application/json;charset=utf-8;' });
             const link = document.createElement('a');
@@ -1406,7 +1499,7 @@ Description: ${photo.description || 'N/A'}
 
     useEffect(() => {
         return () => {
-            photosData.forEach(p => { if (p.imageUrl) revokeImageUrl(p.imageUrl); });
+            photosDataRef.current.forEach(p => { if (p.imageUrl) revokeImageUrl(p.imageUrl); });
         };
     }, []);
 
@@ -1456,9 +1549,10 @@ Description: ${photo.description || 'N/A'}
         return photoErrors;
     };
 
+
     return (
         <div
-            className="bg-gray-100 dark:bg-gray-900 min-h-screen transition-colors duration-200 relative"
+            className="bg-gray-50 dark:bg-[#161618] min-h-screen transition-colors duration-200 relative"
             onDragOver={handleFileDragOver}
             onDragLeave={handleFileDragLeave}
             onDrop={handleFileDrop}
@@ -1491,9 +1585,9 @@ Description: ${photo.description || 'N/A'}
             
             <div className="flex justify-center gap-2 lg:gap-4 p-2 sm:p-4 lg:p-6 xl:p-8">
                 <div className="flex-1 min-w-0 max-w-7xl">
-                <div className="sticky top-0 z-40 bg-gray-100 dark:bg-gray-900 py-2 mb-4 border-b border-gray-200 dark:border-gray-700">
+                <div className="sticky top-0 z-40 bg-gray-50/95 dark:bg-[#161618]/95 backdrop-blur-sm py-2.5 mb-4 border-b border-gray-200/60 dark:border-white/5">
                 <div className="flex flex-wrap justify-between items-center gap-2">
-                    <button onClick={handleBack} className="border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 font-semibold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
+                    <button onClick={handleBack} className="border border-gray-300 dark:border-gray-600 bg-white dark:bg-[#1c1c1e] hover:bg-gray-50 dark:hover:bg-[#2a2a2e] text-gray-700 dark:text-gray-200 font-semibold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
                         <ArrowLeftIcon /> <span>Home</span>
                     </button>
                     <div className="flex flex-wrap items-center justify-end gap-2">
@@ -1514,38 +1608,44 @@ Description: ${photo.description || 'N/A'}
                                 <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow transition duration-200 ${autosaveEnabled ? 'translate-x-4' : 'translate-x-0'}`} />
                             </button>
                         </div>
-                        <button onClick={handleQuickSave} title="Save (Ctrl+S)" className="bg-[#007D8C] hover:bg-[#006b7a] text-white font-semibold py-2 px-3 rounded-lg inline-flex items-center transition duration-200">
-                            <SaveIcon />
+                        <button onClick={handleQuickSave} title="Save (Ctrl+S)"
+                            className={`inline-flex items-center gap-2 font-semibold py-2 px-4 rounded-lg transition-all duration-200 ${fileSynced===true?'bg-green-600 hover:bg-green-700 text-white':'bg-[#007D8C] hover:bg-[#006b7a] text-white'}`}>
+                            {fileSynced===true?<><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg><span>Saved</span></>:<><SaveIcon /><span>Save</span></>}
                         </button>
-                        <button onClick={handleOpenProject} className="border border-[#007D8C] text-[#007D8C] hover:bg-[#007D8C]/10 dark:hover:bg-[#007D8C]/10 font-semibold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
+                        {/* Sync status icon — non-interactive */}
+                        {fileSynced !== null && (
+                            <div title={fileSynced ? 'File saved' : 'Changes not yet saved to file'}
+                                className={`flex items-center ${fileSynced ? 'text-green-500 dark:text-green-400' : 'text-amber-400 dark:text-amber-300 animate-pulse'}`}>
+                                {fileSynced
+                                    ? <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                    : <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"/></svg>
+                                }
+                            </div>
+                        )}
+                        <button onClick={handleSavePdf} title="Export PDF" className="bg-[#007D8C] hover:bg-[#006b7a] text-white font-semibold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
+                            <DownloadIcon /> <span>PDF</span>
+                        </button>
+                        <button onClick={handleOpenProject} className="border border-gray-300 dark:border-gray-600 bg-white dark:bg-[#1c1c1e] hover:bg-gray-50 dark:hover:bg-[#2a2a2e] text-gray-700 dark:text-gray-200 font-semibold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
                             <FolderOpenIcon /> <span>Open</span>
                         </button>
-                        <input type="file" ref={fileInputRef} onChange={handleFileSelected} style={{ display: 'none' }} accept=".plog" />
-                        <div className="relative" ref={saveAsMenuRef}>
-                            <button
-                                onClick={() => setShowSaveAsMenu(v => !v)}
-                                className="border border-[#007D8C] text-[#007D8C] hover:bg-[#007D8C]/10 dark:hover:bg-[#007D8C]/10 font-semibold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200"
-                            >
-                                <span>Save As...</span>
-                                <ChevronDownIcon className="h-4 w-4" />
+
+                        <div className="relative" ref={moreMenuRef}>
+                            <button onClick={() => setShowMoreMenu(v => !v)} title="More options"
+                                className="border border-gray-300 dark:border-gray-600 bg-white dark:bg-[#1c1c1e] hover:bg-gray-50 dark:hover:bg-[#2a2a2e] text-gray-500 dark:text-gray-400 py-2 px-2 rounded-lg inline-flex items-center transition duration-200">
+                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M6.75 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0zM12.75 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0zM18.75 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0z"/></svg>
                             </button>
-                            {showSaveAsMenu && (
-                                <div className="absolute right-0 top-full mt-1 z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 min-w-[160px]">
-                                    <button
-                                        onClick={() => { setShowSaveAsMenu(false); handleSaveProject(); }}
-                                        className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
-                                    >
-                                        <SaveIcon className="h-4 w-4 flex-shrink-0" /> Project File
-                                    </button>
-                                    <button
-                                        onClick={() => { setShowSaveAsMenu(false); handleSavePdf(); }}
-                                        className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
-                                    >
-                                        <DownloadIcon className="h-4 w-4 flex-shrink-0" /> PDF
+                            {showMoreMenu && (
+                                <div className="absolute right-0 top-full mt-1 z-50 bg-white dark:bg-[#1c1c1e] border border-gray-200 dark:border-[#007D8C]/20 rounded-xl shadow-xl py-1 min-w-[160px]">
+                                    <button onClick={() => { setShowMoreMenu(false); handleSaveProject(); }}
+                                        className="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-white/5 flex items-center gap-2.5">
+                                        <SaveIcon className="w-4 h-4 shrink-0 text-gray-400" />
+                                        Save As…
                                     </button>
                                 </div>
                             )}
                         </div>
+                        <input type="file" ref={fileInputRef} onChange={handleFileSelected} style={{ display: 'none' }} accept=".plog" />
+
                         {/* @ts-ignore */}
                         {!window.electronAPI && (
                             <button onClick={handleDownloadPhotos} className="border border-[#007D8C] text-[#007D8C] hover:bg-[#007D8C]/10 dark:hover:bg-[#007D8C]/10 font-semibold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
@@ -1557,12 +1657,12 @@ Description: ${photo.description || 'N/A'}
                 </div>
 
                 <div className="main-content">
-                    <Header data={headerData} onDataChange={handleHeaderChange} errors={getHeaderErrors()} />
+                    <div id="report-fields-section"><Header data={headerData} onDataChange={handleHeaderChange} errors={getHeaderErrors()} /></div>
                     <div className="mt-8">
                       <DndContext collisionDetection={closestCenter} onDragEnd={handlePhotoDragEnd}>
                         <SortableContext items={photosData.map(p => p.id)} strategy={verticalListSortingStrategy}>
                           {photosData.map((photo, index) => (
-                             <div key={photo.id}>
+                             <div key={photo.id} id={`photo-entry-${photo.id}`}>
                                 <PhotoEntry
                                     data={photo}
                                     onDataChange={handlePhotoDataChange}
@@ -1584,12 +1684,12 @@ Description: ${photo.description || 'N/A'}
                                 {index < photosData.length - 1 && (
                                      <div className="relative my-10 flex items-center justify-center">
                                         <div className="absolute inset-0 flex items-center" aria-hidden="true">
-                                            <div className="w-full border-t-4 border-[#007D8C]"></div>
+                                            <div className="w-full border-t border-gray-200 dark:border-white/10"></div>
                                         </div>
                                         <div className="relative">
                                             <button
                                                 onClick={() => addPhoto(index)}
-                                                className="bg-white hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 text-[#007D8C] font-bold py-2 px-4 rounded-full border-2 border-[#007D8C] inline-flex items-center gap-2 transition duration-200 shadow-sm"
+                                                className="bg-white hover:bg-gray-50 dark:bg-[#1c1c1e] dark:hover:bg-[#2a2a2e] text-[#007D8C] font-bold py-2 px-4 rounded-full border-2 border-[#007D8C] inline-flex items-center gap-2 transition duration-200 shadow-sm"
                                             >
                                                 <PlusIcon />
                                                 <span>Add Photo Here</span>
@@ -1615,7 +1715,7 @@ Description: ${photo.description || 'N/A'}
                             <button
                                 onClick={() => batchInputRef.current?.click()}
                                 disabled={!!batchProgress}
-                                className="bg-white hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 text-[#007D8C] font-bold py-3 px-6 rounded-lg shadow-md border-2 border-[#007D8C] inline-flex items-center gap-2 transition duration-200 text-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="bg-white hover:bg-gray-50 dark:bg-[#1c1c1e] dark:hover:bg-[#2a2a2e] text-[#007D8C] font-bold py-3 px-6 rounded-lg shadow-md border-2 border-[#007D8C] inline-flex items-center gap-2 transition duration-200 text-lg disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 <FolderArrowDownIcon />
                                 <span>Import Photos</span>
@@ -1637,7 +1737,7 @@ Description: ${photo.description || 'N/A'}
                         )}
                     </div>
                 </div>
-                {photosData.length > 0 && <div className="border-t-4 border-[#007D8C] my-8" />}
+                {photosData.length > 0 && <div className="border-t border-gray-200 dark:border-white/10 my-8" />}
                 <footer className="text-center text-gray-500 dark:text-gray-400 text-sm py-4">
                     X-TES Digital Reporting v1.1.5
                 </footer>
@@ -1666,7 +1766,7 @@ Description: ${photo.description || 'N/A'}
             </div>
             {showUnsupportedFileModal && (
                 <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 transition-opacity duration-300">
-                    <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-2xl text-center relative max-w-md transform scale-95 hover:scale-100 transition-transform duration-300">
+                    <div className="bg-white dark:bg-[#1c1c1e] p-6 rounded-xl shadow-2xl text-center relative max-w-md">
                         <button
                             onClick={() => setShowUnsupportedFileModal(false)}
                             className="absolute top-2 right-2 p-1 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
@@ -1689,34 +1789,80 @@ Description: ${photo.description || 'N/A'}
                     </div>
                 </div>
             )}
-            {showValidationErrorModal && (
-                <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 transition-opacity duration-300">
-                    <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-2xl text-center relative max-w-md transform scale-95 hover:scale-100 transition-transform duration-300">
-                        <button
-                            onClick={() => setShowValidationErrorModal(false)}
-                            className="absolute top-2 right-2 p-1 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
-                            aria-label="Close"
-                        >
-                            <CloseIcon className="h-6 w-6" />
-                        </button>
-                        <SafeImage
-                            fileName="loading-error.gif"
-                            alt="Missing information animation"
-                            className="mx-auto mb-4 w-40 h-40"
-                        />
-                        <h3 className="text-2xl font-bold mb-2 text-gray-800 dark:text-white">Missing Information</h3>
-                        <p className="text-gray-600 dark:text-gray-300">
-                            Please fill in all required fields.
-                        </p>
-                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-3">
-                            Missing fields are highlighted in red.
-                        </p>
+            {showValidationErrorModal && (() => {
+                const reportLabels: Record<string, string> = {
+                    proponent: 'Proponent', projectName: 'Project Name', location: 'Location',
+                    date: 'Date', projectNumber: 'Project Number',
+                };
+                const photoFieldLabels: Record<string, string> = {
+                    date: 'Date', location: 'Location', description: 'Description',
+                    imageUrl: 'Image', direction: 'Direction',
+                };
+                const missingReport = Array.from(errors).filter(k => !k.startsWith('photo-')).map(k => reportLabels[k] || k);
+                const photoErrors: Record<string, string[]> = {};
+                Array.from(errors).filter(k => k.startsWith('photo-')).forEach(k => {
+                    const match = k.match(/^photo-(\d+)-(.+)$/);
+                    if (match) {
+                        const photo = photosData.find(p => p.id === Number(match[1]));
+                        const label = photo ? `Photo ${photo.photoNumber}` : 'Photo';
+                        if (!photoErrors[label]) photoErrors[label] = [];
+                        photoErrors[label].push(photoFieldLabels[match[2]] || match[2]);
+                    }
+                });
+                const badgeClass = "inline-flex items-center gap-1.5 px-3 py-1 bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-full text-xs font-medium border border-red-200 dark:border-red-800";
+                return (
+                    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
+                        <div role="alert" className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl relative max-w-md w-full mx-4 overflow-hidden">
+                            <div className="flex items-center gap-4 p-5 border-b border-gray-100 dark:border-white/5">
+                                <SafeImage fileName="loading-error.gif" alt="Missing info" className="w-14 h-14 flex-shrink-0 rounded-lg" />
+                                <div className="flex-1 min-w-0">
+                                    <h3 className="text-lg font-bold text-gray-800 dark:text-white">Missing Information</h3>
+                                    <p className="text-sm text-gray-500 dark:text-gray-400">Fields highlighted in red need to be filled in.</p>
+                                </div>
+                                <button onClick={() => setShowValidationErrorModal(false)} className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 flex-shrink-0">
+                                    <CloseIcon className="h-5 w-5" />
+                                </button>
+                            </div>
+                            <div className="p-5 space-y-4 max-h-72 overflow-y-auto">
+                                {missingReport.length > 0 && (
+                                    <div>
+                                        <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-2">Report</p>
+                                        <div className="flex flex-wrap gap-2">
+                                            {missingReport.map(label => (
+                                                <span key={label} className={badgeClass}>
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0" />
+                                                    {label}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                                {Object.entries(photoErrors).map(([photoLabel, fields]) => (
+                                    <div key={photoLabel}>
+                                        <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-2">{photoLabel}</p>
+                                        <div className="flex flex-wrap gap-2">
+                                            {fields.map(f => (
+                                                <span key={f} className={badgeClass}>
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0" />
+                                                    {f}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                            <div className="px-5 pb-5 pt-1">
+                                <button onClick={() => setShowValidationErrorModal(false)} className="w-full bg-[#007D8C] hover:bg-[#006270] text-white font-semibold py-2.5 px-4 rounded-lg transition-colors text-sm">
+                                    OK
+                                </button>
+                            </div>
+                        </div>
                     </div>
-                </div>
-            )}
+                );
+            })()}
              {showNoInternetModal && (
                 <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
-                    <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-2xl text-center relative max-w-md">
+                    <div className="bg-white dark:bg-[#1c1c1e] p-6 rounded-xl shadow-2xl text-center relative max-w-md">
                         <button
                             onClick={() => setShowNoInternetModal(false)}
                             className="absolute top-2 right-2 p-1 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
@@ -1734,33 +1880,33 @@ Description: ${photo.description || 'N/A'}
 
             {showFirstSaveModal && (
                 <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[200]">
-                    <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-2xl relative max-w-lg w-full">
+                    <div className="bg-white dark:bg-[#1c1c1e] p-6 rounded-xl shadow-2xl relative max-w-lg w-full border border-gray-200 dark:border-[#007D8C]/20">
                         <h3 className="text-lg font-bold mb-1 text-gray-800 dark:text-white">Save Project</h3>
                         <p className="text-gray-500 dark:text-gray-400 text-xs mb-4">Confirm project details before saving. Autosave will activate after this.</p>
                         <div className="grid grid-cols-2 gap-3 mb-5">
                             <div>
                                 <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Proponent</label>
-                                <input type="text" value={firstSaveHeader.proponent} onChange={e => setFirstSaveHeader(h => ({...h, proponent: e.target.value}))} className="w-full border border-gray-300 dark:border-gray-600 rounded px-2 py-1.5 text-sm text-gray-800 dark:text-white bg-white dark:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-[#007D8C]" />
+                                <input type="text" value={firstSaveHeader.proponent} onChange={e => setFirstSaveHeader(h => ({...h, proponent: e.target.value}))} className="w-full border border-gray-200 dark:border-white/10 rounded-lg px-2 py-1.5 text-sm text-gray-800 dark:text-white bg-gray-50 dark:bg-transparent focus:outline-none focus:ring-2 focus:ring-[#007D8C]/40 focus:border-[#007D8C]" />
                             </div>
                             <div>
                                 <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Project #</label>
-                                <input type="text" value={firstSaveHeader.projectNumber} onChange={e => setFirstSaveHeader(h => ({...h, projectNumber: e.target.value}))} className="w-full border border-gray-300 dark:border-gray-600 rounded px-2 py-1.5 text-sm text-gray-800 dark:text-white bg-white dark:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-[#007D8C]" />
+                                <input type="text" value={firstSaveHeader.projectNumber} onChange={e => setFirstSaveHeader(h => ({...h, projectNumber: e.target.value}))} className="w-full border border-gray-200 dark:border-white/10 rounded-lg px-2 py-1.5 text-sm text-gray-800 dark:text-white bg-gray-50 dark:bg-transparent focus:outline-none focus:ring-2 focus:ring-[#007D8C]/40 focus:border-[#007D8C]" />
                             </div>
                             <div className="col-span-2">
                                 <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Project Name</label>
-                                <input type="text" value={firstSaveHeader.projectName} onChange={e => setFirstSaveHeader(h => ({...h, projectName: e.target.value}))} className="w-full border border-gray-300 dark:border-gray-600 rounded px-2 py-1.5 text-sm text-gray-800 dark:text-white bg-white dark:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-[#007D8C]" />
+                                <input type="text" value={firstSaveHeader.projectName} onChange={e => setFirstSaveHeader(h => ({...h, projectName: e.target.value}))} className="w-full border border-gray-200 dark:border-white/10 rounded-lg px-2 py-1.5 text-sm text-gray-800 dark:text-white bg-gray-50 dark:bg-transparent focus:outline-none focus:ring-2 focus:ring-[#007D8C]/40 focus:border-[#007D8C]" />
                             </div>
                             <div className="col-span-2">
                                 <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Location</label>
-                                <input type="text" value={firstSaveHeader.location} onChange={e => setFirstSaveHeader(h => ({...h, location: e.target.value}))} className="w-full border border-gray-300 dark:border-gray-600 rounded px-2 py-1.5 text-sm text-gray-800 dark:text-white bg-white dark:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-[#007D8C]" />
+                                <input type="text" value={firstSaveHeader.location} onChange={e => setFirstSaveHeader(h => ({...h, location: e.target.value}))} className="w-full border border-gray-200 dark:border-white/10 rounded-lg px-2 py-1.5 text-sm text-gray-800 dark:text-white bg-gray-50 dark:bg-transparent focus:outline-none focus:ring-2 focus:ring-[#007D8C]/40 focus:border-[#007D8C]" />
                             </div>
                             <div>
                                 <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Date</label>
-                                <input type="text" placeholder="e.g. October 1, 2025" value={firstSaveHeader.date} onChange={e => setFirstSaveHeader(h => ({...h, date: e.target.value}))} className="w-full border border-gray-300 dark:border-gray-600 rounded px-2 py-1.5 text-sm text-gray-800 dark:text-white bg-white dark:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-[#007D8C]" />
+                                <input type="text" placeholder="e.g. October 1, 2025" value={firstSaveHeader.date} onChange={e => setFirstSaveHeader(h => ({...h, date: e.target.value}))} className="w-full border border-gray-200 dark:border-white/10 rounded-lg px-2 py-1.5 text-sm text-gray-800 dark:text-white bg-gray-50 dark:bg-transparent focus:outline-none focus:ring-2 focus:ring-[#007D8C]/40 focus:border-[#007D8C]" />
                             </div>
                         </div>
                         <div className="flex justify-end gap-3">
-                            <button onClick={() => setShowFirstSaveModal(false)} className="px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-white text-sm font-semibold rounded-lg transition">Cancel</button>
+                            <button onClick={() => setShowFirstSaveModal(false)} className="px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-white/5 dark:hover:bg-white/10 text-gray-800 dark:text-white text-sm font-semibold rounded-lg transition">Cancel</button>
                             <button onClick={handleConfirmFirstSave} disabled={!firstSaveHeader.projectName.trim()} className="px-4 py-2 bg-[#007D8C] hover:bg-[#006b7a] disabled:opacity-50 text-white text-sm font-semibold rounded-lg transition">Save</button>
                         </div>
                     </div>
@@ -1769,7 +1915,7 @@ Description: ${photo.description || 'N/A'}
 
             {showUnsavedModal && (
                 <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[200]">
-                    <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-2xl text-center relative max-w-md">
+                    <div className="bg-white dark:bg-[#1c1c1e] p-6 rounded-xl shadow-2xl text-center relative max-w-md">
                         <h3 className="text-xl font-bold mb-3 text-gray-800 dark:text-white">Unsaved Changes</h3>
                         <p className="text-gray-600 dark:text-gray-300 mb-6">
                             You have unsaved changes. Are you sure you want to leave? Your changes will be lost.
