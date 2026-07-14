@@ -12,6 +12,7 @@ import { safeSet } from './safeStorage';
 // Photo contest credits — only contest-winning photos get credit overlays
 const PHOTO_CREDITS: Record<string, { photographer: string; caption: string }> = {
     'wallpaper/trinity-berry-scenery-2024.jpg': { photographer: 'Trinity Berry', caption: '2024 X-TEC Photo Contest' },
+    'wallpaper/tara-diebolt-sunset-june2026.jpg': { photographer: 'Tara Diebolt', caption: 'June 2026 Photo Contest — Summer Sunset Storm' },
 };
 
 const PhotoCredit: React.FC<{ fileName: string | null }> = ({ fileName }) => {

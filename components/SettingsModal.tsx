@@ -46,6 +46,7 @@ const PRESET_WALLPAPERS: PresetWallpaper[] = [
     { fileName: 'wallpaper/IMG_0283.JPG', label: 'Sinkhole' },
     { fileName: 'wallpaper/Owl.jpg', label: 'Great Grey Owl' },
     { fileName: 'wallpaper/trinity-berry-scenery-2024.jpg', label: 'Scenery' },
+    { fileName: 'wallpaper/tara-diebolt-sunset-june2026.jpg', label: 'Summer Sunset Storm ★' },
 ];
 
 const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
@@ -302,7 +303,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
         <p className={`text-[11px] font-semibold uppercase tracking-widest mb-4 ${danger ? 'text-red-500 dark:text-red-400' : 'text-[#007D8C]'}`}>{children}</p>
     );
 
-    const selectClass = "text-sm px-3 py-1.5 rounded-lg border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 text-gray-800 dark:text-white focus:ring-2 focus:ring-[#007D8C]/40 focus:border-[#007D8C] outline-none transition cursor-pointer";
+    const selectClass = "w-full text-sm pl-3 pr-8 py-1.5 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#252525] text-gray-800 dark:text-white focus:ring-2 focus:ring-[#007D8C]/40 focus:border-[#007D8C] outline-none transition cursor-pointer appearance-none";
+    const selectChevron = <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2.5 text-gray-400 dark:text-gray-500"><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/></svg></div>;
 
     return (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
@@ -388,12 +390,15 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
                                         </div>
                                         <div className="flex items-center gap-2">
                                             {spellCheckSaved && <span className="text-xs text-green-600 dark:text-green-400 font-medium">Saved</span>}
-                                            <select value={spellCheckLanguages[0] || 'en-US'} onChange={(e) => handleSpellCheckLanguageChange(e.target.value)} className={`w-44 ${selectClass}`}>
-                                                {SPELL_CHECK_LANGUAGES.map((lang) => {
-                                                    const isAvailable = availableLanguages.length === 0 || availableLanguages.includes(lang.code);
-                                                    return <option key={lang.code} value={lang.code} disabled={!isAvailable}>{lang.name}{!isAvailable ? ' (unavailable)' : ''}</option>;
-                                                })}
-                                            </select>
+                                            <div className="relative w-44">
+                                                <select value={spellCheckLanguages[0] || 'en-US'} onChange={(e) => handleSpellCheckLanguageChange(e.target.value)} className={selectClass}>
+                                                    {SPELL_CHECK_LANGUAGES.map((lang) => {
+                                                        const isAvailable = availableLanguages.length === 0 || availableLanguages.includes(lang.code);
+                                                        return <option key={lang.code} value={lang.code} disabled={!isAvailable}>{lang.name}{!isAvailable ? ' (unavailable)' : ''}</option>;
+                                                    })}
+                                                </select>
+                                                {selectChevron}
+                                            </div>
                                         </div>
                                     </div>
                                     <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-2">Changes apply to new text. Restart if spell check doesn't update.</p>
@@ -406,13 +411,16 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
                                             <p className="text-sm font-medium text-gray-700 dark:text-gray-200">Save Interval</p>
                                             <p className="text-xs text-gray-500 dark:text-gray-400">How often to auto-save while a report has unsaved changes.</p>
                                         </div>
-                                        <select value={autosaveInterval} onChange={(e) => handleAutosaveIntervalChange(parseInt(e.target.value))} className={selectClass}>
-                                            <option value={15}>15 seconds</option>
-                                            <option value={30}>30 seconds</option>
-                                            <option value={60}>1 minute</option>
-                                            <option value={120}>2 minutes</option>
-                                            <option value={300}>5 minutes</option>
-                                        </select>
+                                        <div className="relative w-36">
+                                            <select value={autosaveInterval} onChange={(e) => handleAutosaveIntervalChange(parseInt(e.target.value))} className={selectClass}>
+                                                <option value={15}>15 seconds</option>
+                                                <option value={30}>30 seconds</option>
+                                                <option value={60}>1 minute</option>
+                                                <option value={120}>2 minutes</option>
+                                                <option value={300}>5 minutes</option>
+                                            </select>
+                                            {selectChevron}
+                                        </div>
                                     </div>
                                 </div>
 
@@ -445,10 +453,13 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
                                             <p className="text-sm font-medium text-gray-700 dark:text-gray-200">Appearance</p>
                                             <p className="text-xs text-gray-500 dark:text-gray-400">Choose your preferred look.</p>
                                         </div>
-                                        <select value={theme} onChange={(e) => setTheme(e.target.value as 'light' | 'dark')} className={selectClass}>
-                                            <option value="light">Light</option>
-                                            <option value="dark">Dark</option>
-                                        </select>
+                                        <div className="relative w-32">
+                                            <select value={theme} onChange={(e) => setTheme(e.target.value as 'light' | 'dark')} className={selectClass}>
+                                                <option value="light">Light</option>
+                                                <option value="dark">Dark</option>
+                                            </select>
+                                            {selectChevron}
+                                        </div>
                                     </div>
                                 </div>
 
@@ -459,24 +470,27 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
                                             <p className="text-sm font-medium text-gray-700 dark:text-gray-200">UI Scale</p>
                                             <p className="text-xs text-gray-500 dark:text-gray-400">Fit the landing page to your screen.</p>
                                         </div>
-                                        <select value={displayScaleSetting} onChange={(e) => handleDisplayScaleChange(e.target.value)} className={`w-52 ${selectClass}`}>
-                                            <option value="auto">Auto — Fit to Screen</option>
-                                            <optgroup label="Laptop">
-                                                <option value="0.60">11" Laptop (1280×720)</option>
-                                                <option value="0.65">11"–12" Laptop (1366×768)</option>
-                                                <option value="0.72">13" Laptop (1280×800)</option>
-                                                <option value="0.78">13" MacBook (1440×900)</option>
-                                                <option value="0.84">14" Laptop (1600×900)</option>
-                                                <option value="0.90">15" Laptop (1920×1080)</option>
-                                                <option value="0.95">15" High-DPI</option>
-                                            </optgroup>
-                                            <optgroup label="Desktop Monitor">
-                                                <option value="1.00">Desktop HD (1920×1080)</option>
-                                                <option value="1.05">FHD+ (2048×1152)</option>
-                                                <option value="1.08">Large (2560×1440)</option>
-                                                <option value="1.12">Ultra-Wide / 4K</option>
-                                            </optgroup>
-                                        </select>
+                                        <div className="relative w-52">
+                                            <select value={displayScaleSetting} onChange={(e) => handleDisplayScaleChange(e.target.value)} className={selectClass}>
+                                                <option value="auto">Auto — Fit to Screen</option>
+                                                <optgroup label="Laptop">
+                                                    <option value="0.60">11" Laptop (1280×720)</option>
+                                                    <option value="0.65">11"–12" Laptop (1366×768)</option>
+                                                    <option value="0.72">13" Laptop (1280×800)</option>
+                                                    <option value="0.78">13" MacBook (1440×900)</option>
+                                                    <option value="0.84">14" Laptop (1600×900)</option>
+                                                    <option value="0.90">15" Laptop (1920×1080)</option>
+                                                    <option value="0.95">15" High-DPI</option>
+                                                </optgroup>
+                                                <optgroup label="Desktop Monitor">
+                                                    <option value="1.00">Desktop HD (1920×1080)</option>
+                                                    <option value="1.05">FHD+ (2048×1152)</option>
+                                                    <option value="1.08">Large (2560×1440)</option>
+                                                    <option value="1.12">Ultra-Wide / 4K</option>
+                                                </optgroup>
+                                            </select>
+                                            {selectChevron}
+                                        </div>
                                     </div>
                                     <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-2">Auto detects your screen. Choose manually if Auto doesn't look right.</p>
                                 </div>
@@ -528,12 +542,15 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
                                                 <p className="text-sm font-medium text-gray-700 dark:text-gray-200">Position</p>
                                                 <p className="text-xs text-gray-500 dark:text-gray-400">Where the widget appears on screen.</p>
                                             </div>
-                                            <select value={mediaPlayerPosition} onChange={(e) => { setMediaPlayerPosition(e.target.value); localStorage.setItem('xtec_media_player_position', e.target.value); window.dispatchEvent(new CustomEvent('xtec-media-player-changed')); }} className={selectClass}>
-                                                <option value="bottom-left">Bottom Left</option>
-                                                <option value="bottom-right">Bottom Right</option>
-                                                <option value="top-left">Top Left</option>
-                                                <option value="top-right">Top Right</option>
-                                            </select>
+                                            <div className="relative w-40">
+                                                <select value={mediaPlayerPosition} onChange={(e) => { setMediaPlayerPosition(e.target.value); localStorage.setItem('xtec_media_player_position', e.target.value); window.dispatchEvent(new CustomEvent('xtec-media-player-changed')); }} className={selectClass}>
+                                                    <option value="bottom-left">Bottom Left</option>
+                                                    <option value="bottom-right">Bottom Right</option>
+                                                    <option value="top-left">Top Left</option>
+                                                    <option value="top-right">Top Right</option>
+                                                </select>
+                                                {selectChevron}
+                                            </div>
                                         </div>
                                     )}
                                 </div>

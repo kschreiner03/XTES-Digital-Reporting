@@ -95,7 +95,7 @@ const addRecentProject = async (
 
     let updatedProjects = [{ ...projectInfo, timestamp }, ...filteredProjects];
 
-    const MAX_RECENT_PROJECTS_IN_LIST = 50;
+    const MAX_RECENT_PROJECTS_IN_LIST = 20;
     if (updatedProjects.length > MAX_RECENT_PROJECTS_IN_LIST) {
         const toDelete = updatedProjects.splice(MAX_RECENT_PROJECTS_IN_LIST);
         for (const proj of toDelete) {
@@ -340,9 +340,7 @@ const DfrSaskpower = ({ onBack, onBackDirect, initialData }: DfrSaskpowerProps):
     const AUTOSAVE_INTERVAL_KEY = 'xtec_autosave_interval';
     const [autosaveEnabled, setAutosaveEnabled] = useState(initialData?.timestamp != null);
     const [autosaveIntervalMs, setAutosaveIntervalMs] = useState(() => parseInt(localStorage.getItem(AUTOSAVE_INTERVAL_KEY) || '30') * 1000);
-    const [showSaveAsMenu, setShowSaveAsMenu] = useState(false);
     const [showMoreMenu, setShowMoreMenu] = useState(false);
-    const saveAsMenuRef = useRef<HTMLDivElement>(null);
     const moreMenuRef = useRef<HTMLDivElement>(null);
     const quickSaveRef = useRef<() => Promise<void>>();
     const saveProjectRef = useRef<() => Promise<void>>();
@@ -358,6 +356,10 @@ const DfrSaskpower = ({ onBack, onBackDirect, initialData }: DfrSaskpowerProps):
     photosDataRef.current = photosData;
     // fileSynced: true=in sync with file, false=pending sync, null=no file linked
     const [fileSynced, setFileSynced] = useState<boolean | null>(savedFilePathRef.current ? true : null);
+    const [isSyncing, setIsSyncing] = useState(false);
+    const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
+    const [justSaved, setJustSaved] = useState(false);
+    const justSavedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const projectTimestampRef = useRef<number | null>(initialData?.timestamp ?? null);
     const isSavingRef = useRef(false);
     const isDirtyRef = useRef(isDirty);
@@ -730,17 +732,6 @@ const DfrSaskpower = ({ onBack, onBackDirect, initialData }: DfrSaskpowerProps):
         setIsDirty(true);
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-    const syncToFile = async () => {
-        if (!savedFilePathRef.current) { handleSaveProject(); return; }
-        try {
-            const photosForExport = photosDataRef.current.map(({ imageId, ...p }) => p);
-            const fileState = JSON.stringify({ ...data, photosData: photosForExport });
-            await (window as any).electronAPI?.writeToFile?.(fileState, savedFilePathRef.current);
-            setFileSynced(true);
-            toast('File saved ✓');
-        } catch (e) { console.error('Sync failed:', e); toast('File save failed', 'error'); }
-    };
-
     const handleBack = () => {
         if (isDirty) {
             pendingCloseRef.current = false;
@@ -989,8 +980,8 @@ const DfrSaskpower = ({ onBack, onBackDirect, initialData }: DfrSaskpowerProps):
 
                 return {
                     ...photo,
-                    imageId,     // keep imageId
-                    imageUrl: photo.imageUrl // KEEP imageUrl
+                    imageId,
+                    imageUrl: null, // stored separately in images store; hydrated on load
                 };
             }
 
@@ -1648,6 +1639,7 @@ const renderTextSection = async (
     const performSave = async (currentData: DfrSaskpowerData) => {
         if (isSavingRef.current) return;
         isSavingRef.current = true;
+        setIsSyncing(true);
         try {
             const photosForExport = photosDataRef.current.map(({ imageId, ...p }) => p);
             const filePayload = JSON.stringify({ ...currentData, photosData: photosForExport });
@@ -1703,12 +1695,17 @@ const renderTextSection = async (
             setIsDirty(false);
             setFileSynced(true);
             setAutosaveEnabled(true);
+            setLastSyncedAt(new Date());
+            setJustSaved(true);
+            if (justSavedTimeoutRef.current) clearTimeout(justSavedTimeoutRef.current);
+            justSavedTimeoutRef.current = setTimeout(() => setJustSaved(false), 2500);
             toast('Saved ✓');
         } catch (e) {
             console.error('Save failed:', e);
             toast(`Save failed — ${e instanceof Error ? e.message : 'please try again.'}`, 'error');
         } finally {
             isSavingRef.current = false;
+            setIsSyncing(false);
         }
     };
 
@@ -1755,8 +1752,15 @@ const renderTextSection = async (
             const result = await window.electronAPI.saveProject(JSON.stringify(stateForFileExport), savedFilePathRef.current || filename);
             if (result?.path) {
                 savedFilePathRef.current = result.path;
-                if (projectTimestampRef.current) try { const m=JSON.parse(localStorage.getItem('xtec_file_paths')?? '{}'); m[String(projectTimestampRef.current)]=result.path; localStorage.setItem('xtec_file_paths',JSON.stringify(m)); } catch {}
+                projectTimestampRef.current = null; // detach from old entry — next save creates a new one
+                setIsDirty(false);
                 setFileSynced(true);
+                setAutosaveEnabled(true);
+                setLastSyncedAt(new Date());
+                setJustSaved(true);
+                if (justSavedTimeoutRef.current) clearTimeout(justSavedTimeoutRef.current);
+                justSavedTimeoutRef.current = setTimeout(() => setJustSaved(false), 2500);
+                toast('Saved ✓');
             }
         } else {
             const blob = new Blob([JSON.stringify(stateForFileExport)], { type: 'application/json;charset=utf-8;' });
@@ -1966,16 +1970,7 @@ Description: ${photo.description || 'N/A'}
         return () => clearInterval(interval);
     }, [autosaveIntervalMs]);
 
-    useEffect(() => {
-        if (!showSaveAsMenu) return;
-        const handler = (e: MouseEvent) => {
-            if (saveAsMenuRef.current && !saveAsMenuRef.current.contains(e.target as Node)) {
-                setShowSaveAsMenu(false);
-            }
-        };
-        document.addEventListener('mousedown', handler);
-        return () => document.removeEventListener('mousedown', handler);
-    }, [showSaveAsMenu]);
+    useEffect(() => () => { if (justSavedTimeoutRef.current) clearTimeout(justSavedTimeoutRef.current); }, []);
 
     useEffect(() => {
         if (!showMoreMenu) return;
@@ -2107,49 +2102,56 @@ Description: ${photo.description || 'N/A'}
                                 >
                                     <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow transition duration-200 ${autosaveEnabled ? 'translate-x-4' : 'translate-x-0'}`} />
                                 </button>
+                                {(isSyncing || lastSyncedAt) && (
+                                    <span className="flex items-center gap-1 text-[11px] text-gray-400 dark:text-gray-500">
+                                        {isSyncing ? (
+                                            <svg className="w-3 h-3 animate-spin text-[#007D8C]" viewBox="0 0 24 24" fill="none">
+                                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                                            </svg>
+                                        ) : (
+                                            <svg className="w-3 h-3 text-green-500" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5"/>
+                                            </svg>
+                                        )}
+                                        <span>{isSyncing ? 'Syncing…' : `Synced ${lastSyncedAt!.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`}</span>
+                                    </span>
+                                )}
                             </div>
                             {/* Save — primary action, handles first-save dialog automatically */}
-                            <button onClick={handleQuickSave} title="Save (Ctrl+S)"
-                                className={`inline-flex items-center gap-2 font-semibold py-2 px-4 rounded-lg transition-all duration-200 ${
-                                    fileSynced === true
-                                        ? 'bg-green-600 hover:bg-green-700 text-white'
-                                        : 'bg-[#007D8C] hover:bg-[#006b7a] text-white'
-                                }`}>
-                                {fileSynced === true
-                                    ? <><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>Saved</>
-                                    : <><SaveIcon /><span>Save</span></>
-                                }
+                            <button onClick={handleQuickSave} title={justSaved ? 'Saved' : 'Save (Ctrl+S)'}
+                                className={`p-2.5 rounded-lg transition-all duration-200 ${justSaved?'bg-green-600 hover:bg-green-700 text-white':'bg-[#007D8C] hover:bg-[#006b7a] text-white'}`}>
+                                {justSaved?<svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>:<SaveIcon className="w-4 h-4" />}
                             </button>
-                            {/* Sync status icon — non-interactive, shows file sync state */}
-                            {fileSynced !== null && (
-                                <div title={fileSynced ? 'File saved' : 'Changes not yet saved to file'}
-                                    className={`flex items-center ${fileSynced ? 'text-green-500 dark:text-green-400' : 'text-amber-400 dark:text-amber-300 animate-pulse'}`}>
-                                    {fileSynced
-                                        ? <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                                        : <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"/></svg>
-                                    }
-                                </div>
-                            )}
-                            {/* Export PDF */}
-                            <button onClick={handleSavePdf} title="Export PDF"
-                                className="bg-[#007D8C] hover:bg-[#006b7a] text-white font-semibold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
-                                <DownloadIcon /> <span>PDF</span>
-                            </button>
-                            <button onClick={handleOpenProject} className="border border-gray-300 dark:border-gray-600 bg-white dark:bg-[#1c1c1e] hover:bg-gray-50 dark:hover:bg-[#2a2a2e] text-gray-700 dark:text-gray-200 font-semibold py-2 px-4 rounded-lg inline-flex items-center gap-2 transition duration-200">
-                                <FolderOpenIcon /> <span>Open</span>
-                            </button>
-
                             <div className="relative" ref={moreMenuRef}>
-                                <button onClick={() => setShowMoreMenu(v => !v)} title="More options"
-                                    className="border border-gray-300 dark:border-gray-600 bg-white dark:bg-[#1c1c1e] hover:bg-gray-50 dark:hover:bg-[#2a2a2e] text-gray-500 dark:text-gray-400 py-2 px-2 rounded-lg inline-flex items-center transition duration-200">
-                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M6.75 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0zM12.75 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0zM18.75 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0z"/></svg>
+                                <button onClick={() => setShowMoreMenu(v => !v)} title="File options"
+                                    className="border border-gray-300 dark:border-gray-600 bg-white dark:bg-[#1c1c1e] hover:bg-gray-50 dark:hover:bg-[#2a2a2e] text-gray-700 dark:text-gray-200 font-semibold py-2 px-3 rounded-lg inline-flex items-center gap-1.5 transition duration-200">
+                                    <FolderOpenIcon className="w-4 h-4" /> <span>File</span>
+                                    <svg className={`w-3.5 h-3.5 text-gray-400 transition-transform duration-200 ${showMoreMenu ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/></svg>
                                 </button>
                                 {showMoreMenu && (
-                                    <div className="absolute right-0 top-full mt-1 z-50 bg-white dark:bg-[#1c1c1e] border border-gray-200 dark:border-[#007D8C]/20 rounded-xl shadow-xl py-1 min-w-[160px]">
+                                    <div className="absolute right-0 top-full mt-1 z-50 bg-white dark:bg-[#1c1c1e] border border-gray-200 dark:border-[#007D8C]/20 rounded-xl shadow-xl py-1 min-w-[180px] overflow-hidden">
+                                        <button onClick={() => { setShowMoreMenu(false); handleQuickSave(); }}
+                                            className="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-[#007D8C]/5 dark:hover:bg-[#007D8C]/10 flex items-center gap-2.5 transition-colors">
+                                            <SaveIcon color="currentColor" className="w-4 h-4 shrink-0 text-gray-400" />
+                                            Save
+                                        </button>
                                         <button onClick={() => { setShowMoreMenu(false); handleSaveProject(); }}
-                                            className="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-white/5 flex items-center gap-2.5">
-                                            <SaveIcon className="w-4 h-4 shrink-0 text-gray-400" />
+                                            className="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-[#007D8C]/5 dark:hover:bg-[#007D8C]/10 flex items-center gap-2.5 transition-colors">
+                                            <SaveIcon color="currentColor" className="w-4 h-4 shrink-0 text-gray-400" />
                                             Save As…
+                                        </button>
+                                        <div className="my-1 border-t border-gray-100 dark:border-white/5" />
+                                        <button onClick={() => { setShowMoreMenu(false); handleSavePdf(); }}
+                                            className="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-[#007D8C]/5 dark:hover:bg-[#007D8C]/10 flex items-center gap-2.5 transition-colors">
+                                            <DownloadIcon color="currentColor" className="w-4 h-4 shrink-0 text-gray-400" />
+                                            Export PDF
+                                        </button>
+                                        <div className="my-1 border-t border-gray-100 dark:border-white/5" />
+                                        <button onClick={() => { setShowMoreMenu(false); handleOpenProject(); }}
+                                            className="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-[#007D8C]/5 dark:hover:bg-[#007D8C]/10 flex items-center gap-2.5 transition-colors">
+                                            <FolderOpenIcon className="w-4 h-4 shrink-0 text-gray-400" />
+                                            Open…
                                         </button>
                                     </div>
                                 )}
@@ -2393,7 +2395,7 @@ Description: ${photo.description || 'N/A'}
                 </div>
                 {photosData.length > 0 && <div className="border-t border-gray-200 dark:border-white/10 my-8" />}
                 <footer className="text-center text-gray-500 dark:text-gray-400 text-sm py-4">
-                    X-TES Digital Reporting v1.1.5
+                    X-TES Digital Reporting v1.1.6
                 </footer>
                 </div>
 

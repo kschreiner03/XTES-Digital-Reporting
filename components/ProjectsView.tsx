@@ -644,10 +644,15 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({ onClose, onOpenProject, onR
                         </div>
                         <div>
                             <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider block mb-1.5">Location</label>
-                            <select value={newFolderParent} onChange={e => setNewFolderParent(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-[#3d3d3d] bg-gray-50 dark:bg-[#111] text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#007D8C]/20">
-                                <option value="">Root</option>
-                                {folders.map(f => <option key={f} value={f}>{f}</option>)}
-                            </select>
+                            <div className="relative w-full">
+                                <select value={newFolderParent} onChange={e => setNewFolderParent(e.target.value)} className="w-full pl-3 pr-8 py-2 rounded-lg border border-gray-200 dark:border-[#3d3d3d] bg-white dark:bg-[#1e1e1e] text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#007D8C]/30 focus:border-[#007D8C] appearance-none cursor-pointer transition">
+                                    <option value="">Root</option>
+                                    {folders.map(f => <option key={f} value={f}>{f}</option>)}
+                                </select>
+                                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2.5 text-gray-400 dark:text-gray-500">
+                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/></svg>
+                                </div>
+                            </div>
                         </div>
                         <div className="flex gap-2 justify-end pt-1">
                             <button onClick={() => setNewFolderOpen(false)} className="px-4 py-2 text-sm rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-[#2a2a2a] transition-colors">Cancel</button>

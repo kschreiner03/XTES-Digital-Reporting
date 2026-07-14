@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { CloseIcon } from './icons';
 
 // ─── Palette ──────────────────────────────────────────────────────────────────
@@ -21,6 +21,8 @@ const loadPalette = (): ColorEntry[] => {
 };
 
 // ─── Data model ───────────────────────────────────────────────────────────────
+interface EventReminder { enabled: boolean; value: number; unit: 'minutes' | 'hours' | 'days'; }
+
 interface ScheduleEntry {
     id: string;
     projectNumber: string;
@@ -32,13 +34,13 @@ interface ScheduleEntry {
     colorId: string;
     color: string;
     textColor: string;
+    reminder?: EventReminder;
 }
-interface Task { id: string; text: string; done: boolean; }
+interface Task { id: string; text: string; done: boolean; reminderTime?: string; }
 interface DayEntry { notes: string; tasks: Task[]; schedule: ScheduleEntry[]; }
 type PlannerData = Record<string, DayEntry>;
 
 const STORAGE_KEY = 'xtec_planner_data';
-const MY_NAME_KEY = 'xtec_planner_my_name';
 const empty = (): DayEntry => ({ notes: '', tasks: [], schedule: [] });
 
 const load = (): PlannerData => {
@@ -103,32 +105,6 @@ const startMins = (s: ScheduleEntry): number => {
     return h * 60 + m;
 };
 
-const isTrivial = (c: string) => {
-    if (!c || c === 'transparent') return true;
-    const m = c.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
-    if (m && +m[1] > 240 && +m[2] > 240 && +m[3] > 240) return true;
-    return c === '#ffffff' || c === '#fff';
-};
-
-const norm = (s: string) => (s ?? '').replace(/ /g, ' ').replace(/\s+/g, ' ').trim();
-
-const parseDate = (s: string): string | null => {
-    const v = norm(s); if (!v || v.length < 4) return null;
-    const iso = v.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
-    if (iso) return `${iso[1]}-${iso[2].padStart(2,'0')}-${iso[3].padStart(2,'0')}`;
-    const mdy = v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
-    if (mdy) return `${mdy[3]}-${mdy[1].padStart(2,'0')}-${mdy[2].padStart(2,'0')}`;
-    const d = new Date(v);
-    if (!isNaN(d.getTime()) && d.getFullYear() > 2000) return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-    return null;
-};
-
-const excelSerial = (n: number): string | null => {
-    if (!Number.isFinite(n) || n < 40000 || n > 60000) return null;
-    const d = new Date(Date.UTC(1899, 11, 30) + n * 86400000);
-    return `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`;
-};
-
 const datesBetween = (from: string, to: string, weekdayOnly?: number): string[] => {
     const out: string[] = [];
     const cur = new Date(from + 'T00:00:00');
@@ -160,9 +136,6 @@ const CalendarPlanner: React.FC<CalendarPlannerProps> = ({ onClose }) => {
     const [viewMonth, setViewMonth] = useState(today.getMonth());
     const [data,      setData]      = useState<PlannerData>(load);
     const [palette]                 = useState<ColorEntry[]>(loadPalette);
-    const [myName,    setMyName]    = useState(() => localStorage.getItem(MY_NAME_KEY) ?? '');
-    const [importMsg, setImportMsg] = useState<string|null>(null);
-    const [showPaste, setShowPaste] = useState(false);
 
     const [selectedKey, setSelectedKey] = useState<string>(todayKey);
     const [panelMode,   setPanelMode]   = useState<PanelMode>('day');
@@ -184,10 +157,18 @@ const CalendarPlanner: React.FC<CalendarPlannerProps> = ({ onClose }) => {
     const [editingId,  setEditingId]  = useState<string | null>(null);
     const [editingKey, setEditingKey] = useState<string | null>(null);
     const [newTask, setNewTask] = useState('');
-    const pasteAreaRef = useRef<HTMLTextAreaElement>(null);
+    const [showTaskReminder, setShowTaskReminder] = useState(false);
+    const [newTaskReminderTime, setNewTaskReminderTime] = useState('');
+
+    // Event reminder form state
+    const [evtReminder,     setEvtReminder]     = useState(false);
+    const [evtReminderVal,  setEvtReminderVal]  = useState(1);
+    const [evtReminderUnit, setEvtReminderUnit] = useState<'minutes' | 'hours' | 'days'>('hours');
+
+    // Track which notifications have been sent this session (prevents duplicates on re-render)
+    const firedRef = useRef<Set<string>>(new Set());
 
     useEffect(() => { persist(data); }, [data]);
-    useEffect(() => { localStorage.setItem(MY_NAME_KEY, myName); }, [myName]);
 
     useEffect(() => {
         if (!colorOpen) return;
@@ -201,6 +182,95 @@ const CalendarPlanner: React.FC<CalendarPlannerProps> = ({ onClose }) => {
         const col = palette.find(p => p.id === evtColorId);
         if (col?.id === 'off') { setEvtName('OFF'); setEvtProject(''); setEvtAllDay(true); }
     }, [evtColorId, palette]);
+
+    // When switching to all-day, force reminder unit to 'days' (minutes/hours don't apply)
+    useEffect(() => {
+        if (evtAllDay && (evtReminderUnit === 'minutes' || evtReminderUnit === 'hours')) {
+            setEvtReminderUnit('days');
+        }
+    }, [evtAllDay, evtReminderUnit]);
+
+    // Request notification permission on first open
+    useEffect(() => {
+        if ('Notification' in window && Notification.permission === 'default') {
+            Notification.requestPermission();
+        }
+    }, []);
+
+    // Check every minute for pending notifications
+    useEffect(() => {
+        const check = () => {
+            if (!('Notification' in window) || Notification.permission !== 'granted') return;
+
+            const now   = new Date();
+            const nowMins = now.getHours() * 60 + now.getMinutes();
+            const todayKey = toKey(now.getFullYear(), now.getMonth(), now.getDate());
+
+            for (const [dateKey, entry] of Object.entries(data)) {
+                // ── Events ──
+                for (const s of entry.schedule) {
+                    if (!s.reminder?.enabled) continue;
+                    const { value, unit } = s.reminder;
+                    let fireKey: string;
+                    let fireMins: number;
+
+                    if (unit === 'days') {
+                        const d = new Date(dateKey + 'T00:00:00');
+                        d.setDate(d.getDate() - value);
+                        fireKey = toKey(d.getFullYear(), d.getMonth(), d.getDate());
+                        fireMins = 8 * 60; // fire at 8:00 AM on the reminder day
+                    } else {
+                        if (!s.startTime) continue;
+                        const [eh, em] = s.startTime.split(':').map(Number);
+                        const eventMins = eh * 60 + em;
+                        const beforeMins = unit === 'hours' ? value * 60 : value;
+                        const computed = eventMins - beforeMins;
+                        if (computed < 0) {
+                            const d = new Date(dateKey + 'T00:00:00');
+                            d.setDate(d.getDate() - 1);
+                            fireKey = toKey(d.getFullYear(), d.getMonth(), d.getDate());
+                            fireMins = 24 * 60 + computed;
+                        } else {
+                            fireKey = dateKey;
+                            fireMins = computed;
+                        }
+                    }
+
+                    if (fireKey !== todayKey || fireMins !== nowMins) continue;
+                    const notifId = `${s.id}-${fireKey}`;
+                    if (firedRef.current.has(notifId)) continue;
+                    firedRef.current.add(notifId);
+
+                    const title = s.projectName || s.projectNumber || 'Event';
+                    const parts = [
+                        s.projectNumber ? `#${s.projectNumber}` : '',
+                        s.location ? `📍 ${s.location}` : '',
+                        s.startTime ? `⏰ ${fmt12(s.startTime)}` : '',
+                    ].filter(Boolean);
+                    new Notification(`📅 Reminder: ${title}`, {
+                        body: parts.join(' · ') || `Coming up on ${dateKey}`,
+                        tag: notifId,
+                    });
+                }
+
+                // ── Tasks ──
+                for (const t of entry.tasks) {
+                    if (!t.reminderTime || t.done) continue;
+                    if (dateKey !== todayKey) continue;
+                    const [th, tm] = t.reminderTime.split(':').map(Number);
+                    if (th * 60 + tm !== nowMins) continue;
+                    const notifId = `task-${t.id}-${dateKey}`;
+                    if (firedRef.current.has(notifId)) continue;
+                    firedRef.current.add(notifId);
+                    new Notification('✅ Task Reminder', { body: t.text, tag: notifId });
+                }
+            }
+        };
+
+        check();
+        const interval = setInterval(check, 60_000);
+        return () => clearInterval(interval);
+    }, [data]);
 
     // ── Navigation ──────────────────────────────────────────────────────────
     const prevMonth = () => { if(viewMonth===0){setViewMonth(11);setViewYear(v=>v-1);}else setViewMonth(m=>m-1); };
@@ -240,6 +310,7 @@ const CalendarPlanner: React.FC<CalendarPlannerProps> = ({ onClose }) => {
                     colorId:       col.id,
                     color:         col.color,
                     textColor:     textForBg(col.color),
+                    reminder:      evtReminder ? { enabled: true, value: evtReminderVal, unit: evtReminderUnit } : undefined,
                 };
                 const sorted = [...ex.schedule, newE].sort((a, b) => {
                     if (a.allDay && !b.allDay) return -1;
@@ -255,6 +326,7 @@ const CalendarPlanner: React.FC<CalendarPlannerProps> = ({ onClose }) => {
 
         setEvtProject(''); setEvtName(''); setEvtLocation(''); setEvtStart(''); setEvtEnd('');
         setEvtAllDay(false); setEvtRecurring(false);
+        setEvtReminder(false); setEvtReminderVal(1); setEvtReminderUnit('hours');
         const fromYear = parseInt(evtFrom.slice(0,4)), fromMonth = parseInt(evtFrom.slice(5,7))-1;
         setViewYear(fromYear); setViewMonth(fromMonth);
         setSelectedKey(evtFrom);
@@ -264,9 +336,9 @@ const CalendarPlanner: React.FC<CalendarPlannerProps> = ({ onClose }) => {
     // ── Tasks ────────────────────────────────────────────────────────────────
     const addTask = () => {
         if (!selectedKey || !newTask.trim()) return;
-        const t: Task = { id: Date.now().toString(), text: newTask.trim(), done: false };
+        const t: Task = { id: Date.now().toString(), text: newTask.trim(), done: false, reminderTime: newTaskReminderTime || undefined };
         setData(prev => { const e={...empty(),...(prev[selectedKey]??{})}; return{...prev,[selectedKey]:{...e,tasks:[...e.tasks,t]}}; });
-        setNewTask('');
+        setNewTask(''); setNewTaskReminderTime(''); setShowTaskReminder(false);
     };
     const toggleTask = (id: string) => {
         if (!selectedKey) return;
@@ -293,6 +365,9 @@ const CalendarPlanner: React.FC<CalendarPlannerProps> = ({ onClose }) => {
         setEvtAllDay(s.allDay ?? false);
         setEvtRecurring(false);
         setEvtColorId(s.colorId);
+        setEvtReminder(s.reminder?.enabled ?? false);
+        setEvtReminderVal(s.reminder?.value ?? 1);
+        setEvtReminderUnit(s.reminder?.unit ?? 'hours');
         setPanelMode('edit');
     };
 
@@ -316,6 +391,7 @@ const CalendarPlanner: React.FC<CalendarPlannerProps> = ({ onClose }) => {
                         colorId:       col.id,
                         color:         col.color,
                         textColor:     textForBg(col.color),
+                        reminder:      evtReminder ? { enabled: true, value: evtReminderVal, unit: evtReminderUnit } : undefined,
                     } : s).sort((a, b) => {
                         if (a.allDay && !b.allDay) return -1;
                         if (!a.allDay && b.allDay) return 1;
@@ -335,77 +411,6 @@ const CalendarPlanner: React.FC<CalendarPlannerProps> = ({ onClose }) => {
         if (!selectedKey) return;
         setData(prev => ({...prev,[selectedKey]:{...empty(),...(prev[selectedKey]??{}),notes}}));
     };
-
-    // ── Paste ────────────────────────────────────────────────────────────────
-    const handlePaste = useCallback((e: React.ClipboardEvent<HTMLTextAreaElement>) => {
-        e.preventDefault();
-        const html = e.clipboardData.getData('text/html');
-        const tsv  = e.clipboardData.getData('text/plain');
-
-        interface Cell { value: string; color: string; }
-        interface Row  { cells: Cell[]; rowColor: string; }
-        let rows: Row[] = [];
-
-        if (html) { try {
-            const doc = new DOMParser().parseFromString(html, 'text/html');
-            const trs = Array.from(doc.querySelectorAll('tr'));
-            if (trs.length) rows = trs.map(tr => {
-                const cells: Cell[] = Array.from(tr.querySelectorAll('td,th')).map(td => {
-                    const el = td as HTMLElement;
-                    return { value: norm(el.textContent ?? ''), color: el.style.backgroundColor || '' };
-                });
-                return { cells, rowColor: cells.find(c => !isTrivial(c.color))?.color ?? '' };
-            });
-        } catch {} }
-
-        if (!rows.length && tsv) rows = tsv.split('\n').filter(l=>l.trim()).map(l=>({cells:l.split('\t').map(v=>({value:norm(v),color:''})),rowColor:''}));
-
-        const hasDate = (row: Row) => row.cells.some(c => { const n=Number(c.value); return excelSerial(n)!==null||parseDate(c.value)!==null; });
-        const startRow = rows.length > 1 && !hasDate(rows[0]) ? 1 : 0;
-        const name = norm(myName).toLowerCase();
-        let count = 0, firstKey: string|null = null;
-
-        setData(prev => {
-            const next = { ...prev };
-            for (let ri = startRow; ri < rows.length; ri++) {
-                const row = rows[ri];
-                const vals = row.cells.map(c => c.value);
-                if (name && !vals.some(v => norm(v).toLowerCase().includes(name))) continue;
-
-                let dateKey: string|null = null, dateIdx = -1;
-                for (let ci = 0; ci < vals.length; ci++) {
-                    const n=Number(vals[ci]); const k=excelSerial(n)??parseDate(vals[ci]);
-                    if (k) { dateKey=k; dateIdx=ci; break; }
-                }
-                if (!dateKey) continue;
-
-                const usedIdx = new Set([dateIdx]);
-                if (name) { const ni=vals.findIndex(v=>norm(v).toLowerCase().includes(name)); if(ni>=0)usedIdx.add(ni); }
-                const rest = vals.map((v,i)=>({v:v.trim(),i})).filter(({v,i})=>v&&!usedIdx.has(i));
-                const label = rest.reduce((a,b)=>b.v.length>a.v.length?b:a,{v:'',i:-1}).v;
-
-                const toHex=(rgb:string)=>{const m=rgb.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);return m?'#'+[+m[1],+m[2],+m[3]].map(x=>x.toString(16).padStart(2,'0')).join(''):rgb;};
-                let matchedCol = palette[0];
-                if (row.rowColor && !isTrivial(row.rowColor)) {
-                    const nr = toHex(row.rowColor).toLowerCase();
-                    const match = palette.find(p => toHex(p.color).toLowerCase() === nr);
-                    matchedCol = match ?? { id:'import', label:'Imported', color:row.rowColor };
-                }
-
-                const ex = next[dateKey] ?? empty();
-                if (!(ex.schedule??[]).some(s=>s.projectName===label)) {
-                    next[dateKey] = { ...ex, schedule: [...(ex.schedule??[]), { id:`s-${Date.now()}-${ri}`, projectNumber:'', projectName:label, location:'', startTime:'', endTime:'', allDay:false, colorId:matchedCol.id, color:matchedCol.color, textColor:textForBg(matchedCol.color) }] };
-                    if (!firstKey) firstKey = dateKey;
-                    count++;
-                }
-            }
-            return next;
-        });
-
-        if (firstKey) { setViewYear(parseInt(firstKey.slice(0,4))); setViewMonth(parseInt(firstKey.slice(5,7))-1); setSelectedKey(firstKey); }
-        setImportMsg(count===0?(name?`No rows found for "${myName}"`:'No dates found'):`${count} day${count!==1?'s':''} imported`);
-        setShowPaste(false);
-    }, [myName, palette]);
 
     const selEntry  = selectedKey ? ({...empty(),...(data[selectedKey]??{})}) : null;
     const selPalette = palette.find(p => p.id === evtColorId) ?? palette[0];
@@ -432,27 +437,12 @@ const CalendarPlanner: React.FC<CalendarPlannerProps> = ({ onClose }) => {
                 </div>
                 <div className="flex-1">
                     <h2 className="text-sm font-semibold text-gray-800 dark:text-white">Field Planner</h2>
-                    <div className="flex items-center gap-1.5 mt-0.5">
-                        <span className="text-[10px] text-gray-400">My name:</span>
-                        <input value={myName} onChange={e=>setMyName(e.target.value)} placeholder="e.g. Kole Schreiner"
-                            className="text-[10px] bg-transparent text-gray-600 dark:text-gray-300 outline-none border-b border-dashed border-gray-300 dark:border-white/20 focus:border-[#007D8C] w-36 pb-px"/>
-                    </div>
                 </div>
                 <div className="flex items-center gap-2">
-                    {importMsg && (
-                        <span className={`text-xs font-medium px-2 py-1 rounded-lg border whitespace-nowrap ${importMsg.startsWith('No')?'text-amber-600 bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800':'text-green-600 bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'}`}>
-                            {importMsg.startsWith('No')?'⚠ ':'✓ '}{importMsg}
-                        </span>
-                    )}
                     <button onClick={()=>{setPanelMode('add');setEvtFrom(selectedKey);setEvtTo(selectedKey);}}
                         className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap ${panelMode==='add'||panelMode==='edit'?'bg-[#007D8C] text-white':'bg-[#007D8C]/10 text-[#007D8C] hover:bg-[#007D8C]/20'}`}>
                         <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
                         Add Event
-                    </button>
-                    <button onClick={()=>{setImportMsg(null);setShowPaste(true);setTimeout(()=>pasteAreaRef.current?.focus(),80);}}
-                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-white/10 hover:bg-gray-50 dark:hover:bg-white/5 rounded-lg transition-colors whitespace-nowrap">
-                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M15.666 3.888A2.25 2.25 0 0013.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 01-.75.75H9a.75.75 0 01-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 01-2.25 2.25H6.75A2.25 2.25 0 014.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 011.927-.184"/></svg>
-                        Paste Schedule
                     </button>
                     <button onClick={onClose} className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/10 transition-colors">
                         <CloseIcon className="h-4 w-4"/>
@@ -548,7 +538,7 @@ const CalendarPlanner: React.FC<CalendarPlannerProps> = ({ onClose }) => {
                                 )}
 
                                 {/* Notes dot (0 events) */}
-                                {n === 0 && (de?.notes?.trim() || de?.tasks?.length) && (
+                                {n === 0 && Boolean(de?.notes?.trim() || de?.tasks?.length) && (
                                     <div className="absolute bottom-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-[#007D8C]/50"/>
                                 )}
                             </button>
@@ -674,6 +664,39 @@ const CalendarPlanner: React.FC<CalendarPlannerProps> = ({ onClose }) => {
                                     </div>
                                 </div>
                             )}
+
+                            {/* Reminder */}
+                            <div className="border-t border-gray-100 dark:border-white/5 pt-3.5">
+                                <label className="block text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-2">Reminder</label>
+                                <label className="flex items-center gap-2 cursor-pointer mb-2.5">
+                                    <input type="checkbox" checked={evtReminder} onChange={e=>setEvtReminder(e.target.checked)}
+                                        className="w-4 h-4 accent-[#007D8C] rounded"/>
+                                    <span className="text-sm text-gray-700 dark:text-gray-200 flex items-center gap-1.5">
+                                        <svg className="w-3.5 h-3.5 text-[#007D8C]" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0"/>
+                                        </svg>
+                                        Notify me before this event
+                                    </span>
+                                </label>
+                                {evtReminder && (
+                                    <div className="flex items-center gap-2">
+                                        <input type="number" min={1} max={999} value={evtReminderVal}
+                                            onChange={e=>setEvtReminderVal(Math.max(1, parseInt(e.target.value)||1))}
+                                            className="w-16 text-sm px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 text-gray-800 dark:text-white focus:ring-2 focus:ring-[#007D8C]/40 focus:border-[#007D8C] outline-none transition text-center"/>
+                                        <div className="relative flex-1">
+                                            <select value={evtReminderUnit} onChange={e=>setEvtReminderUnit(e.target.value as 'minutes'|'hours'|'days')}
+                                                className="w-full text-sm pl-2.5 pr-7 py-1.5 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#252525] text-gray-800 dark:text-white focus:ring-2 focus:ring-[#007D8C]/40 focus:border-[#007D8C] outline-none transition appearance-none cursor-pointer">
+                                                {!evtAllDay && <option value="minutes">minutes before</option>}
+                                                {!evtAllDay && <option value="hours">hours before</option>}
+                                                <option value="days">days before (8 AM)</option>
+                                            </select>
+                                            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2 text-gray-400 dark:text-gray-500">
+                                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/></svg>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
                         </div>
 
                         <div className="px-5 pb-5 pt-2 shrink-0 border-t border-gray-100 dark:border-white/5">
@@ -733,7 +756,10 @@ const CalendarPlanner: React.FC<CalendarPlannerProps> = ({ onClose }) => {
                                         {selEntry.schedule.filter(s=>s.allDay).map(s=>(
                                             <div key={s.id} className="group flex items-center gap-2 mb-2 p-2.5 rounded-xl" style={{backgroundColor:s.color,color:s.textColor}}>
                                                 <div className="flex-1 min-w-0">
-                                                    <p className="text-[10px] font-bold opacity-70 mb-0.5 uppercase tracking-wide">All Day</p>
+                                                    <div className="flex items-center gap-1.5 mb-0.5">
+                                                        <p className="text-[10px] font-bold opacity-70 uppercase tracking-wide">All Day</p>
+                                                        {s.reminder?.enabled&&<svg className="w-3 h-3 opacity-70 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0"/></svg>}
+                                                    </div>
                                                     <div className="flex items-center gap-1.5 flex-wrap">
                                                         {s.projectNumber&&<span className="text-xs font-bold bg-black/20 dark:bg-white/20 rounded px-1">{s.projectNumber}</span>}
                                                         {s.projectName&&<span className="text-sm font-semibold">{s.projectName}</span>}
@@ -753,13 +779,14 @@ const CalendarPlanner: React.FC<CalendarPlannerProps> = ({ onClose }) => {
                                         ))}
 
                                         {/* Compact event list (collapsed) */}
-                                        {!timelineExpanded && selEntry.schedule.filter(s=>!s.allDay).map(s=>(
+                                        {!timelineExpanded && selEntry.schedule.filter(s=>!s.allDay&&s.startTime).map(s=>(
                                             <div key={s.id} className="group flex items-center gap-2 mb-1.5 p-2 rounded-lg" style={{backgroundColor:s.color,color:s.textColor}}>
                                                 <div className="flex-1 min-w-0 flex items-center gap-2">
                                                     {s.startTime&&<span className="text-[10px] font-bold opacity-80 shrink-0">{fmt12(s.startTime)}</span>}
                                                     {s.projectNumber&&<span className="text-[10px] font-bold bg-black/20 dark:bg-white/20 rounded px-1">{s.projectNumber}</span>}
                                                     <span className="text-xs font-semibold truncate">{s.projectName||'·'}</span>
                                                     {s.location&&<span className="text-[10px] opacity-70 truncate">📍{s.location}</span>}
+                                                    {s.reminder?.enabled&&<svg className="w-3 h-3 opacity-70 shrink-0 ml-auto" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0"/></svg>}
                                                 </div>
                                                 <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                                                     <button onClick={()=>startEdit(selectedKey,s)} className="hover:opacity-70 transition-opacity" style={{color:s.textColor}} title="Edit">
@@ -790,7 +817,10 @@ const CalendarPlanner: React.FC<CalendarPlannerProps> = ({ onClose }) => {
                                                         <div key={s.id} className="group absolute left-12 right-0 rounded-lg overflow-hidden shadow-sm"
                                                             style={{top:`${topPx}px`,height:`${Math.max(22,hPx)}px`,backgroundColor:s.color,color:s.textColor}}>
                                                             <div className="px-1.5 py-0.5 h-full flex flex-col justify-center">
-                                                                <p className="text-[9px] font-bold opacity-80 leading-none">{fmt12(s.startTime)}{s.endTime?`–${fmt12(s.endTime)}`:''}</p>
+                                                                <div className="flex items-center gap-1">
+                                                                    <p className="text-[9px] font-bold opacity-80 leading-none">{fmt12(s.startTime)}{s.endTime?`–${fmt12(s.endTime)}`:''}</p>
+                                                                    {s.reminder?.enabled&&<svg className="w-2.5 h-2.5 opacity-70 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0"/></svg>}
+                                                                </div>
                                                                 <p className="text-[10px] font-semibold leading-tight truncate">{s.projectName||s.projectNumber}</p>
                                                                 {s.location&&<p className="text-[9px] opacity-70 truncate">📍{s.location}</p>}
                                                             </div>
@@ -810,6 +840,7 @@ const CalendarPlanner: React.FC<CalendarPlannerProps> = ({ onClose }) => {
                                                     <div className="flex items-center gap-1.5 flex-wrap">
                                                         {s.projectNumber&&<span className="text-xs font-bold bg-black/20 dark:bg-white/20 rounded px-1">{s.projectNumber}</span>}
                                                         {s.projectName&&<span className="text-sm font-semibold">{s.projectName}</span>}
+                                                        {s.reminder?.enabled&&<svg className="w-3 h-3 opacity-70 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0"/></svg>}
                                                     </div>
                                                     {s.location&&<p className="text-[10px] opacity-70 mt-0.5">📍 {s.location}</p>}
                                                     <p className="text-[10px] opacity-60 mt-0.5">{palette.find(p=>p.id===s.colorId)?.label??''}</p>
@@ -837,17 +868,46 @@ const CalendarPlanner: React.FC<CalendarPlannerProps> = ({ onClose }) => {
                                                 <button onClick={()=>toggleTask(t.id)} className={`w-4 h-4 rounded shrink-0 border-2 flex items-center justify-center transition-colors ${t.done?'bg-[#007D8C] border-[#007D8C]':'border-gray-300 dark:border-white/20 hover:border-[#007D8C]'}`}>
                                                     {t.done&&<svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" strokeWidth={3} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>}
                                                 </button>
-                                                <span className={`flex-1 text-sm ${t.done?'line-through text-gray-400 dark:text-gray-600':'text-gray-700 dark:text-gray-200'}`}>{t.text}</span>
+                                                <div className="flex-1 min-w-0">
+                                                    <span className={`text-sm ${t.done?'line-through text-gray-400 dark:text-gray-600':'text-gray-700 dark:text-gray-200'}`}>{t.text}</span>
+                                                    {t.reminderTime && !t.done && (
+                                                        <span className="ml-2 inline-flex items-center gap-1 text-[10px] text-[#007D8C] font-medium">
+                                                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0"/>
+                                                            </svg>
+                                                            {t.reminderTime}
+                                                        </span>
+                                                    )}
+                                                </div>
                                                 <button onClick={()=>deleteTask(t.id)} className="opacity-0 group-hover:opacity-100 p-0.5 text-gray-400 hover:text-red-500 transition-all">
                                                     <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
                                                 </button>
                                             </div>
                                         ))}
                                     </div>
-                                    <div className="flex gap-2">
-                                        <input value={newTask} onChange={e=>setNewTask(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')addTask();}} placeholder="Add a task..."
-                                            className="flex-1 text-sm px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 text-gray-800 dark:text-white placeholder-gray-400 dark:placeholder-gray-600 focus:ring-2 focus:ring-[#007D8C]/40 focus:border-[#007D8C] outline-none transition"/>
-                                        <button onClick={addTask} className="px-3 py-1.5 bg-[#007D8C] hover:bg-[#006270] text-white text-sm font-semibold rounded-lg transition-colors">Add</button>
+                                    <div className="space-y-1.5">
+                                        <div className="flex gap-2">
+                                            <input value={newTask} onChange={e=>setNewTask(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')addTask();}} placeholder="Add a task..."
+                                                className="flex-1 text-sm px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 text-gray-800 dark:text-white placeholder-gray-400 dark:placeholder-gray-600 focus:ring-2 focus:ring-[#007D8C]/40 focus:border-[#007D8C] outline-none transition"/>
+                                            <button onClick={()=>setShowTaskReminder(v=>!v)} title="Set reminder"
+                                                className={`px-2 py-1.5 rounded-lg border transition-colors ${showTaskReminder?'bg-[#007D8C] border-[#007D8C] text-white':'border-gray-200 dark:border-white/10 text-gray-400 hover:text-[#007D8C] hover:border-[#007D8C] bg-white dark:bg-white/5'}`}>
+                                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0"/>
+                                                </svg>
+                                            </button>
+                                            <button onClick={addTask} className="px-3 py-1.5 bg-[#007D8C] hover:bg-[#006270] text-white text-sm font-semibold rounded-lg transition-colors">Add</button>
+                                        </div>
+                                        {showTaskReminder && (
+                                            <div className="flex items-center gap-2 pl-1">
+                                                <svg className="w-3.5 h-3.5 text-[#007D8C] shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0"/>
+                                                </svg>
+                                                <span className="text-xs text-gray-500 dark:text-gray-400">Remind at</span>
+                                                <input type="time" value={newTaskReminderTime} onChange={e=>setNewTaskReminderTime(e.target.value)}
+                                                    className="text-sm px-2 py-1 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 text-gray-800 dark:text-white focus:ring-2 focus:ring-[#007D8C]/40 focus:border-[#007D8C] outline-none transition"/>
+                                                <span className="text-xs text-gray-400">on this day</span>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
 
@@ -869,28 +929,6 @@ const CalendarPlanner: React.FC<CalendarPlannerProps> = ({ onClose }) => {
             </div>
           </div>
         </div>
-
-        {/* ── Paste dialog ──────────────────────────────────────────────────── */}
-        {showPaste && (
-            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
-                <div className="bg-white dark:bg-[#1c1c1e] rounded-2xl shadow-2xl border border-gray-200 dark:border-[#007D8C]/20 w-full max-w-md overflow-hidden">
-                    <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-gray-100 dark:border-white/5">
-                        <div>
-                            <h3 className="text-base font-semibold text-gray-800 dark:text-white">Paste from Excel</h3>
-                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Select All → Copy → paste below.<br/>Only <strong className="text-gray-700 dark:text-gray-200">"{myName||'your name'}"</strong> rows are imported.</p>
-                        </div>
-                        <button onClick={()=>setShowPaste(false)} className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/10 transition-colors">
-                            <CloseIcon className="h-4 w-4"/>
-                        </button>
-                    </div>
-                    <div className="px-6 py-5">
-                        <textarea ref={pasteAreaRef} onPaste={handlePaste} readOnly rows={5} placeholder="Click here, then Ctrl+V / ⌘V"
-                            className="w-full text-sm px-4 py-8 rounded-xl border-2 border-dashed border-[#007D8C]/30 bg-[#007D8C]/5 dark:bg-[#007D8C]/10 text-gray-400 dark:text-gray-500 focus:border-[#007D8C] focus:outline-none transition-colors resize-none text-center cursor-pointer"/>
-                        <p className="text-[11px] text-gray-400 dark:text-gray-600 text-center mt-2">Row colors are matched to the legend palette automatically.</p>
-                    </div>
-                </div>
-            </div>
-        )}
         </>
     );
 };

@@ -8,7 +8,7 @@ All notable changes to X-TEC Digital Reporting are documented here.
 
 ### Added
 
-- **Field Planner** — calendar on the landing page (bottom-left button) with month view, color-coded schedule entries per day, task checklists, and notes. PM/person colors are configurable (Jeff K., Lacey Teasdale, Tyson Doering, Jostein Kevinsen, Brian, Kirsten, Off). Events support start/end times, all-day toggle, location, and weekly recurrence. Paste your Excel schedule directly — the app finds your name, imports your rows, and matches Excel cell colors to the palette automatically. Click any day to view/edit events; hover events to reveal edit and delete buttons.
+- **Field Planner** — calendar on the landing page (bottom-left button) with month view, color-coded schedule entries per day, task checklists, and notes. PM/person colors are configurable (Jeff K., Lacey Teasdale, Tyson Doering, Jostein Kevinsen, Brian, Kirsten, Off). Events support start/end times, all-day toggle, location, and weekly recurrence. Click any day to view/edit events; hover events to reveal edit and delete buttons.
 - **File sync save** — Save button now works like Word/Excel. First click shows a Save dialog to pick the file location; all subsequent saves write directly to the same file with no dialog. File path is remembered across sessions so opening from Recent Projects also saves to the correct file. Save button turns green "Saved" when the file is current and shows a small sync icon when there are unsaved changes.
 - **Open as New Day** — right-click any project in Recent Projects → "Open as New Day" to open a copy with today's date as a fresh unsaved draft. All text and project info is preserved; just change what's different.
 - **MOE File #** added to the Env File type dropdown in Standard DFR headers.
@@ -33,9 +33,12 @@ All notable changes to X-TEC Digital Reporting are documented here.
 - Standard DFR header fields updated to match SaskPower DFR style (stacked label + bordered input).
 - All focus rings unified to teal — comment annotation boxes no longer show a yellow focus ring.
 - BulletPointEditor native outline suppressed to prevent OS-level yellow/gold focus ring.
+- Field Planner — removed Paste Schedule (Excel import). Events are now added manually through Add Event.
 
 ### Fixed
 
+- Field Planner — a day with no events, notes, or tasks could render a stray "0" in the calendar cell instead of staying blank.
+- Field Planner — events with no start time were listed twice under Schedule in the day panel.
 - Drag-and-drop hang — a missing `FileReader` error handler caused the batch photo import loop to hang permanently if any file failed to read. The failed photo placeholder is now cleaned up automatically and the import continues with remaining photos.
 - Phantom photo bug — a drag-and-drop photo upload that hung could leave an invisible incomplete photo entry causing a false "Missing Information" error on PDF export with nothing highlighted. Phantom entries are now stripped on load and skipped during validation.
 - Photo entry fields not highlighting red — Date, Location, and Description now turn red on a failed export; photo cards show a red outline and a "Missing: …" banner.

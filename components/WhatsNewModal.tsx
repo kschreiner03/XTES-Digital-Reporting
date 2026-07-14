@@ -2,7 +2,7 @@ import React from 'react';
 import { CloseIcon } from './icons';
 import SafeImage from './SafeImage';
 
-const APP_VERSION = '1.1.5';
+const APP_VERSION = '1.1.6';
 const LAST_SEEN_VERSION_KEY = 'xtec_last_seen_version';
 
 interface ReleaseNote {
@@ -12,6 +12,18 @@ interface ReleaseNote {
 }
 
 const RELEASE_NOTES: ReleaseNote[] = [
+    {
+        version: '1.1.6',
+        date: 'June 2026',
+        highlights: [
+            'Field Planner — a new calendar on the landing page (bottom-left button) for scheduling field days, with color-coded crew assignments, task checklists, and notes per day',
+            'Saving now works like Word/Excel — the first save asks where to put the file, every save after that writes straight to that file with no dialog. Use Save As… (under ⋯) anytime you want to save a separate copy instead of overwriting the original',
+            'Save button shows a quick green confirmation, and a small status next to Autosave now shows when it\'s syncing and the time of the last successful save',
+            'Open as New Day — right-click a project in Recent Projects to open a copy with today\'s date as a fresh draft',
+            'Refreshed look across all reports and the Settings menu',
+            'Various bug fixes and performance improvements',
+        ],
+    },
     {
         version: '1.1.5',
         date: 'April 2026',
